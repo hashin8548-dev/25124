@@ -299,7 +299,10 @@ where
     ) {
         if backup_path.exists() {
             fs::remove_file(&backup_path).with_context(|| {
-                format!("could not remove old save backup '{}'", backup_path.display())
+                format!(
+                    "could not remove old save backup '{}'",
+                    backup_path.display()
+                )
             })?;
             sync_directory(parent)?;
             after_stage(ReplaceStage::BackupRemoved)?;
