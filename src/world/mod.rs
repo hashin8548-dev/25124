@@ -1,4 +1,7 @@
+mod ids;
 mod spawn;
+
+pub(crate) use ids::voxel_instance_id;
 
 use bevy::prelude::*;
 
