@@ -65,6 +65,13 @@ pub(super) fn update_chunk_streaming(
     chunk_entities: Query<(Entity, &ChunkMembership)>,
     bonds: Query<(Entity, &VoxelBond)>,
 ) {
+    state
+        .active_bond_ids
+        .retain(|id| !journal.broken_bonds.contains(id));
+    state
+        .voxel_bodies
+        .retain(|_, body| chunk_entities.get(body.entity).is_ok());
+
     let camera_position = camera
         .iter()
         .next()
