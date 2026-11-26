@@ -307,7 +307,10 @@ pub fn validate_all(
             chunk.coordinate
         );
         ensure!(
-            chunk.dimensions.iter().all(|dimension| (1..=32).contains(dimension)),
+            chunk
+                .dimensions
+                .iter()
+                .all(|dimension| (1..=32).contains(dimension)),
             "chunk '{}' dimensions must each be in [1, 32]",
             chunk.id
         );
@@ -333,7 +336,12 @@ pub fn validate_chunk_file(
         chunk.schema_version,
         chunk.id
     );
-    ensure!(chunk.id == source.id, "chunk id '{}' does not match region index id '{}'", chunk.id, source.id);
+    ensure!(
+        chunk.id == source.id,
+        "chunk id '{}' does not match region index id '{}'",
+        chunk.id,
+        source.id
+    );
     ensure!(
         chunk.coordinate == source.coordinate,
         "chunk '{}' coordinates do not match its region index",
@@ -345,12 +353,16 @@ pub fn validate_chunk_file(
         chunk.id
     );
     ensure!(
-        (chunk.voxel_size_m - source.voxel_size_m).abs() <= f32::EPSILON * source.voxel_size_m.max(1.0),
+        (chunk.voxel_size_m - source.voxel_size_m).abs()
+            <= f32::EPSILON * source.voxel_size_m.max(1.0),
         "chunk '{}' voxel size does not match its region index",
         chunk.id
     );
     ensure!(
-        chunk.dimensions.iter().all(|dimension| (1..=32).contains(dimension)),
+        chunk
+            .dimensions
+            .iter()
+            .all(|dimension| (1..=32).contains(dimension)),
         "chunk '{}' dimensions must each be in [1, 32]",
         chunk.id
     );
