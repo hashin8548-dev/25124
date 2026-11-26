@@ -268,6 +268,9 @@ pub(super) fn fracture_on_new_impacts(
                     if let Some(chunk_id) = &owning_chunk {
                         fragment.insert(ChunkMembership(chunk_id.clone()));
                     }
+                    if let Some(chunk_id) = &owning_chunk {
+                        fragment.insert(ChunkMembership(chunk_id.clone()));
+                    }
                     if let Some(rolling) = rolling {
                         fragment.insert(rolling);
                     }
