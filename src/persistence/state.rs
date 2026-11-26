@@ -35,6 +35,8 @@ pub struct PersistedBodyState {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PersistedFragmentState {
+    #[serde(default)]
+    pub chunk_id: Option<String>,
     pub definition_id: String,
     pub half_extents_m: [f32; 3],
     pub translation_m: [f32; 3],
