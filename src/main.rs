@@ -5,6 +5,7 @@ mod persistence;
 mod physics;
 mod rendering;
 mod world;
+mod ui;
 
 use anyhow::Result;
 use bevy::{asset::AssetPlugin, prelude::*};
