@@ -2,7 +2,7 @@ mod state;
 
 pub use state::{PersistedBodyState, PersistedFragmentState, WorldStateFile};
 
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use avian3d::prelude::{AngularVelocity, LinearVelocity};
 use bevy::prelude::*;
