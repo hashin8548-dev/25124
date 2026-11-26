@@ -370,6 +370,35 @@ mod tests {
     }
 
     #[test]
+    fn greedy_collider_boxes_cover_each_mergeable_cell_once() {
+        let cells = vec![
+            1, 1, 2,
+            1, 0, 0,
+            0, 0, 0,
+            1, 0, 0,
+        ];
+        let grid = VoxelGrid::from_cells([3, 2, 2], 0.5, cells).unwrap();
+        let mergeable = [
+            true, true, true,
+            true, false, false,
+            false, false, false,
+            true, false, false,
+        ];
+        let boxes = grid.greedy_boxes(&mergeable).unwrap();
+        let total_volume = boxes
+            .iter()
+            .map(|box_| {
+                box_.full_size_m.x * box_.full_size_m.y * box_.full_size_m.z
+            })
+            .sum::<f32>();
+        assert!((total_volume - 5.0 * 0.5_f32.powi(3)).abs() < 1.0e-6);
+        assert_eq!(
+            boxes.iter().filter(|box_| box_.palette_index == 2).count(),
+            1
+        );
+    }
+
+    #[test]
     fn mismatched_render_mask_is_rejected() {
         let grid = VoxelGrid::from_cells([1, 1, 1], 1.0, vec![1]).unwrap();
         assert!(grid.build_greedy_meshes(&[]).is_err());
