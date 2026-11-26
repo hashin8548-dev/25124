@@ -19,6 +19,7 @@ pub struct PersistRuntimeState;
 /// Marks a generated fragment with the definition and local collider dimensions needed for recovery.
 #[derive(Component, Clone, Debug)]
 pub struct PersistedFragment {
+    pub chunk_id: Option<String>,
     pub definition_id: String,
     pub half_extents_m: [f32; 3],
 }
@@ -104,7 +105,9 @@ fn save_world_on_f5(
     // Unknown records are retained so temporarily unavailable mod content can be restored later.
     // Known static bodies are omitted: their authored transforms remain owned by chunk/manifest data.
     let mut snapshot = WorldStateFile::new(target.world_id.clone());
-    snapshot.bodies = unresolved_body_states(&previous_state, &known_ids);
+    // Keep body records for chunks that are currently streamed out. Live entities below
+    // overwrite their own IDs with current runtime state.
+    snapshot.bodies = previous_state.bodies.clone();
     snapshot.fractured = destruction_journal.fractured.clone();
     snapshot.broken_bonds = destruction_journal.broken_bonds.clone();
     snapshot.fragments = previous_state.fragments.clone();
@@ -125,6 +128,7 @@ fn save_world_on_f5(
         snapshot.fragments.insert(
             id.0.clone(),
             PersistedFragmentState {
+                chunk_id: fragment.chunk_id.clone(),
                 definition_id: fragment.definition_id.clone(),
                 half_extents_m: fragment.half_extents_m,
                 translation_m: transform.translation.to_array(),
