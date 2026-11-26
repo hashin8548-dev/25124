@@ -58,7 +58,10 @@ impl VoxelGrid {
     ///
     /// Occupancy in the grid is the occlusion source. Callers should pass the full occupancy
     /// grid, not only renderable cells, so hidden internal faces are not emitted.
-    pub fn build_greedy_meshes(&self) -> BTreeMap<u8, Mesh> {
+    pub fn build_greedy_meshes(&self, renderable: &[bool]) -> Result<BTreeMap<u8, Mesh>, String> {
+        if renderable.len() != self.cells.len() {
+            return Err("renderable mask does not match the voxel grid volume".to_owned());
+        }
         let mut buffers = BTreeMap::<u8, MeshBuffers>::new();
         for axis in 0..3 {
             let u = (axis + 1) % 3;
@@ -91,8 +94,9 @@ impl VoxelGrid {
                             } else {
                                 neighbour[axis] = self.dimensions[axis];
                             }
-                            let palette = self.cell(cell[0], cell[1], cell[2]);
-                            if palette == 0 {
+                            let cell_index = self.index(cell[0], cell[1], cell[2]);
+                            let palette = self.cells[cell_index];
+                            if palette == 0 || !renderable[cell_index] {
                                 continue;
                             }
                             let adjacent = if neighbour_axis < 0 || neighbour_axis >= self.dimensions[axis] as isize {
@@ -131,7 +135,7 @@ impl VoxelGrid {
             }
         }
 
-        buffers
+        Ok(buffers
             .into_iter()
             .filter_map(|(palette, buffers)| {
                 if buffers.indices.is_empty() {
@@ -147,12 +151,15 @@ impl VoxelGrid {
                 mesh.insert_indices(Indices::U32(buffers.indices));
                 Some((palette, mesh))
             })
-            .collect()
+            .collect())
     }
 
     /// Decomposes equal-material occupied cells into maximal axis-aligned boxes. Each box
     /// becomes one child shape in the chunk's compound collider.
-    pub fn greedy_boxes(&self) -> Vec<GreedyBox> {
+    pub fn greedy_boxes(&self, mergeable: &[bool]) -> Result<Vec<GreedyBox>, String> {
+        if mergeable.len() != self.cells.len() {
+            return Err("mergeable mask does not match the voxel grid volume".to_owned());
+        }
         let mut visited = vec![false; self.cells.len()];
         let mut boxes = Vec::new();
         let [width, height, depth] = self.dimensions;
@@ -162,14 +169,14 @@ impl VoxelGrid {
                 for x in 0..width {
                     let index = self.index(x, y, z);
                     let palette = self.cells[index];
-                    if palette == 0 || visited[index] {
+                    if palette == 0 || !mergeable[index] || visited[index] {
                         continue;
                     }
 
                     let mut size_x = 1;
                     while x + size_x < width {
                         let next = self.index(x + size_x, y, z);
-                        if visited[next] || self.cells[next] != palette {
+                        if visited[next] || !mergeable[next] || self.cells[next] != palette {
                             break;
                         }
                         size_x += 1;
@@ -179,7 +186,7 @@ impl VoxelGrid {
                     'extend_z: while z + size_z < depth {
                         for dx in 0..size_x {
                             let next = self.index(x + dx, y, z + size_z);
-                            if visited[next] || self.cells[next] != palette {
+                            if visited[next] || !mergeable[next] || self.cells[next] != palette {
                                 break 'extend_z;
                             }
                         }
@@ -224,7 +231,15 @@ impl VoxelGrid {
                 }
             }
         }
-        boxes
+        Ok(boxes)
+    }
+
+    pub fn cell_count(&self) -> usize {
+        self.cells.len()
+    }
+
+    pub fn cells(&self) -> &[u8] {
+        &self.cells
     }
 
     fn index(&self, x: usize, y: usize, z: usize) -> usize {
@@ -296,9 +311,9 @@ fn append_face(
     buffers.normals.extend([normal; 4]);
     buffers.uvs.extend([
         [0.0, 0.0],
-        [size[u] / size[axis].max(1.0), 0.0],
-        [size[u] / size[axis].max(1.0), size[v] / size[axis].max(1.0)],
-        [0.0, size[v] / size[axis].max(1.0)],
+        [size[u], 0.0],
+        [size[u], size[v]],
+        [0.0, size[v]],
     ]);
     if sign > 0.0 {
         buffers.indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
@@ -317,7 +332,7 @@ mod tests {
         cells[0] = 1;
         cells[1] = 1;
         let grid = VoxelGrid::from_cells([2, 1, 1], 1.0, cells).unwrap();
-        let meshes = grid.build_greedy_meshes();
+        let meshes = grid.build_greedy_meshes(&[true, true]).unwrap();
         let mesh = meshes.get(&1).unwrap();
         assert_eq!(mesh.count_vertices(), 24);
         assert_eq!(mesh.indices().unwrap().len(), 36);
@@ -326,7 +341,7 @@ mod tests {
     #[test]
     fn homogeneous_static_slab_becomes_one_compound_shape_box() {
         let grid = VoxelGrid::from_cells([16, 1, 16], 1.0, vec![1; 16 * 16]).unwrap();
-        let boxes = grid.greedy_boxes();
+        let boxes = grid.greedy_boxes(&vec![true; 16 * 16]).unwrap();
         assert_eq!(boxes.len(), 1);
         assert_eq!(boxes[0].full_size_m, bevy::prelude::Vec3::new(16.0, 1.0, 16.0));
     }
@@ -334,7 +349,7 @@ mod tests {
     #[test]
     fn disconnected_materials_are_never_merged_into_the_same_collider_box() {
         let grid = VoxelGrid::from_cells([3, 1, 1], 0.5, vec![1, 2, 1]).unwrap();
-        let boxes = grid.greedy_boxes();
+        let boxes = grid.greedy_boxes(&[true, true, true]).unwrap();
         assert_eq!(boxes.len(), 3);
         assert_eq!(boxes[0].palette_index, 1);
         assert_eq!(boxes[1].palette_index, 2);
