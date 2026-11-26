@@ -9,6 +9,7 @@ pub struct EngineSettings {
     pub physics: PhysicsSettings,
     pub camera: CameraSettings,
     pub rendering: RenderingSettings,
+    pub streaming: StreamingSettings,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -46,6 +47,16 @@ pub struct RenderingSettings {
     pub key_light_illuminance_lux: f32,
     pub key_light_rotation_degrees_xyz: [f32; 3],
     pub shadows_enabled: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StreamingSettings {
+    pub load_radius_chunks: u32,
+    pub unload_radius_chunks: u32,
+    pub max_parallel_chunk_loads: u32,
+    pub max_chunk_spawns_per_frame: u32,
+    pub greedy_meshing_enabled: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -186,6 +197,8 @@ pub struct RegionManifest {
 pub struct ChunkReference {
     pub id: String,
     pub coordinate: [i32; 3],
+    pub dimensions: [u32; 3],
+    pub voxel_size_m: f32,
     pub path: String,
 }
 
