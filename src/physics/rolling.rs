@@ -274,10 +274,7 @@ mod tests {
         let omega = Vec3::new(3.0, -1.0, 2.0);
         let normal = Vec3::new(1.0, 2.0, 3.0).normalize();
         let result = dissipate_rolling_spin(omega, normal, inertia, 1.25);
-        assert!(
-            rotational_energy(result, inertia)
-                <= rotational_energy(omega, inertia) + 1.0e-5
-        );
+        assert!(rotational_energy(result, inertia) <= rotational_energy(omega, inertia) + 1.0e-5);
 
         let angular_impulse = inertia * (result - omega);
         assert!(angular_impulse.dot(normal).abs() < 1.0e-5);
