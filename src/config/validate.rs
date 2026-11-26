@@ -122,6 +122,10 @@ pub fn validate_all(
                     && destructibility.fragments_per_axis.iter().product::<u32>() <= 64,
                 "component definition '{id}' fragments_per_axis must be in [2, 4] with at most 64 fragments"
             );
+            ensure!(
+                definition.visual.model.is_none(),
+                "destructible component definition '{id}' must use a procedural primitive visual"
+            );
         }
     }
 
@@ -168,9 +172,15 @@ pub fn validate_all(
             chunk.id
         );
         for (index, definition_id) in chunk.palette.iter().enumerate().skip(1) {
+            let Some(definition) = components.definitions.get(definition_id) else {
+                anyhow::bail!(
+                    "chunk '{}' palette entry {index} references unknown definition '{definition_id}'",
+                    chunk.id
+                );
+            };
             ensure!(
-                components.definitions.contains_key(definition_id),
-                "chunk '{}' palette entry {index} references unknown definition '{definition_id}'",
+                matches!(&definition.collider, ColliderShape::Cuboid { .. }),
+                "chunk '{}' palette entry '{definition_id}' must use a cuboid collider",
                 chunk.id
             );
         }
@@ -329,7 +339,7 @@ mod tests {
         .expect("sample configuration should validate");
 
         assert_eq!(config.world.id, "sandbox");
-        assert_eq!(config.world.objects.len(), 5);
+        assert_eq!(config.world.objects.len(), 4);
         assert_eq!(config.chunks.len(), 4);
         assert_eq!(
             config.world.objects[1].definition,
