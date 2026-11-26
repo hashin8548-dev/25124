@@ -305,3 +305,42 @@ fn chunk_radius_m(source: &ChunkSource, radius_chunks: f32) -> f32 {
     let (min, max) = chunk_bounds(source);
     (max - min).max_element() * radius_chunks
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::{chunk_radius_m, distance_to_chunk_aabb};
+    use crate::config::ChunkSource;
+    use bevy::prelude::Vec3;
+
+    fn source() -> ChunkSource {
+        ChunkSource {
+            id: "chunk_1_-1_0".to_owned(),
+            region_id: "overworld".to_owned(),
+            region_coordinate: [0, 0],
+            coordinate: [1, -1, 0],
+            dimensions: [16, 16, 16],
+            voxel_size_m: 1.0,
+            path: PathBuf::from("regions/chunks/chunk_1_-1_0.json"),
+        }
+    }
+
+    #[test]
+    fn chunk_bounds_and_distance_work_for_negative_coordinates() {
+        let chunk = source();
+        assert_eq!(
+            distance_to_chunk_aabb(Vec3::new(20.0, -4.0, 8.0), &chunk),
+            0.0
+        );
+        assert!((distance_to_chunk_aabb(Vec3::new(35.0, -4.0, 8.0), &chunk) - 3.0).abs() < 1.0e-5);
+        assert!((distance_to_chunk_aabb(Vec3::new(20.0, -20.0, 8.0), &chunk) - 4.0).abs() < 1.0e-5);
+    }
+
+    #[test]
+    fn streaming_radius_scales_with_the_authored_chunk_bounds() {
+        let chunk = source();
+        assert_eq!(chunk_radius_m(&chunk, 2.0), 32.0);
+        assert_eq!(chunk_radius_m(&chunk, 3.0), 48.0);
+    }
+}
