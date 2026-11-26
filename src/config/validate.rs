@@ -604,9 +604,12 @@ mod tests {
             let contents = std::fs::read_to_string(&source.path)
                 .unwrap_or_else(|error| panic!("could not read chunk '{}': {error}", source.id));
             let chunk: super::super::schema::ChunkFile = serde_json::from_str(&contents)
-                .unwrap_or_else(|error| panic!("chunk '{}' contains invalid JSON: {error}", source.id));
-            super::validate_chunk_file(&chunk, source, &config.components)
-                .unwrap_or_else(|error| panic!("chunk '{}' failed payload validation: {error:#}", source.id));
+                .unwrap_or_else(|error| {
+                    panic!("chunk '{}' contains invalid JSON: {error}", source.id)
+                });
+            super::validate_chunk_file(&chunk, source, &config.components).unwrap_or_else(
+                |error| panic!("chunk '{}' failed payload validation: {error:#}", source.id),
+            );
         }
     }
 
@@ -635,13 +638,7 @@ mod tests {
         assert_eq!(config.world.id, "sandbox");
         assert_eq!(config.world.objects.len(), 4);
         assert_eq!(config.chunks.len(), 4);
-        assert_eq!(
-            config.world.objects[1].definition,
-            "primitive.steel_block"
-        );
-        assert_eq!(
-            config.world.objects[2].definition,
-            "primitive.timber_crate"
-        );
+        assert_eq!(config.world.objects[1].definition, "primitive.steel_block");
+        assert_eq!(config.world.objects[2].definition, "primitive.timber_crate");
     }
 }
