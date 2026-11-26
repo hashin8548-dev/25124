@@ -5,7 +5,7 @@ use anyhow::{Result, ensure};
 use super::load::ChunkSource;
 use super::schema::{
     AlphaMode, BodyType, ChunkFile, ColliderShape, ComponentCatalog, EngineSettings,
-    MaterialCatalog, WorldManifest,
+    MAX_CHUNK_DIMENSION, MaterialCatalog, WorldManifest,
 };
 
 const SCHEMA_VERSION: u32 = 1;
@@ -374,7 +374,7 @@ pub fn validate_chunk_file(
         chunk
             .dimensions
             .iter()
-            .all(|dimension| (1..=32).contains(dimension)),
+            .all(|dimension| (1..=MAX_CHUNK_DIMENSION).contains(dimension)),
         "chunk '{}' dimensions must each be in [1, 32]",
         chunk.id
     );
