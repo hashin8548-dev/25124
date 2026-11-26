@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::Write,
     path::{Path, PathBuf},
@@ -15,11 +15,26 @@ pub struct WorldStateFile {
     pub format_version: u32,
     pub world_id: String,
     pub bodies: BTreeMap<String, PersistedBodyState>,
+    #[serde(default)]
+    pub fractured: BTreeSet<String>,
+    #[serde(default)]
+    pub fragments: BTreeMap<String, PersistedFragmentState>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PersistedBodyState {
+    pub translation_m: [f32; 3],
+    pub rotation_xyzw: [f32; 4],
+    pub linear_velocity_m_s: [f32; 3],
+    pub angular_velocity_rad_s: [f32; 3],
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PersistedFragmentState {
+    pub definition_id: String,
+    pub half_extents_m: [f32; 3],
     pub translation_m: [f32; 3],
     pub rotation_xyzw: [f32; 4],
     pub linear_velocity_m_s: [f32; 3],
@@ -32,6 +47,8 @@ impl WorldStateFile {
             format_version: 1,
             world_id,
             bodies: BTreeMap::new(),
+            fractured: BTreeSet::new(),
+            fragments: BTreeMap::new(),
         }
     }
 
@@ -128,6 +145,42 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
         );
         let inverse_norm = norm_squared.sqrt().recip();
         for component in &mut body.rotation_xyzw {
+            *component *= inverse_norm;
+        }
+    }
+
+    for id in &state.fractured {
+        ensure!(!id.trim().is_empty(), "save contains an empty fractured object id");
+    }
+
+    for (id, fragment) in &mut state.fragments {
+        ensure!(!id.trim().is_empty(), "save contains an empty fragment id");
+        ensure!(
+            !fragment.definition_id.trim().is_empty(),
+            "fragment '{id}' has an empty component definition id"
+        );
+        ensure!(
+            fragment.half_extents_m.iter().all(|value| value.is_finite() && *value > 0.0),
+            "fragment '{id}' has invalid half extents"
+        );
+        ensure!(
+            fragment.translation_m.iter()
+                .chain(fragment.rotation_xyzw.iter())
+                .chain(fragment.linear_velocity_m_s.iter())
+                .chain(fragment.angular_velocity_rad_s.iter())
+                .all(|value| value.is_finite()),
+            "save contains non-finite fragment state for '{id}'"
+        );
+
+        let norm_squared = fragment.rotation_xyzw.iter()
+            .map(|component| component * component)
+            .sum::<f32>();
+        ensure!(
+            norm_squared.is_finite() && norm_squared > 1.0e-12,
+            "save contains a zero-length or invalid fragment quaternion for '{id}'"
+        );
+        let inverse_norm = norm_squared.sqrt().recip();
+        for component in &mut fragment.rotation_xyzw {
             *component *= inverse_norm;
         }
     }
