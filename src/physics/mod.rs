@@ -3,9 +3,9 @@ mod contacts;
 mod destructibility;
 mod rolling;
 
-pub use bonds::{VoxelBond, spawn_voxel_bond};
+pub use bonds::{VoxelBond, VoxelBondSpec, spawn_voxel_bond};
 pub use contacts::ContactLedger;
-pub use destructibility::{DestructibleBody, DestructionJournal};
+pub use destructibility::{DestructibleBody, DestructibleBodySpec, DestructionJournal};
 pub use rolling::RollingResistance;
 
 use avian3d::prelude::{PhysicsSchedule, PhysicsStepSystems};
