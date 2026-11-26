@@ -99,12 +99,13 @@ impl VoxelGrid {
                             if palette == 0 || !renderable[cell_index] {
                                 continue;
                             }
-                            let adjacent = if neighbour_axis < 0 || neighbour_axis >= self.dimensions[axis] as isize {
-                                0
+                            let adjacent_is_mergeable = if neighbour_axis < 0 || neighbour_axis >= self.dimensions[axis] as isize {
+                                false
                             } else {
-                                self.cell(neighbour[0], neighbour[1], neighbour[2])
+                                let adjacent_index = self.index(neighbour[0], neighbour[1], neighbour[2]);
+                                renderable[adjacent_index]
                             };
-                            if adjacent == 0 {
+                            if !adjacent_is_mergeable {
                                 mask[v_index * self.dimensions[u] + u_index] = palette;
                             }
                         }
@@ -116,7 +117,10 @@ impl VoxelGrid {
                         |palette, u_start, v_start, width, height| {
                             let mut origin = [0.0_f32; 3];
                             let mut size = [0.0_f32; 3];
-                            origin[axis] = slice as f32 * self.voxel_size_m;
+                            // Tiny inward bias avoids coplanar z-fighting at chunk seams and
+                            // against independently simulated blocks. Collision geometry remains exact.
+                            origin[axis] = slice as f32 * self.voxel_size_m
+                                - sign as f32 * self.voxel_size_m * 1.0e-4;
                             origin[u] = u_start as f32 * self.voxel_size_m;
                             origin[v] = v_start as f32 * self.voxel_size_m;
                             size[axis] = 0.0;
