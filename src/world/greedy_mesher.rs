@@ -254,14 +254,6 @@ impl VoxelGrid {
         Ok(boxes)
     }
 
-    pub fn cell_count(&self) -> usize {
-        self.cells.len()
-    }
-
-    pub fn cells(&self) -> &[u8] {
-        &self.cells
-    }
-
     fn index(&self, x: usize, y: usize, z: usize) -> usize {
         (y * self.dimensions[2] + z) * self.dimensions[0] + x
     }
