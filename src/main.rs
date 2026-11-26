@@ -4,8 +4,8 @@ mod engine;
 mod persistence;
 mod physics;
 mod rendering;
-mod world;
 mod ui;
+mod world;
 
 use anyhow::Result;
 use bevy::{asset::AssetPlugin, prelude::*};
