@@ -24,6 +24,7 @@ pub struct DestructibleBody {
     pub static_friction: f32,
     pub dynamic_friction: f32,
     pub restitution: f32,
+    pub rolling_resistance_coefficient: f32,
     pub visual: VisualDefinition,
 }
 
@@ -38,6 +39,7 @@ impl DestructibleBody {
         static_friction: f32,
         dynamic_friction: f32,
         restitution: f32,
+        rolling_resistance_coefficient: f32,
         visual: &VisualDefinition,
     ) -> Self {
         Self {
@@ -51,6 +53,7 @@ impl DestructibleBody {
             static_friction,
             dynamic_friction,
             restitution,
+            rolling_resistance_coefficient,
             visual: visual.clone(),
         }
     }
@@ -210,7 +213,16 @@ pub(super) fn fracture_on_new_impacts(
                     let fragment_linear_velocity =
                         inherited_linear_velocity + inherited_angular_velocity.cross(world_offset);
 
-                    commands.spawn((
+                    let fragment_collider = ColliderShape::Cuboid {
+                        half_extents: fragment_half_extents.to_array(),
+                    };
+                    let rolling = RollingResistance::from_collider(
+                        &fragment_collider,
+                        target.density_kg_m3,
+                        target.rolling_resistance_coefficient,
+                        1.0,
+                    );
+                    let mut fragment = commands.spawn((
                         Name::new(fragment_id.clone()),
                         PersistentObjectId(fragment_id),
                         PersistedFragment {
@@ -242,6 +254,9 @@ pub(super) fn fracture_on_new_impacts(
                             ..default()
                         },
                     ));
+                    if let Some(rolling) = rolling {
+                        fragment.insert(rolling);
+                    }
                     fragment_index += 1;
                 }
             }
