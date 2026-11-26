@@ -18,7 +18,14 @@ impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MenuState>()
             .add_systems(Startup, setup_menu)
-            .add_systems(Update, (toggle_menu_with_escape, update_button_styles, sync_menu_visibility));
+            .add_systems(
+                Update,
+                (
+                    toggle_menu_with_escape,
+                    update_button_styles,
+                    sync_menu_visibility,
+                ),
+            );
     }
 }
 
@@ -109,7 +116,10 @@ impl MenuAsset {
             self.button_height_px,
             self.button_font_size_px,
         ];
-        if !dimensions.iter().all(|value| value.is_finite() && *value > 0.0) {
+        if !dimensions
+            .iter()
+            .all(|value| value.is_finite() && *value > 0.0)
+        {
             return Err("menu dimensions and font sizes must be positive and finite".to_owned());
         }
         if self.buttons.is_empty() {
@@ -241,10 +251,10 @@ fn setup_menu(
 }
 
 fn load_menu(path: &Path) -> Result<MenuAsset, String> {
-    let source = std::fs::read_to_string(path)
-        .map_err(|error| format!("failed to read file: {error}"))?;
-    let menu: MenuAsset = serde_json::from_str(&source)
-        .map_err(|error| format!("invalid menu JSON: {error}"))?;
+    let source =
+        std::fs::read_to_string(path).map_err(|error| format!("failed to read file: {error}"))?;
+    let menu: MenuAsset =
+        serde_json::from_str(&source).map_err(|error| format!("invalid menu JSON: {error}"))?;
     menu.validate()?;
     Ok(menu)
 }
@@ -291,7 +301,12 @@ fn toggle_menu_with_escape(
 
 fn update_button_styles(
     mut buttons: Query<
-        (&Hovered, Has<Pressed>, &MenuButtonColors, &mut BackgroundColor),
+        (
+            &Hovered,
+            Has<Pressed>,
+            &MenuButtonColors,
+            &mut BackgroundColor,
+        ),
         With<Button>,
     >,
 ) {
@@ -304,10 +319,7 @@ fn update_button_styles(
     }
 }
 
-fn sync_menu_visibility(
-    state: Res<MenuState>,
-    mut roots: Query<&mut Visibility, With<MenuRoot>>,
-) {
+fn sync_menu_visibility(state: Res<MenuState>, mut roots: Query<&mut Visibility, With<MenuRoot>>) {
     if !state.is_changed() {
         return;
     }
