@@ -76,6 +76,7 @@ struct ImpactTransfer {
 pub(super) fn restore_destruction_journal(
     state: Res<WorldStateFile>,
     mut journal: ResMut<DestructionJournal>,
+    mut world_state: ResMut<WorldStateFile>,
 ) {
     journal.fractured.clone_from(&state.fractured);
     journal.broken_bonds.clone_from(&state.broken_bonds);
@@ -282,6 +283,7 @@ pub(super) fn fracture_on_new_impacts(
         }
 
         journal.fractured.insert(target.instance_id.clone());
+        world_state.bodies.remove(&target.instance_id);
         for (joint_entity, bond) in &bonds {
             if bond.body1 == entity || bond.body2 == entity {
                 journal.broken_bonds.insert(bond.id.clone());
