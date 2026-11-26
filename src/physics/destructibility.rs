@@ -84,6 +84,8 @@ pub(super) fn restore_destruction_journal(
     journal.broken_bonds.clone_from(&state.broken_bonds);
 }
 
+// Bevy system parameters stay explicit so ECS access, change detection, and scheduling remain visible.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn fracture_on_new_impacts(
     mut commands: Commands,
     collisions: Collisions,
