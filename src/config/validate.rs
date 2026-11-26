@@ -154,6 +154,17 @@ pub fn validate_all(
         (1..=256).contains(&streaming.max_chunk_spawns_per_frame),
         "streaming.max_chunk_spawns_per_frame must be between 1 and 256"
     );
+    let maximum_chunk_extent_m = chunks
+        .iter()
+        .map(|chunk| {
+            chunk.dimensions.iter().copied().max().unwrap_or(0) as f32 * chunk.voxel_size_m
+        })
+        .fold(0.0_f32, f32::max);
+    ensure!(
+        (maximum_chunk_extent_m * streaming.load_radius_chunks as f32).is_finite()
+            && (maximum_chunk_extent_m * streaming.unload_radius_chunks as f32).is_finite(),
+        "streaming radii produce non-finite world-space distances"
+    );
 
     ensure!(
         !materials.materials.is_empty(),
