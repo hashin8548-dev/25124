@@ -265,7 +265,9 @@ fn handle_menu_action(
             state.visible = false;
             virtual_time.unpause();
         }
-        "quit" => app_exit.write(AppExit::Success),
+        "quit" => {
+            app_exit.write(AppExit::Success);
+        }
         _ => unreachable!("menu actions are validated during asset loading"),
     }
 }
