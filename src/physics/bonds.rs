@@ -148,7 +148,7 @@ pub(super) fn break_overstressed_bonds(
 
 #[cfg(test)]
 mod tests {
-    use super::{calculate_bond_stress, BondStress};
+    use super::{BondStress, calculate_bond_stress};
     use crate::config::BondStrengthDefinition;
     use bevy::prelude::Vec3;
 
@@ -175,12 +175,7 @@ mod tests {
         assert_eq!(shear.tensile_pa, 0.0);
         assert!((shear.shear_pa - 10.0).abs() < 1.0e-5);
 
-        let bending = calculate_bond_stress(
-            Vec3::ZERO,
-            Vec3::X * (10.0 / 6.0),
-            Vec3::Y,
-            1.0,
-        );
+        let bending = calculate_bond_stress(Vec3::ZERO, Vec3::X * (10.0 / 6.0), Vec3::Y, 1.0);
         assert!((bending.bending_pa - 10.0).abs() < 1.0e-5);
     }
 
@@ -197,12 +192,7 @@ mod tests {
 
     #[test]
     fn invalid_geometry_fails_closed() {
-        let stress = calculate_bond_stress(
-            Vec3::X,
-            Vec3::Y,
-            Vec3::Z,
-            f32::NAN,
-        );
+        let stress = calculate_bond_stress(Vec3::X, Vec3::Y, Vec3::Z, f32::NAN);
         assert!(stress.tensile_pa.is_infinite());
     }
 }
