@@ -97,12 +97,12 @@ pub(super) fn update_chunk_streaming(
                 Err(error) => {
                     state.failed.insert(id.clone());
                     error!("Rejected streamed chunk '{}': {error:#}", id);
-                },
+                }
             },
             Err(error) => {
                 state.failed.insert(id.clone());
                 error!("Could not read streamed chunk '{}': {error}", id);
-            },
+            }
         }
     }
 
@@ -140,18 +140,15 @@ pub(super) fn update_chunk_streaming(
             // Detached dynamic voxels and fragments are no longer spatially contained by
             // their source chunk. Keep that chunk resident while one of its actors is still
             // near the camera, otherwise unloading would make nearby debris disappear.
-            let has_nearby_dynamic_body = bodies.iter().any(
-                |(_, membership, transform, _, _)| {
+            let has_nearby_dynamic_body = bodies.iter().any(|(_, membership, transform, _, _)| {
+                membership.0 == *id
+                    && camera_position.distance(transform.translation) <= unload_distance
+            });
+            let has_nearby_fragment =
+                fragments.iter().any(|(_, _, membership, transform, _, _)| {
                     membership.0 == *id
                         && camera_position.distance(transform.translation) <= unload_distance
-                },
-            );
-            let has_nearby_fragment = fragments.iter().any(
-                |(_, _, membership, transform, _, _)| {
-                    membership.0 == *id
-                        && camera_position.distance(transform.translation) <= unload_distance
-                },
-            );
+                });
 
             (!has_nearby_dynamic_body && !has_nearby_fragment).then(|| id.clone())
         })
@@ -264,9 +261,7 @@ pub(super) fn update_chunk_streaming(
         let Some((source, chunk)) = state.ready.pop_front() else {
             break;
         };
-        if distance_to_chunk_aabb(camera_position, &source)
-            > chunk_radius_m(&source, load_limit)
-        {
+        if distance_to_chunk_aabb(camera_position, &source) > chunk_radius_m(&source, load_limit) {
             continue;
         }
         let spawn_result = {
@@ -299,7 +294,7 @@ pub(super) fn update_chunk_streaming(
             Err(error) => {
                 state.failed.insert(source.id.clone());
                 error!("Failed to spawn chunk '{}': {error}", source.id);
-            },
+            }
         }
     }
 }
