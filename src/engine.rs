@@ -1,6 +1,6 @@
 use avian3d::{
     dynamics::solver::SolverConfig,
-    prelude::{Gravity, PhysicsPlugins, SubstepCount},
+    prelude::{Gravity, PhysicsPlugins, SubstepCount, TimeToSleep},
 };
 use bevy::prelude::*;
 
@@ -28,6 +28,7 @@ impl Plugin for EnginePlugin {
         app.add_plugins(PhysicsPlugins::default())
             .insert_resource(Time::<Fixed>::from_hz(physics.fixed_hz))
             .insert_resource(SubstepCount(physics.substeps))
+            .insert_resource(TimeToSleep(physics.sleep_after_seconds))
             .insert_resource(Gravity(Vec3::from_array(gravity)))
             .insert_resource(SolverConfig {
                 restitution_threshold: physics.restitution_threshold_m_s,
