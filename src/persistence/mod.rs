@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use crate::{
     config::RuntimeConfig,
     physics::DestructionJournal,
-    persistence::state::{PersistedBodyState, PersistedFragmentState},
+    world::voxel_instance_id,
 };
 
 #[derive(Component, Clone, Debug)]
@@ -57,9 +57,11 @@ fn known_world_instance_ids(config: &RuntimeConfig) -> HashSet<String> {
             for (z, row) in layer.rows.iter().enumerate() {
                 for (x, cell) in row.chars().enumerate() {
                     if cell != '0' {
-                        known.insert(format!(
-                            "voxel:{}:{}:{}:{}",
-                            chunk.id, x, layer.y, z
+                        known.insert(voxel_instance_id(
+                            &chunk.id,
+                            x as u32,
+                            layer.y,
+                            z as u32,
                         ));
                     }
                 }
