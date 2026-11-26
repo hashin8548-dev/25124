@@ -29,36 +29,38 @@ pub struct DestructibleBody {
     pub visual: VisualDefinition,
 }
 
+/// Data used to construct an impact-fracturable rigid body.
+pub struct DestructibleBodySpec<'a> {
+    pub instance_id: &'a str,
+    pub definition_id: &'a str,
+    pub destructibility: &'a DestructibilityDefinition,
+    pub half_extents_m: Vec3,
+    pub body_type: BodyType,
+    pub density_kg_m3: f32,
+    pub static_friction: f32,
+    pub dynamic_friction: f32,
+    pub restitution: f32,
+    pub rolling_resistance_coefficient: f32,
+    pub visual: &'a VisualDefinition,
+}
+
 impl DestructibleBody {
-    pub fn new(
-        instance_id: impl Into<String>,
-        definition_id: impl Into<String>,
-        definition: &DestructibilityDefinition,
-        half_extents_m: Vec3,
-        body_type: BodyType,
-        density_kg_m3: f32,
-        static_friction: f32,
-        dynamic_friction: f32,
-        restitution: f32,
-        rolling_resistance_coefficient: f32,
-        visual: &VisualDefinition,
-    ) -> Self {
+    pub fn from_spec(spec: DestructibleBodySpec<'_>) -> Self {
         Self {
-            instance_id: instance_id.into(),
-            definition_id: definition_id.into(),
-            impact_speed_threshold_m_s: definition.impact_speed_threshold_m_s,
-            fragments_per_axis: definition.fragments_per_axis,
-            half_extents_m,
-            body_type,
-            density_kg_m3,
-            static_friction,
-            dynamic_friction,
-            restitution,
-            rolling_resistance_coefficient,
-            visual: visual.clone(),
+            instance_id: spec.instance_id.to_owned(),
+            definition_id: spec.definition_id.to_owned(),
+            impact_speed_threshold_m_s: spec.destructibility.impact_speed_threshold_m_s,
+            fragments_per_axis: spec.destructibility.fragments_per_axis,
+            half_extents_m: spec.half_extents_m,
+            body_type: spec.body_type,
+            density_kg_m3: spec.density_kg_m3,
+            static_friction: spec.static_friction,
+            dynamic_friction: spec.dynamic_friction,
+            restitution: spec.restitution,
+            rolling_resistance_coefficient: spec.rolling_resistance_coefficient,
+            visual: spec.visual.clone(),
         }
     }
-}
 
 #[derive(Resource, Clone, Debug, Default)]
 pub struct DestructionJournal {
