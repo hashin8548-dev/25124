@@ -2,12 +2,12 @@ mod state;
 
 pub use state::{PersistedBodyState, PersistedFragmentState, WorldStateFile};
 
-use std::{collections::HashSet, path::PathBuf};
+use std::path::PathBuf;
 
 use avian3d::prelude::{AngularVelocity, LinearVelocity};
 use bevy::prelude::*;
 
-use crate::{config::RuntimeConfig, physics::DestructionJournal, world::voxel_instance_id};
+use crate::physics::DestructionJournal;
 
 #[derive(Component, Clone, Debug)]
 pub struct PersistentObjectId(pub String);
@@ -38,45 +38,9 @@ impl Plugin for PersistencePlugin {
     }
 }
 
-fn known_world_instance_ids(config: &RuntimeConfig) -> HashSet<String> {
-    let mut known = config
-        .world
-        .objects
-        .iter()
-        .map(|instance| instance.id.clone())
-        .collect::<HashSet<_>>();
-
-    for chunk in &config.chunks {
-        for layer in &chunk.layers {
-            for (z, row) in layer.rows.iter().enumerate() {
-                for (x, cell) in row.chars().enumerate() {
-                    if cell != '0' {
-                        known.insert(voxel_instance_id(&chunk.id, x as u32, layer.y, z as u32));
-                    }
-                }
-            }
-        }
-    }
-
-    known
-}
-
-fn unresolved_body_states(
-    previous_state: &WorldStateFile,
-    known_instance_ids: &HashSet<String>,
-) -> std::collections::BTreeMap<String, PersistedBodyState> {
-    previous_state
-        .bodies
-        .iter()
-        .filter(|(id, _)| !known_instance_ids.contains(*id))
-        .map(|(id, state)| (id.clone(), state.clone()))
-        .collect()
-}
-
 fn save_world_on_f5(
     keys: Res<ButtonInput<KeyCode>>,
     target: Res<WorldSaveTarget>,
-    config: Res<RuntimeConfig>,
     previous_state: Res<WorldStateFile>,
     destruction_journal: Res<DestructionJournal>,
     bodies: Query<
@@ -100,10 +64,8 @@ fn save_world_on_f5(
         return;
     }
 
-    let known_ids = known_world_instance_ids(&config);
-
-    // Unknown records are retained so temporarily unavailable mod content can be restored later.
-    // Known static bodies are omitted: their authored transforms remain owned by chunk/manifest data.
+    // Keep state for streamed-out chunks and unavailable mod content. Live bodies and fragments
+    // overwrite their records below, while static authored cells remain manifest-owned.
     let mut snapshot = WorldStateFile::new(target.world_id.clone());
     // Keep body records for chunks that are currently streamed out. Live entities below
     // overwrite their own IDs with current runtime state.
@@ -156,30 +118,29 @@ fn save_world_on_f5(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use super::{PersistedBodyState, WorldStateFile, unresolved_body_states};
+    use super::{PersistedBodyState, WorldStateFile};
 
     #[test]
-    fn save_snapshot_preserves_only_records_not_owned_by_current_world_instances() {
+    fn save_snapshot_can_preserve_dynamic_states_for_unloaded_chunks() {
         let mut previous = WorldStateFile::new("test-world".to_owned());
-        for id in ["dynamic", "static", "unresolved-mod-object"] {
-            previous.bodies.insert(
-                id.to_owned(),
-                PersistedBodyState {
-                    translation_m: [1.0, 2.0, 3.0],
-                    rotation_xyzw: [0.0, 0.0, 0.0, 1.0],
-                    linear_velocity_m_s: [0.0; 3],
-                    angular_velocity_rad_s: [0.0; 3],
-                },
-            );
-        }
+        previous.bodies.insert(
+            "voxel:chunk_a:1:2:3".to_owned(),
+            PersistedBodyState {
+                translation_m: [8.0, 3.0, -2.0],
+                rotation_xyzw: [0.0, 0.0, 0.0, 1.0],
+                linear_velocity_m_s: [1.0, 0.0, 0.0],
+                angular_velocity_rad_s: [0.0; 3],
+            },
+        );
+        let snapshot = previous.clone();
 
-        let known_instance_ids = HashSet::from(["dynamic".to_owned(), "static".to_owned()]);
-        let unresolved = unresolved_body_states(&previous, &known_instance_ids);
-
-        assert_eq!(unresolved.len(), 1);
-        assert!(unresolved.contains_key("unresolved-mod-object"));
-        assert!(!unresolved.contains_key("static"));
+        assert_eq!(
+            snapshot.bodies["voxel:chunk_a:1:2:3"].translation_m,
+            [8.0, 3.0, -2.0]
+        );
+        assert_eq!(
+            snapshot.bodies["voxel:chunk_a:1:2:3"].linear_velocity_m_s,
+            [1.0, 0.0, 0.0]
+        );
     }
 }
