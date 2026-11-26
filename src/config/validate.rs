@@ -54,6 +54,18 @@ pub fn validate_all(
         physics.warm_start_coefficient.is_finite() && (0.0..=1.0).contains(&physics.warm_start_coefficient),
         "physics.warm_start_coefficient must be in [0, 1]"
     );
+    ensure!(
+        physics.sleep_linear_threshold_m_s.is_finite() && physics.sleep_linear_threshold_m_s > 0.0,
+        "physics.sleep_linear_threshold_m_s must be positive and finite"
+    );
+    ensure!(
+        physics.sleep_angular_threshold_rad_s.is_finite() && physics.sleep_angular_threshold_rad_s > 0.0,
+        "physics.sleep_angular_threshold_rad_s must be positive and finite"
+    );
+    ensure!(
+        physics.sleep_after_seconds.is_finite() && physics.sleep_after_seconds > 0.0,
+        "physics.sleep_after_seconds must be positive and finite"
+    );
 
     let camera = &engine.camera;
     ensure!(camera.spawn_position_m.iter().all(|value| value.is_finite()), "camera.spawn_position_m must contain only finite values");
@@ -97,7 +109,7 @@ pub fn validate_all(
         }
         if let Some(destructibility) = &definition.destructibility {
             ensure!(
-                matches!(definition.collider, ColliderShape::Cuboid { .. }),
+                matches!(&definition.collider, ColliderShape::Cuboid { .. }),
                 "destructible component definition '{id}' must use a cuboid collider"
             );
             ensure!(
