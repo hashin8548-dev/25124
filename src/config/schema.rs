@@ -18,6 +18,12 @@ pub struct PhysicsSettings {
     pub gravity_m_s2: [f32; 3],
     pub fixed_hz: f64,
     pub substeps: u32,
+    pub restitution_threshold_m_s: f32,
+    pub restitution_iterations: u32,
+    pub contact_damping_ratio: f32,
+    pub contact_frequency_factor: f32,
+    pub max_overlap_solve_speed_m_s: f32,
+    pub warm_start_coefficient: f32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -69,7 +75,16 @@ pub struct ComponentDefinition {
     pub collider: ColliderShape,
     pub material: String,
     pub swept_ccd: Option<SweptCcdDefinition>,
+    #[serde(default)]
+    pub destructibility: Option<DestructibilityDefinition>,
     pub visual: VisualDefinition,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DestructibilityDefinition {
+    pub impact_speed_threshold_m_s: f32,
+    pub fragments_per_axis: [u32; 3],
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Hash)]
@@ -135,7 +150,47 @@ pub struct WorldManifest {
     pub id: String,
     pub name: String,
     pub gravity_m_s2: Option<[f32; 3]>,
+    #[serde(default)]
+    pub regions: Vec<String>,
     pub objects: Vec<WorldObjectInstance>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegionManifest {
+    pub schema_version: u32,
+    pub id: String,
+    pub coordinate: [i32; 2],
+    pub chunks: Vec<ChunkReference>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChunkReference {
+    pub id: String,
+    pub coordinate: [i32; 3],
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChunkFile {
+    pub schema_version: u32,
+    pub id: String,
+    pub coordinate: [i32; 3],
+    pub dimensions: [u32; 3],
+    pub voxel_size_m: f32,
+    /// Palette index zero is reserved for air. Remaining entries reference component definitions.
+    pub palette: Vec<String>,
+    /// Each row contains one hexadecimal palette index per X cell; rows are ordered by Z.
+    pub layers: Vec<ChunkLayer>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChunkLayer {
+    pub y: u32,
+    pub rows: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
