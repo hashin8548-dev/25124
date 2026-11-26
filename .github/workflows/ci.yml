@@ -68,7 +68,17 @@ jobs:
         shell: pwsh
         run: |
           $root = "./dist/physics_sandbox"
-          foreach ($path in @("physics_sandbox.exe", "data/engine.json", "data/materials.json", "data/components.json", "assets", "mods", "worlds/sandbox/world.json")) {
+          foreach ($path in @(
+            "physics_sandbox.exe",
+            "data/engine.json",
+            "data/materials.json",
+            "data/components.json",
+            "assets/ui/main_menu.json",
+            "mods",
+            "worlds/sandbox/world.json",
+            "worlds/sandbox/regions/overworld.json",
+            "worlds/sandbox/regions/chunks/chunk_0_0_0.json"
+          )) {
             if (-not (Test-Path (Join-Path $root $path))) {
               throw "Portable package is missing: $path"
             }
