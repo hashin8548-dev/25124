@@ -120,6 +120,7 @@ fn save_world_on_f5(
     let mut snapshot = WorldStateFile::new(target.world_id.clone());
     snapshot.bodies = unresolved_body_states(&previous_state, &known_ids);
     snapshot.fractured = destruction_journal.fractured.clone();
+    snapshot.broken_bonds = destruction_journal.broken_bonds.clone();
     snapshot.fragments = previous_state.fragments.clone();
 
     for (id, transform, linear_velocity, angular_velocity) in &bodies {
@@ -150,10 +151,10 @@ fn save_world_on_f5(
 
     match snapshot.write_atomic(&target.state_path) {
         Ok(()) => info!(
-            "Saved {} dynamic body states, {} fragments and {} fracture records to '{}'",
+            "Saved {} dynamic body states, {} fragments and {} damage records to '{}'",
             snapshot.bodies.len(),
             snapshot.fragments.len(),
-            snapshot.fractured.len(),
+            snapshot.fractured.len() + snapshot.broken_bonds.len(),
             target.state_path.display()
         ),
         Err(error) => error!(
