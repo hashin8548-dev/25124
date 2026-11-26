@@ -2,19 +2,12 @@ mod state;
 
 pub use state::{PersistedBodyState, PersistedFragmentState, WorldStateFile};
 
-use std::{
-    collections::HashSet,
-    path::PathBuf,
-};
+use std::{collections::HashSet, path::PathBuf};
 
 use avian3d::prelude::{AngularVelocity, LinearVelocity};
 use bevy::prelude::*;
 
-use crate::{
-    config::RuntimeConfig,
-    physics::DestructionJournal,
-    world::voxel_instance_id,
-};
+use crate::{config::RuntimeConfig, physics::DestructionJournal, world::voxel_instance_id};
 
 #[derive(Component, Clone, Debug)]
 pub struct PersistentObjectId(pub String);
@@ -57,12 +50,7 @@ fn known_world_instance_ids(config: &RuntimeConfig) -> HashSet<String> {
             for (z, row) in layer.rows.iter().enumerate() {
                 for (x, cell) in row.chars().enumerate() {
                     if cell != '0' {
-                        known.insert(voxel_instance_id(
-                            &chunk.id,
-                            x as u32,
-                            layer.y,
-                            z as u32,
-                        ));
+                        known.insert(voxel_instance_id(&chunk.id, x as u32, layer.y, z as u32));
                     }
                 }
             }
@@ -99,15 +87,13 @@ fn save_world_on_f5(
         ),
         With<PersistRuntimeState>,
     >,
-    fragments: Query<
-        (
-            &PersistentObjectId,
-            &PersistedFragment,
-            &Transform,
-            &LinearVelocity,
-            &AngularVelocity,
-        ),
-    >,
+    fragments: Query<(
+        &PersistentObjectId,
+        &PersistedFragment,
+        &Transform,
+        &LinearVelocity,
+        &AngularVelocity,
+    )>,
 ) {
     if !keys.just_pressed(KeyCode::F5) {
         return;
