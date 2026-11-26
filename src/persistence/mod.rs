@@ -50,7 +50,10 @@ pub struct PersistencePlugin;
 
 impl Plugin for PersistencePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, save_world_on_f5);
+        app.add_systems(
+            Update,
+            save_world_on_f5.after(crate::world::ChunkStreamingUpdateSet),
+        );
     }
 }
 
