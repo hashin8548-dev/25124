@@ -7,7 +7,9 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 
 use super::{
-    schema::{ChunkFile, ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest},
+    schema::{
+        ChunkFile, ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest,
+    },
     validate::validate_all,
 };
 
@@ -146,7 +148,10 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkFil
                 reference.id
             );
             validate_relative_data_path(&reference.path).with_context(|| {
-                format!("invalid chunk path '{}' in region '{}'", reference.path, region.id)
+                format!(
+                    "invalid chunk path '{}' in region '{}'",
+                    reference.path, region.id
+                )
             })?;
 
             let chunk_path = region_directory.join(&reference.path);
