@@ -15,7 +15,10 @@ use crate::{
         PersistRuntimeState, PersistedBodyState, PersistedFragment, PersistedFragmentState,
         PersistentObjectId, WorldStateFile,
     },
-    physics::{DestructibleBody, RollingResistance, spawn_voxel_bond},
+    physics::{
+        DestructibleBody, DestructibleBodySpec, RollingResistance, VoxelBondSpec,
+        spawn_voxel_bond,
+    },
     world::{ChunkMembership, greedy_mesher::VoxelGrid, voxel_instance_id},
 };
 
@@ -446,14 +449,16 @@ pub(super) fn spawn_chunk(
             let face_size = face_area.sqrt();
             let joint = spawn_voxel_bond(
                 commands,
-                bond_id.clone(),
-                body_a.entity,
-                body_b.entity,
-                anchor1,
-                anchor2,
-                local_axis1,
-                face_size,
-                strength,
+                VoxelBondSpec {
+                    id: bond_id.clone(),
+                    body1: body_a.entity,
+                    body2: body_b.entity,
+                    local_anchor1: anchor1,
+                    local_anchor2: anchor2,
+                    normal_local: local_axis1,
+                    face_size_m: face_size,
+                    strength,
+                },
             );
             commands
                 .entity(joint)
@@ -604,19 +609,19 @@ fn spawn_body(
     if let (Some(destructibility), ColliderShape::Cuboid { half_extents }) =
         (&definition.destructibility, &definition.collider)
     {
-        entity.insert(DestructibleBody::new(
+        entity.insert(DestructibleBody::from_spec(DestructibleBodySpec {
             instance_id,
             definition_id,
             destructibility,
-            Vec3::from_array(*half_extents),
-            definition.body_type,
-            physical_material.density_kg_m3,
-            physical_material.static_friction,
-            physical_material.dynamic_friction,
-            physical_material.restitution,
-            physical_material.rolling_resistance_coefficient,
-            &definition.visual,
-        ));
+            half_extents_m: Vec3::from_array(*half_extents),
+            body_type: definition.body_type,
+            density_kg_m3: physical_material.density_kg_m3,
+            static_friction: physical_material.static_friction,
+            dynamic_friction: physical_material.dynamic_friction,
+            restitution: physical_material.restitution,
+            rolling_resistance_coefficient: physical_material.rolling_resistance_coefficient,
+            visual: &definition.visual,
+        }));
     }
 
     let entity_id = entity.id();
