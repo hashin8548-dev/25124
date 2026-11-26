@@ -637,7 +637,11 @@ mod tests {
         assert_eq!(config.chunks.len(), 4);
         assert_eq!(
             config.world.objects[1].definition,
-            config.world.objects[2].definition
+            "primitive.steel_block"
+        );
+        assert_eq!(
+            config.world.objects[2].definition,
+            "primitive.timber_crate"
         );
     }
 }
