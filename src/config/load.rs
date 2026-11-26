@@ -15,10 +15,7 @@ use super::{
 
 #[derive(Clone, Debug)]
 pub struct ProjectPaths {
-    pub root_dir: PathBuf,
-    pub data_dir: PathBuf,
     pub assets_dir: PathBuf,
-    pub world_manifest: PathBuf,
     pub world_state: PathBuf,
 }
 
@@ -75,7 +72,6 @@ impl RuntimeConfig {
     }
 
     pub fn load(
-        root_dir: PathBuf,
         data_dir: PathBuf,
         assets_dir: PathBuf,
         world_manifest_path: PathBuf,
@@ -98,10 +94,7 @@ impl RuntimeConfig {
             world,
             chunks,
             paths: ProjectPaths {
-                root_dir,
-                data_dir,
                 assets_dir,
-                world_manifest: world_manifest_path,
                 world_state: world_state_path,
             },
         })
@@ -133,6 +126,12 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkFil
             region_ids.insert(region.id.clone()),
             "duplicate region id '{}'",
             region.id
+        );
+        info!(
+            "Indexing region '{}' at {:?} ({} chunk references)",
+            region.id,
+            region.coordinate,
+            region.chunks.len()
         );
 
         let region_directory = region_path
@@ -253,7 +252,6 @@ mod tests {
     fn checked_in_configuration_loads_external_chunk_files() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let config = RuntimeConfig::load(
-            root.to_path_buf(),
             root.join("data"),
             root.join("assets"),
             root.join("worlds/sandbox/world.json"),
