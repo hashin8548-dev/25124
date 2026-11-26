@@ -246,8 +246,8 @@ pub(super) fn update_chunk_streaming(
             Ok(body_count) => {
                 state.loaded.insert(source.id.clone());
                 info!(
-                    "Streamed chunk '{}' with {} individual interactive bodies",
-                    source.id, body_count
+                    "Streamed chunk '{}' from region '{}' at {:?} with {} individual interactive bodies",
+                    source.id, source.region_id, source.region_coordinate, body_count
                 );
             }
             Err(error) => error!("Failed to spawn chunk '{}': {error}", source.id),
