@@ -3,7 +3,7 @@ mod contacts;
 mod destructibility;
 mod rolling;
 
-pub use bonds::{VoxelBond, calculate_bond_stress, spawn_voxel_bond};
+pub use bonds::{VoxelBond, spawn_voxel_bond};
 pub use contacts::ContactLedger;
 pub use destructibility::{DestructibleBody, DestructionJournal};
 pub use rolling::RollingResistance;
