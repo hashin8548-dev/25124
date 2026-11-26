@@ -3,7 +3,7 @@ mod ids;
 mod spawn;
 mod streaming;
 
-pub(crate) use ids::voxel_instance_id;
+pub(crate) use ids::{parse_voxel_instance_id, voxel_instance_id};
 pub(crate) use spawn::SpawnedVoxelBody;
 
 use bevy::prelude::*;
