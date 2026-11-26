@@ -233,7 +233,6 @@ fn dissipate_rolling_spin(
     }
 
     local_omega - inverse_inertia_torque * applied_impulse
-    result
 }
 
 #[cfg(test)]
