@@ -84,7 +84,12 @@ pub(super) fn fracture_on_new_impacts(
     mut commands: Commands,
     collisions: Collisions,
     mut journal: ResMut<DestructionJournal>,
-    targets: Query<(&DestructibleBody, &Transform, &LinearVelocity, &AngularVelocity)>,
+    targets: Query<(
+        &DestructibleBody,
+        &Transform,
+        &LinearVelocity,
+        &AngularVelocity,
+    )>,
     config: Res<crate::config::RuntimeConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -157,7 +162,10 @@ pub(super) fn fracture_on_new_impacts(
         let full_size = half * 2.0;
         let total_mass = full_size.x * full_size.y * full_size.z * target.density_kg_m3;
         if !total_mass.is_finite() || total_mass <= 0.0 {
-            warn!("Skipping fracture for '{}' because its mass is invalid", target.instance_id);
+            warn!(
+                "Skipping fracture for '{}' because its mass is invalid",
+                target.instance_id
+            );
             continue;
         }
 
@@ -207,8 +215,7 @@ pub(super) fn fracture_on_new_impacts(
                         ((z as f32 + 0.5) / counts[2] as f32 * 2.0 - 1.0) * half.z,
                     );
                     let world_offset = transform.rotation * local_offset;
-                    let fragment_id =
-                        format!("fragment:{}:{fragment_index}", target.instance_id);
+                    let fragment_id = format!("fragment:{}:{fragment_index}", target.instance_id);
                     let rotation = transform.rotation;
                     let fragment_linear_velocity =
                         inherited_linear_velocity + inherited_angular_velocity.cross(world_offset);
@@ -272,9 +279,7 @@ pub(super) fn fracture_on_new_impacts(
         commands.entity(entity).despawn();
         info!(
             "Fractured '{}' into {} pieces after a {:.2} m/s impact",
-            target.instance_id,
-            fragment_index,
-            impact.speed_m_s
+            target.instance_id, fragment_index, impact.speed_m_s
         );
     }
 }
@@ -315,10 +320,8 @@ mod tests {
             let fragment_full_size = fragment_half * 2.0;
             let original_volume =
                 original_full_size.x * original_full_size.y * original_full_size.z;
-            let fragment_volume = fragment_full_size.x
-                * fragment_full_size.y
-                * fragment_full_size.z
-                * fragment_count;
+            let fragment_volume =
+                fragment_full_size.x * fragment_full_size.y * fragment_full_size.z * fragment_count;
             assert!((original_volume - fragment_volume).abs() < 1.0e-6);
         }
     }
