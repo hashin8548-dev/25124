@@ -195,25 +195,44 @@ fn dissipate_rolling_spin(
     }
 
     let rolling_omega = local_omega - normal * local_omega.dot(normal);
-    let angular_momentum = inertia * rolling_omega;
-    let momentum_length = angular_momentum.length();
-    if momentum_length <= 1.0e-8 {
+    let rolling_speed = rolling_omega.length();
+    if rolling_speed <= 1.0e-8 {
         return local_omega;
     }
 
-    let impulse = angular_momentum / momentum_length * -angular_impulse_ns_m;
-    let delta_omega = impulse / inertia;
-    let mut result = local_omega + delta_omega;
+    // Apply torque opposite the tangential angular velocity. The impulse direction is
+    // perpendicular to the contact normal in body-local space; the inertia tensor converts
+    // that torque impulse into angular velocity, including anisotropic-axis coupling.
+    let torque_axis = rolling_omega / rolling_speed;
+    let inverse_inertia_torque = torque_axis / inertia;
+    let effective_inverse_inertia = torque_axis.dot(inverse_inertia_torque);
+    if !effective_inverse_inertia.is_finite() || effective_inverse_inertia <= 0.0 {
+        return local_omega;
+    }
 
-    // Do not let the approximate contact torque reverse a spin component in one step.
+    // For delta-L = -j * torque_axis:
+    // delta-E = -j * |omega_t| + 0.5 * j^2 * (axis . I^-1 . axis).
+    // This cap guarantees non-increasing rotational kinetic energy.
+    let energy_safe_impulse = rolling_speed / effective_inverse_inertia;
+
+    // Avoid reversing any principal-axis component in one contact step. This can be
+    // stricter than the energy bound for strongly anisotropic bodies.
+    let mut no_reversal_impulse = f32::INFINITY;
     for axis in 0..3 {
-        if local_omega[axis] != 0.0 && result[axis] * local_omega[axis] < 0.0 {
-            result[axis] = 0.0;
+        if torque_axis[axis] * local_omega[axis] > 0.0 {
+            let limit = local_omega[axis].abs() * inertia[axis] / torque_axis[axis].abs();
+            no_reversal_impulse = no_reversal_impulse.min(limit);
         }
     }
 
-    // The contact-normal spin component is not rolling resistance.
-    result = result - normal * (result.dot(normal) - local_omega.dot(normal));
+    let applied_impulse = angular_impulse_ns_m
+        .min(energy_safe_impulse)
+        .min(no_reversal_impulse);
+    if !applied_impulse.is_finite() || applied_impulse <= 0.0 {
+        return local_omega;
+    }
+
+    local_omega - inverse_inertia_torque * applied_impulse
     result
 }
 
@@ -248,6 +267,21 @@ mod tests {
             }
             assert!((result.dot(normal) - omega.dot(normal)).abs() < 1.0e-5);
         }
+    }
+
+    #[test]
+    fn oblique_contact_impulse_preserves_energy_and_has_no_normal_torque() {
+        let inertia = Vec3::new(0.4, 1.7, 3.1);
+        let omega = Vec3::new(3.0, -1.0, 2.0);
+        let normal = Vec3::new(1.0, 2.0, 3.0).normalize();
+        let result = dissipate_rolling_spin(omega, normal, inertia, 1.25);
+        assert!(
+            rotational_energy(result, inertia)
+                <= rotational_energy(omega, inertia) + 1.0e-5
+        );
+
+        let angular_impulse = inertia * (result - omega);
+        assert!(angular_impulse.dot(normal).abs() < 1.0e-5);
     }
 
     #[test]
