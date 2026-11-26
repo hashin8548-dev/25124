@@ -107,6 +107,23 @@ pub fn validate_all(
             ensure!(matches!(definition.body_type, BodyType::Dynamic), "static component definition '{id}' cannot configure swept CCD");
             ensure!(ccd.threshold.is_finite() && (0.0..=1.0).contains(&ccd.threshold), "component definition '{id}' swept CCD threshold must be finite and in [0, 1]");
         }
+        if let Some(bond_strength) = &definition.bond_strength {
+            ensure!(
+                matches!(&definition.collider, ColliderShape::Cuboid { .. }),
+                "bonded component definition '{id}' must use a cuboid collider"
+            );
+            ensure!(
+                [
+                    bond_strength.tensile_strength_pa,
+                    bond_strength.shear_strength_pa,
+                    bond_strength.bending_strength_pa,
+                    bond_strength.torsional_strength_pa,
+                ]
+                .iter()
+                .all(|value| value.is_finite() && *value > 0.0),
+                "component '{id}' bond strength values must be positive and finite"
+            );
+        }
         if let Some(destructibility) = &definition.destructibility {
             ensure!(
                 matches!(&definition.collider, ColliderShape::Cuboid { .. }),
