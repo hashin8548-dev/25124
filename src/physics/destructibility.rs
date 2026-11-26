@@ -76,7 +76,6 @@ struct ImpactTransfer {
 pub(super) fn restore_destruction_journal(
     state: Res<WorldStateFile>,
     mut journal: ResMut<DestructionJournal>,
-    mut world_state: ResMut<WorldStateFile>,
 ) {
     journal.fractured.clone_from(&state.fractured);
     journal.broken_bonds.clone_from(&state.broken_bonds);
@@ -86,6 +85,7 @@ pub(super) fn fracture_on_new_impacts(
     mut commands: Commands,
     collisions: Collisions,
     mut journal: ResMut<DestructionJournal>,
+    mut world_state: ResMut<WorldStateFile>,
     targets: Query<(
         &DestructibleBody,
         &Transform,
