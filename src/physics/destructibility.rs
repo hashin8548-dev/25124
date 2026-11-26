@@ -9,8 +9,8 @@ use bevy::prelude::*;
 use crate::{
     config::{AlphaMode, BodyType, ColliderShape, DestructibilityDefinition, VisualDefinition},
     persistence::{PersistedFragment, PersistentObjectId, WorldStateFile},
-    physics::RollingResistance,
-    physics::VoxelBond,
+    physics::{RollingResistance, VoxelBond},
+    world::ChunkMembership,
 };
 
 #[derive(Component, Clone, Debug)]
@@ -90,6 +90,7 @@ pub(super) fn fracture_on_new_impacts(
         &Transform,
         &LinearVelocity,
         &AngularVelocity,
+        Option<&ChunkMembership>,
     )>,
     config: Res<crate::config::RuntimeConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -119,7 +120,7 @@ pub(super) fn fracture_on_new_impacts(
         }
 
         for (target_entity, sign) in [(pair.collider1, 1.0), (pair.collider2, -1.0)] {
-            let Ok((target, transform, _, _)) = targets.get(target_entity) else {
+            let Ok((target, transform, _, _, _)) = targets.get(target_entity) else {
                 continue;
             };
             if impact_speed < target.impact_speed_threshold_m_s
@@ -151,10 +152,11 @@ pub(super) fn fracture_on_new_impacts(
     }
 
     for (entity, impact) in candidates {
-        let Ok((target, transform, linear_velocity, angular_velocity)) = targets.get(entity) else {
+        let Ok((target, transform, linear_velocity, angular_velocity, chunk_membership)) = targets.get(entity) else {
             continue;
         };
         let target = target.clone();
+        let owning_chunk = chunk_membership.map(|membership| membership.0.clone());
         if journal.fractured.contains(&target.instance_id) {
             continue;
         }
@@ -234,6 +236,7 @@ pub(super) fn fracture_on_new_impacts(
                         Name::new(fragment_id.clone()),
                         PersistentObjectId(fragment_id),
                         PersistedFragment {
+                            chunk_id: owning_chunk.clone(),
                             definition_id: target.definition_id.clone(),
                             half_extents_m: fragment_half_extents.to_array(),
                         },
@@ -262,6 +265,9 @@ pub(super) fn fracture_on_new_impacts(
                             ..default()
                         },
                     ));
+                    if let Some(chunk_id) = &owning_chunk {
+                        fragment.insert(ChunkMembership(chunk_id.clone()));
+                    }
                     if let Some(rolling) = rolling {
                         fragment.insert(rolling);
                     }
