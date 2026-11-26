@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use avian3d::prelude::{
     AngularVelocity, CcdFilter, Collider, ColliderDensity, CollisionEventsEnabled, Friction,
@@ -8,25 +8,27 @@ use bevy::{gltf::prelude::GltfAssetLabel, prelude::*};
 
 use crate::{
     config::{
-        AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ColliderShape,
-        ComponentDefinition, RuntimeConfig, SweepModeDefinition, VisualDefinition,
+        AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ChunkFile,
+        ColliderShape, ComponentDefinition, RuntimeConfig, SweepModeDefinition, VisualDefinition,
     },
     persistence::{
         PersistRuntimeState, PersistedBodyState, PersistedFragment, PersistedFragmentState,
         PersistentObjectId, WorldStateFile,
     },
     physics::{DestructibleBody, RollingResistance, spawn_voxel_bond},
-    world::voxel_instance_id,
+    world::{ChunkMembership, greedy_mesher::VoxelGrid, voxel_instance_id},
 };
 
 #[derive(Clone)]
-struct SpawnedVoxelBody {
-    id: String,
-    entity: Entity,
-    rotation: Quat,
-    half_extents: Vec3,
-    body_type: BodyType,
-    bond_strength: Option<BondStrengthDefinition>,
+pub(super) struct SpawnedVoxelBody {
+    pub(super) id: String,
+    pub(super) entity: Entity,
+    pub(super) coordinate: [i32; 3],
+    pub(super) chunk_id: String,
+    pub(super) rotation: Quat,
+    pub(super) half_extents: Vec3,
+    pub(super) body_type: BodyType,
+    pub(super) bond_strength: Option<BondStrengthDefinition>,
 }
 
 pub(super) fn spawn_world(
@@ -84,181 +86,8 @@ pub(super) fn spawn_world(
         );
     }
 
-    let mut voxel_count = 0_usize;
-    let mut spawned_voxels = HashMap::<[i32; 3], SpawnedVoxelBody>::new();
-    for chunk in &config.chunks {
-        let dimensions = chunk.dimensions;
-        let voxel_size = chunk.voxel_size_m;
-        let chunk_origin = Vec3::new(
-            chunk.coordinate[0] as f32 * dimensions[0] as f32 * voxel_size,
-            chunk.coordinate[1] as f32 * dimensions[1] as f32 * voxel_size,
-            chunk.coordinate[2] as f32 * dimensions[2] as f32 * voxel_size,
-        );
-
-        for layer in &chunk.layers {
-            for (z, row) in layer.rows.iter().enumerate() {
-                for (x, character) in row.chars().enumerate() {
-                    let palette_index = character
-                        .to_digit(16)
-                        .expect("chunk palette rows are validated before app startup")
-                        as usize;
-                    if palette_index == 0 {
-                        continue;
-                    }
-
-                    let definition_id = &chunk.palette[palette_index];
-                    let instance_id = voxel_instance_id(&chunk.id, x as u32, layer.y, z as u32);
-                    if world_state.fractured.contains(&instance_id) {
-                        continue;
-                    }
-
-                    let authored_definition = config
-                        .components
-                        .definitions
-                        .get(definition_id)
-                        .expect("chunk palettes are validated before app startup");
-                    let physical_material = config
-                        .materials
-                        .materials
-                        .get(&authored_definition.material)
-                        .expect("component materials are validated before app startup");
-
-                    // Voxel dimensions are scaled from the palette definition by this chunk's
-                    // authored voxel size. The chunk file remains independent of the block catalogue.
-                    let mut definition = authored_definition.clone();
-                    let ColliderShape::Cuboid { half_extents } = &mut definition.collider else {
-                        unreachable!("chunk palette definitions are validated as cuboids");
-                    };
-                    for extent in half_extents {
-                        *extent *= voxel_size;
-                    }
-
-                    let saved = if matches!(definition.body_type, BodyType::Dynamic) {
-                        world_state.bodies.get(&instance_id)
-                    } else {
-                        None
-                    };
-                    let position = chunk_origin
-                        + Vec3::new(
-                            (x as f32 + 0.5) * voxel_size,
-                            (layer.y as f32 + 0.5) * voxel_size,
-                            (z as f32 + 0.5) * voxel_size,
-                        );
-
-                    let authored_transform = Transform::from_translation(position);
-                    let entity = spawn_body(
-                        &mut commands,
-                        &instance_id,
-                        definition_id,
-                        &definition,
-                        physical_material,
-                        authored_transform,
-                        saved,
-                        &config,
-                        &asset_server,
-                        &mut meshes,
-                        &mut materials,
-                        &mut mesh_cache,
-                        &mut material_cache,
-                    );
-
-                    let ColliderShape::Cuboid { half_extents } = &definition.collider else {
-                        unreachable!("chunk palette definitions are validated as cuboids");
-                    };
-                    let grid_coordinate = [
-                        chunk.coordinate[0] * dimensions[0] as i32 + x as i32,
-                        chunk.coordinate[1] * dimensions[1] as i32 + layer.y as i32,
-                        chunk.coordinate[2] * dimensions[2] as i32 + z as i32,
-                    ];
-                    let rotation = saved
-                        .map(|state| Quat::from_array(state.rotation_xyzw))
-                        .unwrap_or(Quat::IDENTITY);
-                    spawned_voxels.insert(
-                        grid_coordinate,
-                        SpawnedVoxelBody {
-                            id: instance_id,
-                            entity,
-                            rotation,
-                            half_extents: Vec3::from_array(*half_extents),
-                            body_type: definition.body_type,
-                            bond_strength: definition.bond_strength.clone(),
-                        },
-                    );
-                    voxel_count += 1;
-                }
-            }
-        }
-    }
-
-    // Build a stable, sparse bond graph across all loaded chunks. Each positive-axis
-    // neighbour is visited once, including chunk-boundary neighbours.
-    let mut bond_count = 0_usize;
-    let directions = [
-        ([1, 0, 0], Vec3::X, 0_usize),
-        ([0, 1, 0], Vec3::Y, 1_usize),
-        ([0, 0, 1], Vec3::Z, 2_usize),
-    ];
-    for (coordinate, first) in &spawned_voxels {
-        for (offset, world_axis, axis_index) in directions {
-            let neighbour_coordinate = [
-                coordinate[0] + offset[0],
-                coordinate[1] + offset[1],
-                coordinate[2] + offset[2],
-            ];
-            let Some(second) = spawned_voxels.get(&neighbour_coordinate) else {
-                continue;
-            };
-            if matches!(first.body_type, BodyType::Static)
-                && matches!(second.body_type, BodyType::Static)
-            {
-                continue;
-            }
-            let Some(strength) =
-                combine_bond_strength(first.bond_strength.as_ref(), second.bond_strength.as_ref())
-            else {
-                continue;
-            };
-
-            let (first_id, second_id) = if first.id <= second.id {
-                (&first.id, &second.id)
-            } else {
-                (&second.id, &first.id)
-            };
-            let bond_id = format!("bond:{first_id}|{second_id}");
-            if world_state.broken_bonds.contains(&bond_id) {
-                continue;
-            }
-
-            let local_axis1 = first.rotation.inverse() * world_axis;
-            let local_axis2 = second.rotation.inverse() * -world_axis;
-            let anchor1 = local_axis1 * first.half_extents[axis_index];
-            let anchor2 = local_axis2 * second.half_extents[axis_index];
-            let other_axes = match axis_index {
-                0 => [1, 2],
-                1 => [0, 2],
-                _ => [0, 1],
-            };
-            let face_area = (first.half_extents[other_axes[0]] * 2.0)
-                * (first.half_extents[other_axes[1]] * 2.0);
-            let face_size = face_area.sqrt();
-
-            spawn_voxel_bond(
-                &mut commands,
-                bond_id,
-                first.entity,
-                second.entity,
-                anchor1,
-                anchor2,
-                local_axis1,
-                face_size,
-                strength,
-            );
-            bond_count += 1;
-        }
-    }
-
     let mut restored_fragment_count = 0_usize;
-    for (instance_id, state) in &world_state.fragments {
+    for (instance_id, state) in world_state.fragments.iter().filter(|(_, state)| state.chunk_id.is_none()) {
         let Some(definition) = config.components.definitions.get(&state.definition_id) else {
             warn!(
                 "Skipping fragment '{}' because component definition '{}' is unavailable",
@@ -291,14 +120,309 @@ pub(super) fn spawn_world(
     }
 
     info!(
-        "Loaded world '{}' with {} authored objects, {} voxel cells, {} chunks, {} structural bonds, and {} saved fragments",
+        "Loaded world '{}' with {} authored objects and {} unchunked saved fragments; {} chunks are indexed for streaming",
         config.world.name,
         config.world.objects.len(),
-        voxel_count,
-        config.chunks.len(),
-        bond_count,
-        restored_fragment_count
+        restored_fragment_count,
+        config.chunks.len()
     );
+}
+
+
+/// Spawns one validated chunk. Static non-fracturable cells use greedy render meshes and
+/// material-homogeneous compound colliders. Interactive cells remain independent rigid bodies.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn spawn_chunk(
+    commands: &mut Commands,
+    chunk: &ChunkFile,
+    config: &RuntimeConfig,
+    world_state: &mut WorldStateFile,
+    journal: &crate::physics::DestructionJournal,
+    voxel_bodies: &mut HashMap<[i32; 3], SpawnedVoxelBody>,
+    active_bond_ids: &mut HashSet<String>,
+    asset_server: &AssetServer,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+) -> Result<usize, String> {
+    let dimensions = [
+        chunk.dimensions[0] as usize,
+        chunk.dimensions[1] as usize,
+        chunk.dimensions[2] as usize,
+    ];
+    let volume = dimensions[0] * dimensions[1] * dimensions[2];
+    let mut cells = vec![0_u8; volume];
+    let index = |x: usize, y: usize, z: usize| {
+        (y * dimensions[2] + z) * dimensions[0] + x
+    };
+
+    for layer in &chunk.layers {
+        for (z, row) in layer.rows.iter().enumerate() {
+            for (x, character) in row.chars().enumerate() {
+                cells[index(x, layer.y as usize, z)] = character
+                    .to_digit(16)
+                    .ok_or_else(|| format!("chunk '{}' contains a non-hex palette cell", chunk.id))?
+                    as u8;
+            }
+        }
+    }
+
+    let grid = VoxelGrid::from_cells(dimensions, chunk.voxel_size_m, cells)
+        .map_err(|error| format!("chunk '{}' has invalid voxel data: {error}", chunk.id))?;
+
+    let mut mergeable = vec![false; volume];
+    let mut definitions_by_palette = BTreeMap::new();
+    for (palette_index, definition_id) in chunk.palette.iter().enumerate().skip(1) {
+        let definition = config.components.definitions.get(definition_id)
+            .ok_or_else(|| format!("chunk '{}' references missing definition '{definition_id}'", chunk.id))?;
+        definitions_by_palette.insert(palette_index as u8, (definition_id.clone(), definition.clone()));
+    }
+
+    for y in 0..dimensions[1] {
+        for z in 0..dimensions[2] {
+            for x in 0..dimensions[0] {
+                let palette = grid.cell(x, y, z);
+                if palette == 0 {
+                    continue;
+                }
+                let Some((_, definition)) = definitions_by_palette.get(&palette) else {
+                    return Err(format!("chunk '{}' references palette index {palette} outside its palette", chunk.id));
+                };
+                mergeable[index(x, y, z)] = matches!(definition.body_type, BodyType::Static)
+                    && definition.destructibility.is_none()
+                    && definition.bond_strength.is_none()
+                    && definition.visual.model.is_none();
+            }
+        }
+    }
+
+    let chunk_origin = Vec3::new(
+        chunk.coordinate[0] as f32 * dimensions[0] as f32 * chunk.voxel_size_m,
+        chunk.coordinate[1] as f32 * dimensions[1] as f32 * chunk.voxel_size_m,
+        chunk.coordinate[2] as f32 * dimensions[2] as f32 * chunk.voxel_size_m,
+    );
+
+    // Batch static cells by palette entry. This keeps independent physical material response
+    // while dramatically reducing entities, draw calls, and collider shape count for terrain.
+    if config.engine.streaming.greedy_meshing_enabled {
+        let boxes = grid.greedy_boxes(&mergeable)
+            .map_err(|error| format!("chunk '{}' greedy collider generation failed: {error}", chunk.id))?;
+        let mut collider_shapes = BTreeMap::<u8, Vec<(Vec3, Quat, Collider)>>::new();
+        for greedy_box in boxes {
+            collider_shapes.entry(greedy_box.palette_index).or_default().push((
+                greedy_box.center_m,
+                Quat::IDENTITY,
+                Collider::cuboid(
+                    greedy_box.full_size_m.x,
+                    greedy_box.full_size_m.y,
+                    greedy_box.full_size_m.z,
+                ),
+            ));
+        }
+
+        let mut mesh_by_palette = grid.build_greedy_meshes(&mergeable)
+            .map_err(|error| format!("chunk '{}' greedy mesh generation failed: {error}", chunk.id))?;
+        for (palette, shapes) in collider_shapes {
+            let Some((definition_id, definition)) = definitions_by_palette.get(&palette) else {
+                continue;
+            };
+            let physical_material = config.materials.materials.get(&definition.material)
+                .ok_or_else(|| format!("chunk '{}' definition '{}' has no physical material", chunk.id, definition_id))?;
+            let Some(mesh) = mesh_by_palette.remove(&palette) else {
+                continue;
+            };
+
+            commands.spawn((
+                Name::new(format!("chunk:{}:static:{}", chunk.id, definition_id)),
+                ChunkMembership(chunk.id.clone()),
+                RigidBody::Static,
+                Collider::compound(shapes),
+                ColliderDensity(physical_material.density_kg_m3),
+                Friction::new(physical_material.dynamic_friction)
+                    .with_static_coefficient(physical_material.static_friction),
+                Restitution::new(physical_material.restitution),
+                CollisionEventsEnabled,
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(materials.add(standard_material_from_visual(&definition.visual))),
+                Transform::from_translation(chunk_origin),
+            ));
+        }
+    }
+
+    let mut newly_spawned = Vec::<[i32; 3]>::new();
+    let mut visual_mesh_cache = HashMap::<MeshKey, Handle<Mesh>>::new();
+    let mut visual_material_cache = HashMap::<VisualMaterialKey, Handle<StandardMaterial>>::new();
+
+    // Non-static, destructible, bonded or imported-visual cells keep individual physical bodies.
+    for y in 0..dimensions[1] {
+        for z in 0..dimensions[2] {
+            for x in 0..dimensions[0] {
+                let palette = grid.cell(x, y, z);
+                if palette == 0 || mergeable[index(x, y, z)] {
+                    continue;
+                }
+                let (definition_id, authored_definition) = definitions_by_palette.get(&palette)
+                    .ok_or_else(|| format!("chunk '{}' references invalid palette index {palette}", chunk.id))?;
+                let instance_id = voxel_instance_id(&chunk.id, x as u32, y as u32, z as u32);
+                if journal.fractured.contains(&instance_id) {
+                    continue;
+                }
+
+                let physical_material = config.materials.materials.get(&authored_definition.material)
+                    .ok_or_else(|| format!("component '{}' has unknown material '{}'", definition_id, authored_definition.material))?;
+                let mut definition = authored_definition.clone();
+                let ColliderShape::Cuboid { half_extents } = &mut definition.collider else {
+                    return Err(format!("chunk '{}' palette definition '{}' is not a cuboid", chunk.id, definition_id));
+                };
+                for extent in half_extents {
+                    *extent *= chunk.voxel_size_m;
+                }
+
+                let saved = if matches!(definition.body_type, BodyType::Dynamic) {
+                    world_state.bodies.get(&instance_id)
+                } else {
+                    None
+                };
+                let position = chunk_origin + Vec3::new(
+                    (x as f32 + 0.5) * chunk.voxel_size_m,
+                    (y as f32 + 0.5) * chunk.voxel_size_m,
+                    (z as f32 + 0.5) * chunk.voxel_size_m,
+                );
+                let entity = spawn_body(
+                    commands,
+                    &instance_id,
+                    definition_id,
+                    &definition,
+                    physical_material,
+                    Transform::from_translation(position),
+                    saved,
+                    config,
+                    asset_server,
+                    meshes,
+                    materials,
+                    &mut visual_mesh_cache,
+                    &mut visual_material_cache,
+                );
+                commands.entity(entity).insert(ChunkMembership(chunk.id.clone()));
+
+                let ColliderShape::Cuboid { half_extents } = &definition.collider else {
+                    unreachable!("chunk palette definitions were checked above");
+                };
+                let coordinate = [
+                    chunk.coordinate[0] * chunk.dimensions[0] as i32 + x as i32,
+                    chunk.coordinate[1] * chunk.dimensions[1] as i32 + y as i32,
+                    chunk.coordinate[2] * chunk.dimensions[2] as i32 + z as i32,
+                ];
+                voxel_bodies.insert(coordinate, SpawnedVoxelBody {
+                    id: instance_id,
+                    entity,
+                    coordinate,
+                    chunk_id: chunk.id.clone(),
+                    rotation: saved.map(|state| Quat::from_array(state.rotation_xyzw)).unwrap_or(Quat::IDENTITY),
+                    half_extents: Vec3::from_array(*half_extents),
+                    body_type: definition.body_type,
+                    bond_strength: definition.bond_strength.clone(),
+                });
+                newly_spawned.push(coordinate);
+            }
+        }
+    }
+
+    // Reconnect new cells to any already-loaded neighbours. The stable pair ID prevents
+    // duplicate joints when chunks load in a different order.
+    let directions = [
+        ([1, 0, 0], Vec3::X, 0_usize),
+        ([-1, 0, 0], -Vec3::X, 0_usize),
+        ([0, 1, 0], Vec3::Y, 1_usize),
+        ([0, -1, 0], -Vec3::Y, 1_usize),
+        ([0, 0, 1], Vec3::Z, 2_usize),
+        ([0, 0, -1], -Vec3::Z, 2_usize),
+    ];
+    for coordinate in newly_spawned {
+        let Some(first) = voxel_bodies.get(&coordinate).cloned() else {
+            continue;
+        };
+        for (offset, direction, axis) in directions {
+            let neighbour_coordinate = [
+                coordinate[0] + offset[0],
+                coordinate[1] + offset[1],
+                coordinate[2] + offset[2],
+            ];
+            let Some(second) = voxel_bodies.get(&neighbour_coordinate).cloned() else {
+                continue;
+            };
+            if first.id >= second.id
+                || (matches!(first.body_type, BodyType::Static) && matches!(second.body_type, BodyType::Static))
+            {
+                continue;
+            }
+            let Some(strength) = combine_bond_strength(
+                first.bond_strength.as_ref(),
+                second.bond_strength.as_ref(),
+            ) else {
+                continue;
+            };
+            let bond_id = format!("bond:{}|{}", first.id, second.id);
+            if active_bond_ids.contains(&bond_id) || journal.broken_bonds.contains(&bond_id) {
+                continue;
+            }
+
+            let local_axis1 = first.rotation.inverse() * direction;
+            let local_axis2 = second.rotation.inverse() * -direction;
+            let anchor1 = local_axis1 * first.half_extents[axis];
+            let anchor2 = local_axis2 * second.half_extents[axis];
+            let other_axes = match axis {
+                0 => [1, 2],
+                1 => [0, 2],
+                _ => [0, 1],
+            };
+            let face_area = (first.half_extents[other_axes[0]] * 2.0)
+                * (first.half_extents[other_axes[1]] * 2.0);
+            let face_size = face_area.sqrt();
+            let joint = spawn_voxel_bond(
+                commands,
+                bond_id.clone(),
+                first.entity,
+                second.entity,
+                anchor1,
+                anchor2,
+                local_axis1,
+                face_size,
+                strength,
+            );
+            commands.entity(joint).insert(ChunkMembership(chunk.id.clone()));
+            active_bond_ids.insert(bond_id);
+        }
+    }
+
+    // Restore detached fragments only when their owning chunk enters the active set.
+    let restored_ids: Vec<_> = world_state.fragments.iter()
+        .filter(|(_, state)| state.chunk_id.as_deref() == Some(chunk.id.as_str()))
+        .map(|(id, _)| id.clone())
+        .collect();
+    for id in restored_ids {
+        let state = world_state.fragments.get(&id).cloned()
+            .ok_or_else(|| format!("fragment state '{id}' disappeared during chunk restoration"))?;
+        let definition = config.components.definitions.get(&state.definition_id)
+            .ok_or_else(|| format!("fragment '{id}' references missing definition '{}'", state.definition_id))?;
+        let physical_material = config.materials.materials.get(&definition.material)
+            .ok_or_else(|| format!("fragment '{}' references missing material '{}'", id, definition.material))?;
+        spawn_saved_fragment(
+            commands,
+            &id,
+            &state,
+            definition,
+            physical_material,
+            config,
+            asset_server,
+            meshes,
+            materials,
+            &mut visual_mesh_cache,
+            &mut visual_material_cache,
+        );
+        world_state.fragments.remove(&id);
+    }
+
+    Ok(newly_spawned.len())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -470,6 +594,7 @@ fn spawn_saved_fragment(
         Name::new(instance_id.to_owned()),
         PersistentObjectId(instance_id.to_owned()),
         PersistedFragment {
+            chunk_id: state.chunk_id.clone(),
             definition_id: state.definition_id.clone(),
             half_extents_m: state.half_extents_m,
         },
@@ -497,6 +622,9 @@ fn spawn_saved_fragment(
         },
     ));
 
+    if let Some(chunk_id) = &state.chunk_id {
+        entity.insert(ChunkMembership(chunk_id.clone()));
+    }
     if let Some(rolling) = RollingResistance::from_collider(
         &definition.collider,
         physical_material.density_kg_m3,
