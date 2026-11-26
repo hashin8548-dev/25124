@@ -532,7 +532,6 @@ mod tests {
     fn checked_in_data_and_world_are_valid_without_reading_user_save_data() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let config = RuntimeConfig::load(
-            root.to_path_buf(),
             root.join("data"),
             root.join("assets"),
             root.join("worlds/sandbox/world.json"),
