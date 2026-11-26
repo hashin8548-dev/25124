@@ -171,6 +171,28 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSou
                 "chunk '{}' voxel_size_m must be positive and finite",
                 reference.id
             );
+            for axis in 0..3 {
+                let cell_origin =
+                    reference.coordinate[axis] as i64 * reference.dimensions[axis] as i64;
+                let cell_end = cell_origin + reference.dimensions[axis] as i64 - 1;
+                ensure!(
+                    cell_origin >= i32::MIN as i64 && cell_end <= i32::MAX as i64,
+                    "chunk '{}' coordinate on axis {axis} exceeds the global voxel index range",
+                    reference.id
+                );
+
+                let world_extent =
+                    reference.dimensions[axis] as f32 * reference.voxel_size_m;
+                let world_min = reference.coordinate[axis] as f32 * world_extent;
+                ensure!(
+                    world_extent.is_finite()
+                        && world_extent > 0.0
+                        && world_min.is_finite()
+                        && (world_min + world_extent).is_finite(),
+                    "chunk '{}' world bounds on axis {axis} are not finite",
+                    reference.id
+                );
+            }
 
             ensure!(
                 chunk_ids.insert(reference.id.clone()),
