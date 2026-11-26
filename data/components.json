@@ -124,6 +124,44 @@
         "perceptual_roughness": 0.92,
         "metallic": 0,
         "alpha_mode": "opaque"
+      },
+      "bond_strength": {
+        "tensile_strength_pa": 3000000,
+        "shear_strength_pa": 2000000,
+        "bending_strength_pa": 4000000,
+        "torsional_strength_pa": 2000000
+      }
+    },
+    "block.structural_timber": {
+      "body_type": "dynamic",
+      "collider": {
+        "kind": "cuboid",
+        "half_extents": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "material": "timber",
+      "swept_ccd": null,
+      "destructibility": null,
+      "bond_strength": {
+        "tensile_strength_pa": 35000000,
+        "shear_strength_pa": 7000000,
+        "bending_strength_pa": 55000000,
+        "torsional_strength_pa": 5000000
+      },
+      "visual": {
+        "model": null,
+        "color_srgba": [
+          0.48,
+          0.29,
+          0.15,
+          1
+        ],
+        "perceptual_roughness": 0.86,
+        "metallic": 0,
+        "alpha_mode": "opaque"
       }
     }
   }
