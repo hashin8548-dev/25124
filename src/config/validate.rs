@@ -9,6 +9,7 @@ use super::schema::{
 };
 
 const SCHEMA_VERSION: u32 = 1;
+const ENGINE_SCHEMA_VERSION: u32 = 2;
 const CAMERA_PITCH_LIMIT_DEGREES: f32 = 89.0;
 
 pub fn validate_all(
@@ -19,7 +20,7 @@ pub fn validate_all(
     chunks: &[ChunkSource],
 ) -> Result<()> {
     ensure!(
-        engine.schema_version == SCHEMA_VERSION,
+        engine.schema_version == ENGINE_SCHEMA_VERSION,
         "unsupported engine schema version {}",
         engine.schema_version
     );
