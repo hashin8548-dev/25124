@@ -192,7 +192,33 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSou
         }
     }
 
+    validate_uniform_chunk_lattice(&chunks)?;
     Ok(chunks)
+}
+
+fn validate_uniform_chunk_lattice(chunks: &[ChunkSource]) -> Result<()> {
+    let Some(reference) = chunks.first() else {
+        return Ok(());
+    };
+
+    for chunk in chunks.iter().skip(1) {
+        ensure!(
+            chunk.dimensions == reference.dimensions,
+            "chunk '{}' dimensions {:?} do not match world grid dimensions {:?}",
+            chunk.id,
+            chunk.dimensions,
+            reference.dimensions
+        );
+        ensure!(
+            (chunk.voxel_size_m - reference.voxel_size_m).abs()
+                <= f32::EPSILON * reference.voxel_size_m.max(1.0),
+            "chunk '{}' voxel size {} does not match world grid voxel size {}",
+            chunk.id,
+            chunk.voxel_size_m,
+            reference.voxel_size_m
+        );
+    }
+    Ok(())
 }
 
 fn validate_relative_data_path(path: &str) -> Result<()> {
