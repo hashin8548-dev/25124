@@ -8,8 +8,8 @@ use anyhow::{Context, Result, bail, ensure};
 
 use super::{
     schema::{
-        ComponentCatalog, EngineSettings, MaterialCatalog, MAX_CHUNK_DIMENSION,
-        RegionManifest, WorldManifest,
+        ComponentCatalog, EngineSettings, MAX_CHUNK_DIMENSION, MaterialCatalog, RegionManifest,
+        WorldManifest,
     },
     validate::validate_all,
 };
@@ -184,8 +184,7 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSou
                     reference.id
                 );
 
-                let world_extent =
-                    reference.dimensions[axis] as f32 * reference.voxel_size_m;
+                let world_extent = reference.dimensions[axis] as f32 * reference.voxel_size_m;
                 let world_min = reference.coordinate[axis] as f32 * world_extent;
                 ensure!(
                     world_extent.is_finite()
