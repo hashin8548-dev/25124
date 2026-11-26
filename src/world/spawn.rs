@@ -8,16 +8,26 @@ use bevy::{gltf::prelude::GltfAssetLabel, prelude::*};
 
 use crate::{
     config::{
-        AlphaMode, BodyType, CcdFilterDefinition, ColliderShape, ComponentDefinition,
-        RuntimeConfig, SweepModeDefinition, VisualDefinition,
+        AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ColliderShape,
+        ComponentDefinition, RuntimeConfig, SweepModeDefinition, VisualDefinition,
     },
     persistence::{
         PersistedBodyState, PersistedFragment, PersistedFragmentState, PersistRuntimeState,
         PersistentObjectId, WorldStateFile,
     },
-    physics::DestructibleBody,
+    physics::{DestructibleBody, RollingResistance, spawn_voxel_bond},
     world::voxel_instance_id,
 };
+
+#[derive(Clone)]
+struct SpawnedVoxelBody {
+    id: String,
+    entity: Entity,
+    rotation: Quat,
+    half_extents: Vec3,
+    body_type: BodyType,
+    bond_strength: Option<BondStrengthDefinition>,
+}
 
 pub(super) fn spawn_world(
     mut commands: Commands,
@@ -75,6 +85,7 @@ pub(super) fn spawn_world(
     }
 
     let mut voxel_count = 0_usize;
+    let mut spawned_voxels = HashMap::<[i32; 3], SpawnedVoxelBody>::new();
     for chunk in &config.chunks {
         let dimensions = chunk.dimensions;
         let voxel_size = chunk.voxel_size_m;
@@ -139,13 +150,14 @@ pub(super) fn spawn_world(
                             (z as f32 + 0.5) * voxel_size,
                         );
 
-                    spawn_body(
+                    let authored_transform = Transform::from_translation(position);
+                    let entity = spawn_body(
                         &mut commands,
                         &instance_id,
                         definition_id,
                         &definition,
                         physical_material,
-                        Transform::from_translation(position),
+                        authored_transform,
                         saved,
                         &config,
                         &asset_server,
@@ -154,9 +166,100 @@ pub(super) fn spawn_world(
                         &mut mesh_cache,
                         &mut material_cache,
                     );
+
+                    let ColliderShape::Cuboid { half_extents } = &definition.collider else {
+                        unreachable!("chunk palette definitions are validated as cuboids");
+                    };
+                    let grid_coordinate = [
+                        chunk.coordinate[0] * dimensions[0] as i32 + x as i32,
+                        chunk.coordinate[1] * dimensions[1] as i32 + layer.y as i32,
+                        chunk.coordinate[2] * dimensions[2] as i32 + z as i32,
+                    ];
+                    let rotation = saved
+                        .map(|state| Quat::from_array(state.rotation_xyzw))
+                        .unwrap_or(Quat::IDENTITY);
+                    spawned_voxels.insert(
+                        grid_coordinate,
+                        SpawnedVoxelBody {
+                            id: instance_id,
+                            entity,
+                            rotation,
+                            half_extents: Vec3::from_array(*half_extents),
+                            body_type: definition.body_type,
+                            bond_strength: definition.bond_strength.clone(),
+                        },
+                    );
                     voxel_count += 1;
                 }
             }
+        }
+    }
+
+    // Build a stable, sparse bond graph across all loaded chunks. Each positive-axis
+    // neighbour is visited once, including chunk-boundary neighbours.
+    let mut bond_count = 0_usize;
+    let directions = [
+        ([1, 0, 0], Vec3::X, 0_usize),
+        ([0, 1, 0], Vec3::Y, 1_usize),
+        ([0, 0, 1], Vec3::Z, 2_usize),
+    ];
+    for (coordinate, first) in &spawned_voxels {
+        for (offset, world_axis, axis_index) in directions {
+            let neighbour_coordinate = [
+                coordinate[0] + offset[0],
+                coordinate[1] + offset[1],
+                coordinate[2] + offset[2],
+            ];
+            let Some(second) = spawned_voxels.get(&neighbour_coordinate) else {
+                continue;
+            };
+            if matches!(first.body_type, BodyType::Static)
+                && matches!(second.body_type, BodyType::Static)
+            {
+                continue;
+            }
+            let Some(strength) = combine_bond_strength(
+                first.bond_strength.as_ref(),
+                second.bond_strength.as_ref(),
+            ) else {
+                continue;
+            };
+
+            let (first_id, second_id) = if first.id <= second.id {
+                (&first.id, &second.id)
+            } else {
+                (&second.id, &first.id)
+            };
+            let bond_id = format!("bond:{first_id}|{second_id}");
+            if world_state.broken_bonds.contains(&bond_id) {
+                continue;
+            }
+
+            let local_axis1 = first.rotation.inverse() * world_axis;
+            let local_axis2 = second.rotation.inverse() * -world_axis;
+            let anchor1 = local_axis1 * first.half_extents[axis_index];
+            let anchor2 = local_axis2 * second.half_extents[axis_index];
+            let other_axes = match axis_index {
+                0 => [1, 2],
+                1 => [0, 2],
+                _ => [0, 1],
+            };
+            let face_area = (first.half_extents[other_axes[0]] * 2.0)
+                * (first.half_extents[other_axes[1]] * 2.0);
+            let face_size = face_area.sqrt();
+
+            spawn_voxel_bond(
+                &mut commands,
+                bond_id,
+                first.entity,
+                second.entity,
+                anchor1,
+                anchor2,
+                local_axis1,
+                face_size,
+                strength,
+            );
+            bond_count += 1;
         }
     }
 
@@ -196,11 +299,12 @@ pub(super) fn spawn_world(
     }
 
     info!(
-        "Loaded world '{}' with {} authored objects, {} voxel cells across {} chunks, and {} saved fragments",
+        "Loaded world '{}' with {} authored objects, {} voxel cells, {} chunks, {} structural bonds, and {} saved fragments",
         config.world.name,
         config.world.objects.len(),
         voxel_count,
         config.chunks.len(),
+        bond_count,
         restored_fragment_count
     );
 }
@@ -220,7 +324,7 @@ fn spawn_body(
     materials: &mut Assets<StandardMaterial>,
     mesh_cache: &mut HashMap<MeshKey, Handle<Mesh>>,
     material_cache: &mut HashMap<VisualMaterialKey, Handle<StandardMaterial>>,
-) {
+) -> Entity {
     let (translation, rotation, linear_velocity, angular_velocity) = saved
         .map(|state| {
             (
@@ -271,6 +375,14 @@ fn spawn_body(
                 angular: config.engine.physics.sleep_angular_threshold_rad_s,
             },
         ));
+        if let Some(rolling) = RollingResistance::from_collider(
+            &definition.collider,
+            physical_material.density_kg_m3,
+            physical_material.rolling_resistance_coefficient,
+            1.0,
+        ) {
+            entity.insert(rolling);
+        }
     }
 
     if let Some(ccd) = &definition.swept_ccd {
@@ -306,10 +418,12 @@ fn spawn_body(
             physical_material.static_friction,
             physical_material.dynamic_friction,
             physical_material.restitution,
+            physical_material.rolling_resistance_coefficient,
             &definition.visual,
         ));
     }
 
+    let entity_id = entity.id();
     add_visual(
         &mut entity,
         definition,
@@ -319,6 +433,23 @@ fn spawn_body(
         mesh_cache,
         material_cache,
     );
+    entity_id
+}
+
+fn combine_bond_strength(
+    first: Option<&BondStrengthDefinition>,
+    second: Option<&BondStrengthDefinition>,
+) -> Option<BondStrengthDefinition> {
+    match (first, second) {
+        (None, None) => None,
+        (Some(strength), None) | (None, Some(strength)) => Some(strength.clone()),
+        (Some(first), Some(second)) => Some(BondStrengthDefinition {
+            tensile_strength_pa: first.tensile_strength_pa.min(second.tensile_strength_pa),
+            shear_strength_pa: first.shear_strength_pa.min(second.shear_strength_pa),
+            bending_strength_pa: first.bending_strength_pa.min(second.bending_strength_pa),
+            torsional_strength_pa: first.torsional_strength_pa.min(second.torsional_strength_pa),
+        }),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -341,6 +472,7 @@ fn spawn_saved_fragment(
         half_extents: state.half_extents_m,
     };
     definition.destructibility = None;
+    definition.bond_strength = None;
 
     let mut entity = commands.spawn((
         Name::new(instance_id.to_owned()),
@@ -373,6 +505,14 @@ fn spawn_saved_fragment(
         },
     ));
 
+    if let Some(rolling) = RollingResistance::from_collider(
+        &definition.collider,
+        physical_material.density_kg_m3,
+        physical_material.rolling_resistance_coefficient,
+        1.0,
+    ) {
+        entity.insert(rolling);
+    }
     add_visual(
         &mut entity,
         &definition,
