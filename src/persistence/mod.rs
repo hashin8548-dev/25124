@@ -7,7 +7,10 @@ use std::{collections::HashSet, path::PathBuf};
 use avian3d::prelude::{AngularVelocity, LinearVelocity};
 use bevy::prelude::*;
 
-use crate::{config::{BodyType, RuntimeConfig}, physics::DestructionJournal};
+use crate::{
+    config::{BodyType, RuntimeConfig},
+    physics::DestructionJournal,
+};
 
 #[derive(Component, Clone, Debug)]
 pub struct PersistentObjectId(pub String);
