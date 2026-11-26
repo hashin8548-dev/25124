@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use avian3d::prelude::{FixedJoint, JointCollisionDisabled, JointForces};
 use bevy::prelude::*;
 
@@ -13,11 +11,6 @@ pub struct VoxelBond {
     pub normal_local: Vec3,
     pub face_size_m: f32,
     pub strength: BondStrengthDefinition,
-}
-
-#[derive(Resource, Clone, Debug, Default)]
-pub struct BondBreakJournal {
-    pub broken: BTreeSet<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -116,17 +109,17 @@ pub(super) fn break_overstressed_bonds(
     mut commands: Commands,
     bonds: Query<(Entity, &VoxelBond, &JointForces)>,
     transforms: Query<&Transform>,
-    mut journal: ResMut<BondBreakJournal>,
+    mut journal: ResMut<crate::physics::DestructionJournal>,
 ) {
     for (joint_entity, bond, joint_forces) in &bonds {
-        if journal.broken.contains(&bond.id) {
+        if journal.broken_bonds.contains(&bond.id) {
             commands.entity(joint_entity).despawn();
             continue;
         }
 
         let Ok(body_transform) = transforms.get(bond.body1) else {
             commands.entity(joint_entity).despawn();
-            journal.broken.insert(bond.id.clone());
+            journal.broken_bonds.insert(bond.id.clone());
             continue;
         };
 
