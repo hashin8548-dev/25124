@@ -307,9 +307,8 @@ where
         // Copy through a newly created handle rather than fs::copy followed by
         // reopening the destination. This preserves our write handle through flush/sync
         // and avoids inheriting restrictive file attributes on Windows.
-        let mut source_file = File::open(path).with_context(|| {
-            format!("could not open current save '{}'", path.display())
-        })?;
+        let mut source_file = File::open(path)
+            .with_context(|| format!("could not open current save '{}'", path.display()))?;
         let mut staged_file = OpenOptions::new()
             .write(true)
             .create_new(true)
