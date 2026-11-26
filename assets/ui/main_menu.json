@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "title": "PHYSICS SANDBOX",
+  "subtitle": "A MATERIAL AND DESTRUCTION SIMULATION",
+  "background_srgba": [
+    0.012,
+    0.02,
+    0.032,
+    0.96
+  ],
+  "panel_srgba": [
+    0.045,
+    0.065,
+    0.09,
+    0.98
+  ],
+  "title_srgba": [
+    0.9,
+    0.95,
+    1,
+    1
+  ],
+  "subtitle_srgba": [
+    0.48,
+    0.66,
+    0.78,
+    1
+  ],
+  "button_srgba": [
+    0.09,
+    0.17,
+    0.24,
+    1
+  ],
+  "button_hover_srgba": [
+    0.15,
+    0.32,
+    0.43,
+    1
+  ],
+  "button_text_srgba": [
+    0.92,
+    0.97,
+    1,
+    1
+  ],
+  "panel_width_px": 560,
+  "panel_padding_px": 44,
+  "vertical_gap_px": 16,
+  "title_size_px": 34,
+  "subtitle_size_px": 13,
+  "button_width_px": 360,
+  "button_height_px": 54,
+  "button_font_size_px": 16,
+  "buttons": [
+    {
+      "label": "START SIMULATION",
+      "action": "start"
+    },
+    {
+      "label": "RESUME",
+      "action": "resume"
+    },
+    {
+      "label": "QUIT",
+      "action": "quit"
+    }
+  ]
+}
