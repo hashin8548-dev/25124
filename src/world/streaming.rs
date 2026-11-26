@@ -10,13 +10,13 @@ use bevy::{
 };
 
 use crate::{
+    camera::FreeFlyCamera,
     config::{ChunkFile, ChunkSource, RuntimeConfig, validate_chunk_file},
     persistence::{
         PersistRuntimeState, PersistedBodyState, PersistedFragment, PersistedFragmentState,
         PersistentObjectId, WorldStateFile,
     },
     physics::{DestructionJournal, VoxelBond},
-    camera::FreeFlyCamera,
     world::{ChunkMembership, SpawnedVoxelBody, spawn},
 };
 
@@ -54,16 +54,14 @@ pub(super) fn update_chunk_streaming(
         ),
         With<PersistRuntimeState>,
     >,
-    fragments: Query<
-        (
-            &PersistentObjectId,
-            &PersistedFragment,
-            &ChunkMembership,
-            &Transform,
-            &LinearVelocity,
-            &AngularVelocity,
-        ),
-    >,
+    fragments: Query<(
+        &PersistentObjectId,
+        &PersistedFragment,
+        &ChunkMembership,
+        &Transform,
+        &LinearVelocity,
+        &AngularVelocity,
+    )>,
     chunk_entities: Query<(Entity, &ChunkMembership)>,
     bonds: Query<(Entity, &VoxelBond)>,
 ) {
@@ -101,7 +99,8 @@ pub(super) fn update_chunk_streaming(
         .pending
         .iter()
         .filter(|(_, pending)| {
-            distance_to_chunk_aabb(camera_position, &pending.source) > chunk_radius_m(&pending.source, unload_limit)
+            distance_to_chunk_aabb(camera_position, &pending.source)
+                > chunk_radius_m(&pending.source, unload_limit)
         })
         .map(|(id, _)| id.clone())
         .collect();
@@ -179,7 +178,9 @@ pub(super) fn update_chunk_streaming(
             commands.entity(entity).despawn();
         }
 
-        state.voxel_bodies.retain(|_, body| body.chunk_id != chunk_id);
+        state
+            .voxel_bodies
+            .retain(|_, body| body.chunk_id != chunk_id);
         state.loaded.remove(&chunk_id);
         info!("Unloaded chunk '{chunk_id}' after preserving its dynamic state");
     }
