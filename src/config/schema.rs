@@ -24,6 +24,9 @@ pub struct PhysicsSettings {
     pub contact_frequency_factor: f32,
     pub max_overlap_solve_speed_m_s: f32,
     pub warm_start_coefficient: f32,
+    pub sleep_linear_threshold_m_s: f32,
+    pub sleep_angular_threshold_rad_s: f32,
+    pub sleep_after_seconds: f32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
