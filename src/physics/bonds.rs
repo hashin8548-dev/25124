@@ -132,7 +132,7 @@ pub(super) fn break_overstressed_bonds(
         );
 
         if stress.exceeds(&bond.strength) {
-            journal.broken.insert(bond.id.clone());
+            journal.broken_bonds.insert(bond.id.clone());
             commands.entity(joint_entity).despawn();
             info!(
                 "Voxel bond '{}' failed: tensile {:.2} MPa, shear {:.2} MPa, bending {:.2} MPa, torsion {:.2} MPa",
