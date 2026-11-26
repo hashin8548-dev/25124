@@ -204,7 +204,8 @@ pub(super) fn spawn_chunk(
                     && matches!(definition.body_type, BodyType::Static)
                     && definition.destructibility.is_none()
                     && definition.bond_strength.is_none()
-                    && definition.visual.model.is_none();
+                    && definition.visual.model.is_none()
+                    && matches!(definition.visual.alpha_mode, AlphaMode::Opaque);
             }
         }
     }
