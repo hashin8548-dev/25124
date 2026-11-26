@@ -11,6 +11,8 @@ use super::{
     validate::validate_all,
 };
 
+const REGION_SCHEMA_VERSION: u32 = 2;
+
 #[derive(Clone, Debug)]
 pub struct ProjectPaths {
     pub assets_dir: PathBuf,
@@ -126,7 +128,7 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSou
         let region_path = world_directory.join(region_reference);
         let region: RegionManifest = read_json(&region_path)?;
         ensure!(
-            region.schema_version == 1,
+            region.schema_version == REGION_SCHEMA_VERSION,
             "unsupported schema version {} in region '{}'",
             region.schema_version,
             region.id
