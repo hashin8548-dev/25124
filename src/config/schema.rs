@@ -62,6 +62,8 @@ pub struct MaterialDefinition {
     pub static_friction: f32,
     pub dynamic_friction: f32,
     pub restitution: f32,
+    #[serde(default)]
+    pub rolling_resistance_coefficient: f32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -80,6 +82,8 @@ pub struct ComponentDefinition {
     pub swept_ccd: Option<SweptCcdDefinition>,
     #[serde(default)]
     pub destructibility: Option<DestructibilityDefinition>,
+    #[serde(default)]
+    pub bond_strength: Option<BondStrengthDefinition>,
     pub visual: VisualDefinition,
 }
 
@@ -88,6 +92,16 @@ pub struct ComponentDefinition {
 pub struct DestructibilityDefinition {
     pub impact_speed_threshold_m_s: f32,
     pub fragments_per_axis: [u32; 3],
+}
+
+/// Material-level failure thresholds for voxel-to-voxel structural bonds.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BondStrengthDefinition {
+    pub tensile_strength_pa: f32,
+    pub shear_strength_pa: f32,
+    pub bending_strength_pa: f32,
+    pub torsional_strength_pa: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Hash)]
