@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail, ensure};
+use bevy::prelude::*;
 
 use super::{
     schema::{ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest},
