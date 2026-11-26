@@ -7,8 +7,9 @@ use avian3d::prelude::{
 use bevy::prelude::*;
 
 use crate::{
-    config::{AlphaMode, BodyType, DestructibilityDefinition, VisualDefinition},
+    config::{AlphaMode, BodyType, ColliderShape, DestructibilityDefinition, VisualDefinition},
     persistence::{PersistedFragment, PersistentObjectId, WorldStateFile},
+    physics::RollingResistance,
     physics::VoxelBond,
 };
 
