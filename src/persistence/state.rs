@@ -18,6 +18,8 @@ pub struct WorldStateFile {
     #[serde(default)]
     pub fractured: BTreeSet<String>,
     #[serde(default)]
+    pub broken_bonds: BTreeSet<String>,
+    #[serde(default)]
     pub fragments: BTreeMap<String, PersistedFragmentState>,
 }
 
@@ -48,6 +50,7 @@ impl WorldStateFile {
             world_id,
             bodies: BTreeMap::new(),
             fractured: BTreeSet::new(),
+            broken_bonds: BTreeSet::new(),
             fragments: BTreeMap::new(),
         }
     }
@@ -151,6 +154,10 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
 
     for id in &state.fractured {
         ensure!(!id.trim().is_empty(), "save contains an empty fractured object id");
+    }
+
+    for id in &state.broken_bonds {
+        ensure!(!id.trim().is_empty(), "save contains an empty broken bond id");
     }
 
     for (id, fragment) in &mut state.fragments {
