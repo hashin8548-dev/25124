@@ -327,6 +327,8 @@ pub(super) fn spawn_chunk(
         }
     }
 
+    let newly_spawned_count = newly_spawned.len();
+
     // Reconnect new cells to any already-loaded neighbours. The stable pair ID prevents
     // duplicate joints when chunks load in a different order.
     let directions = [
@@ -337,7 +339,7 @@ pub(super) fn spawn_chunk(
         ([0, 0, 1], Vec3::Z, 2_usize),
         ([0, 0, -1], -Vec3::Z, 2_usize),
     ];
-    for coordinate in newly_spawned {
+    for coordinate in newly_spawned.iter().copied() {
         let Some(first) = voxel_bodies.get(&coordinate).cloned() else {
             continue;
         };
@@ -422,7 +424,7 @@ pub(super) fn spawn_chunk(
         world_state.fragments.remove(&id);
     }
 
-    Ok(newly_spawned.len())
+    Ok(newly_spawned_count)
 }
 
 #[allow(clippy::too_many_arguments)]
