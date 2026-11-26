@@ -216,7 +216,7 @@ fn dissipate_rolling_spin(
     }
 
     // The contact-normal spin component is not rolling resistance.
-    result = result - normal * (result - local_omega).dot(normal);
+    result = result - normal * (result.dot(normal) - local_omega.dot(normal));
     result
 }
 
