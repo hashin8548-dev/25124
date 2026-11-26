@@ -93,7 +93,9 @@ pub(super) fn fracture_on_new_impacts(
         for manifold in &pair.manifolds {
             for point in &manifold.points {
                 impact_speed = impact_speed.max((-point.normal_speed).max(0.0));
-                let impulse = manifold.normal * point.normal_impulse;
+                // The manifold normal points from collider1 to collider2. The normal
+                // impulse applied to collider1 therefore acts opposite that normal.
+                let impulse = -manifold.normal * point.normal_impulse;
                 impulse_on_first += impulse;
                 torque_on_first += point.point.cross(impulse);
             }
