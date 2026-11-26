@@ -30,6 +30,7 @@ pub struct ChunkStreamingState {
     pending: HashMap<String, PendingChunk>,
     ready: VecDeque<(ChunkSource, ChunkFile)>,
     loaded: HashSet<String>,
+    failed: HashSet<String>,
     pub(crate) voxel_bodies: HashMap<[i32; 3], SpawnedVoxelBody>,
     active_bond_ids: HashSet<String>,
 }
@@ -93,9 +94,15 @@ pub(super) fn update_chunk_streaming(
         match result {
             Ok(chunk) => match validate_chunk_file(&chunk, &pending.source, &config.components) {
                 Ok(()) => state.ready.push_back((pending.source, chunk)),
-                Err(error) => error!("Rejected streamed chunk '{}': {error:#}", id),
+                Err(error) => {
+                    state.failed.insert(id.clone());
+                    error!("Rejected streamed chunk '{}': {error:#}", id);
+                },
             },
-            Err(error) => error!("Could not read streamed chunk '{}': {error}", id),
+            Err(error) => {
+                state.failed.insert(id.clone());
+                error!("Could not read streamed chunk '{}': {error}", id);
+            },
         }
     }
 
@@ -198,6 +205,7 @@ pub(super) fn update_chunk_streaming(
         .iter()
         .filter(|source| {
             !state.loaded.contains(&source.id)
+                && !state.failed.contains(&source.id)
                 && !state.pending.contains_key(&source.id)
                 && !state.ready.iter().any(|(queued, _)| queued.id == source.id)
                 && distance_to_chunk_aabb(camera_position, source)
@@ -265,7 +273,10 @@ pub(super) fn update_chunk_streaming(
                     source.id, source.region_id, source.region_coordinate, body_count
                 );
             }
-            Err(error) => error!("Failed to spawn chunk '{}': {error}", source.id),
+            Err(error) => {
+                state.failed.insert(source.id.clone());
+                error!("Failed to spawn chunk '{}': {error}", source.id);
+            },
         }
     }
 }
