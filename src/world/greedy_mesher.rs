@@ -67,8 +67,8 @@ impl VoxelGrid {
 
     /// Greedily merges coplanar exposed faces, grouped by palette index.
     ///
-    /// Occupancy in the grid is the occlusion source. Callers should pass the full occupancy
-    /// grid, not only renderable cells, so hidden internal faces are not emitted.
+    /// Only faces between two renderable cells are culled. Interfaces with dynamic or
+    /// otherwise non-mergeable cells remain visible, while same-batch internal faces disappear.
     pub fn build_greedy_meshes(&self, renderable: &[bool]) -> Result<BTreeMap<u8, Mesh>, String> {
         if renderable.len() != self.cells.len() {
             return Err("renderable mask does not match the voxel grid volume".to_owned());
@@ -350,6 +350,30 @@ mod tests {
         let mesh = meshes.get(&1).unwrap();
         assert_eq!(mesh.count_vertices(), 24);
         assert_eq!(mesh.indices().unwrap().len(), 36);
+    }
+
+    #[test]
+    fn single_voxel_exposes_six_quads() {
+        let grid = VoxelGrid::from_cells([1, 1, 1], 1.0, vec![1]).unwrap();
+        let meshes = grid.build_greedy_meshes(&[true]).unwrap();
+        let mesh = meshes.get(&1).unwrap();
+        assert_eq!(mesh.count_vertices(), 24);
+        assert_eq!(mesh.indices().unwrap().len(), 36);
+    }
+
+    #[test]
+    fn non_mergeable_neighbour_keeps_the_interface_face_visible() {
+        let grid = VoxelGrid::from_cells([2, 1, 1], 1.0, vec![1, 2]).unwrap();
+        let meshes = grid.build_greedy_meshes(&[true, false]).unwrap();
+        // The first voxel has five outer faces plus its interface with an interactive cell.
+        assert_eq!(meshes.get(&1).unwrap().count_vertices(), 24);
+    }
+
+    #[test]
+    fn mismatched_render_mask_is_rejected() {
+        let grid = VoxelGrid::from_cells([1, 1, 1], 1.0, vec![1]).unwrap();
+        assert!(grid.build_greedy_meshes(&[]).is_err());
+        assert!(grid.greedy_boxes(&[]).is_err());
     }
 
     #[test]
