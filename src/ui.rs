@@ -29,8 +29,8 @@ impl Plugin for MenuPlugin {
 }
 
 #[derive(Resource, Default)]
-struct MenuState {
-    visible: bool,
+pub(crate) struct MenuState {
+    pub(crate) visible: bool,
 }
 
 #[derive(Component)]
