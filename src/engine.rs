@@ -20,10 +20,7 @@ impl Plugin for EnginePlugin {
     fn build(&self, app: &mut App) {
         let config = app.world().resource::<RuntimeConfig>().clone();
         let physics = &config.engine.physics;
-        let gravity = config
-            .world
-            .gravity_m_s2
-            .unwrap_or(physics.gravity_m_s2);
+        let gravity = config.world.gravity_m_s2.unwrap_or(physics.gravity_m_s2);
 
         app.add_plugins(PhysicsPlugins::default())
             .insert_resource(Time::<Fixed>::from_hz(physics.fixed_hz))
