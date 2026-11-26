@@ -231,18 +231,26 @@ pub(super) fn update_chunk_streaming(
         {
             continue;
         }
-        match spawn::spawn_chunk(
-            &mut commands,
-            &chunk,
-            &config,
-            &mut world_state,
-            &journal,
-            &mut state.voxel_bodies,
-            &mut state.active_bond_ids,
-            &asset_server,
-            &mut meshes,
-            &mut materials,
-        ) {
+        let spawn_result = {
+            let streaming_state = state.bypass_change_detection();
+            let (voxel_bodies, active_bond_ids) = (
+                &mut streaming_state.voxel_bodies,
+                &mut streaming_state.active_bond_ids,
+            );
+            spawn::spawn_chunk(
+                &mut commands,
+                &chunk,
+                &config,
+                &mut world_state,
+                &journal,
+                voxel_bodies,
+                active_bond_ids,
+                &asset_server,
+                &mut meshes,
+                &mut materials,
+            )
+        };
+        match spawn_result {
             Ok(body_count) => {
                 state.loaded.insert(source.id.clone());
                 info!(
