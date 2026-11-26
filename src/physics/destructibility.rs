@@ -9,6 +9,7 @@ use bevy::prelude::*;
 use crate::{
     config::{AlphaMode, BodyType, DestructibilityDefinition, VisualDefinition},
     persistence::{PersistedFragment, PersistentObjectId, WorldStateFile},
+    physics::VoxelBond,
 };
 
 #[derive(Component, Clone, Debug)]
@@ -84,6 +85,7 @@ pub(super) fn fracture_on_new_impacts(
     config: Res<crate::config::RuntimeConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    bonds: Query<(Entity, &VoxelBond)>,
 ) {
     let mut candidates = std::collections::HashMap::<Entity, ImpactTransfer>::new();
 
@@ -246,6 +248,12 @@ pub(super) fn fracture_on_new_impacts(
         }
 
         journal.fractured.insert(target.instance_id.clone());
+        for (joint_entity, bond) in &bonds {
+            if bond.body1 == entity || bond.body2 == entity {
+                journal.broken_bonds.insert(bond.id.clone());
+                commands.entity(joint_entity).despawn();
+            }
+        }
         commands.entity(entity).despawn();
         info!(
             "Fractured '{}' into {} pieces after a {:.2} m/s impact",
