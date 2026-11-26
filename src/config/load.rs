@@ -5,7 +5,6 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail, ensure};
-use bevy::prelude::*;
 
 use super::{
     schema::{ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest},
@@ -22,6 +21,8 @@ pub struct ProjectPaths {
 #[derive(Clone, Debug)]
 pub struct ChunkSource {
     pub id: String,
+    pub region_id: String,
+    pub region_coordinate: [i32; 2],
     pub coordinate: [i32; 3],
     pub dimensions: [u32; 3],
     pub voxel_size_m: f32,
@@ -136,12 +137,6 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSou
             "duplicate region id '{}'",
             region.id
         );
-        info!(
-            "Indexing region '{}' at {:?} ({} chunk references)",
-            region.id,
-            region.coordinate,
-            region.chunks.len()
-        );
 
         let region_directory = region_path
             .parent()
@@ -187,6 +182,8 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSou
             );
             chunks.push(ChunkSource {
                 id: reference.id.clone(),
+                region_id: region.id.clone(),
+                region_coordinate: region.coordinate,
                 coordinate: reference.coordinate,
                 dimensions: reference.dimensions,
                 voxel_size_m: reference.voxel_size_m,
