@@ -9,10 +9,10 @@
     "restitution_iterations": 4,
     "contact_damping_ratio": 10.0,
     "contact_frequency_factor": 1.5,
-    "max_overlap_solve_speed_m_s": 2.0,
+    "max_overlap_solve_speed_m_s": 0.5,
     "warm_start_coefficient": 1.0,
-    "sleep_linear_threshold_m_s": 0.08,
-    "sleep_angular_threshold_rad_s": 0.08,
+    "sleep_linear_threshold_m_s": 0.15,
+    "sleep_angular_threshold_rad_s": 0.15,
     "sleep_after_seconds": 0.5
   },
   "camera": {
