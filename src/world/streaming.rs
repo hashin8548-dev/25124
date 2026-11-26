@@ -199,6 +199,13 @@ pub(super) fn update_chunk_streaming(
         info!("Unloaded chunk '{chunk_id}' after preserving its dynamic state");
     }
 
+    // Discard completed reads that became irrelevant while waiting in the spawn queue.
+    // This prevents stale ready items from consuming the per-frame spawn budget.
+    let load_limit = config.engine.streaming.load_radius_chunks as f32;
+    state.ready.retain(|(source, _)| {
+        distance_to_chunk_aabb(camera_position, source) <= chunk_radius_m(source, load_limit)
+    });
+
     // Prioritize nearest indexed chunks and keep the number of outstanding I/O tasks bounded.
     let mut candidates: Vec<_> = config
         .chunks
