@@ -2,6 +2,9 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+/// Maximum edge length supported by the bounded in-memory voxel mesher.
+pub(crate) const MAX_CHUNK_DIMENSION: u32 = 32;
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EngineSettings {
