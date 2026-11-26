@@ -161,7 +161,10 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSou
                 )
             })?;
             ensure!(
-                reference.dimensions.iter().all(|dimension| (1..=32).contains(dimension)),
+                reference
+                    .dimensions
+                    .iter()
+                    .all(|dimension| (1..=32).contains(dimension)),
                 "chunk '{}' dimensions must each be in [1, 32]",
                 reference.id
             );
