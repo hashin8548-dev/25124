@@ -1,5 +1,7 @@
 mod free_fly;
 
+pub use free_fly::FreeFlyCamera;
+
 use bevy::prelude::*;
 
 pub struct CameraPlugin;
