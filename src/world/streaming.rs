@@ -129,15 +129,31 @@ pub(super) fn update_chunk_streaming(
         .loaded
         .iter()
         .filter_map(|id| {
-            config
-                .chunks
-                .iter()
-                .find(|source| &source.id == id)
-                .filter(|source| {
-                    distance_to_chunk_aabb(camera_position, source)
-                        > chunk_radius_m(source, unload_limit)
-                })
-                .map(|_| id.clone())
+            let source = config.chunks.iter().find(|source| &source.id == id)?;
+            let unload_distance = chunk_radius_m(source, unload_limit);
+            let chunk_is_distant =
+                distance_to_chunk_aabb(camera_position, source) > unload_distance;
+            if !chunk_is_distant {
+                return None;
+            }
+
+            // Detached dynamic voxels and fragments are no longer spatially contained by
+            // their source chunk. Keep that chunk resident while one of its actors is still
+            // near the camera, otherwise unloading would make nearby debris disappear.
+            let has_nearby_dynamic_body = bodies.iter().any(
+                |(_, membership, transform, _, _)| {
+                    membership.0 == *id
+                        && camera_position.distance(transform.translation) <= unload_distance
+                },
+            );
+            let has_nearby_fragment = fragments.iter().any(
+                |(_, _, membership, transform, _, _)| {
+                    membership.0 == *id
+                        && camera_position.distance(transform.translation) <= unload_distance
+                },
+            );
+
+            (!has_nearby_dynamic_body && !has_nearby_fragment).then(|| id.clone())
         })
         .collect();
 
