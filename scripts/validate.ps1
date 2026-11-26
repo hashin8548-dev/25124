@@ -9,28 +9,28 @@ Push-Location $repoRoot
 function Invoke-CargoCheck {
     param(
         [Parameter(Mandatory = $true)]
-        [string[]]$Arguments
+        [string[]]$CargoArgs
     )
 
-    & cargo @Arguments
+    & cargo @CargoArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "cargo $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+        throw "cargo $($CargoArgs -join ' ') failed with exit code $LASTEXITCODE"
     }
 }
 
 try {
     Write-Host "==> Checking Rust formatting"
-    Invoke-CargoCheck -Arguments @("fmt", "--all", "--", "--check")
+    Invoke-CargoCheck -CargoArgs @("fmt", "--all", "--", "--check")
 
     Write-Host "==> Type-checking all targets (locked dependencies)"
-    Invoke-CargoCheck -Arguments @("check", "--locked", "--all-targets")
+    Invoke-CargoCheck -CargoArgs @("check", "--locked", "--all-targets")
 
     Write-Host "==> Running all tests (locked dependencies)"
-    Invoke-CargoCheck -Arguments @("test", "--locked", "--all-targets")
+    Invoke-CargoCheck -CargoArgs @("test", "--locked", "--all-targets")
 
     if (-not $SkipClippy) {
         Write-Host "==> Running Clippy with warnings denied"
-        Invoke-CargoCheck -Arguments @("clippy", "--locked", "--all-targets", "--", "-D", "warnings")
+        Invoke-CargoCheck -CargoArgs @("clippy", "--locked", "--all-targets", "--", "-D", "warnings")
     }
 
     Write-Host "Local validation passed."
