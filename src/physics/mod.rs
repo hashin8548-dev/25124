@@ -11,6 +11,9 @@ pub use rolling::RollingResistance;
 use avian3d::prelude::{PhysicsSchedule, PhysicsStepSystems};
 use bevy::prelude::*;
 
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ContactUpdateSet;
+
 pub struct ContactPlugin;
 
 impl Plugin for ContactPlugin {
@@ -29,7 +32,8 @@ impl Plugin for ContactPlugin {
                     bonds::break_overstressed_bonds,
                     destructibility::fracture_on_new_impacts,
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(ContactUpdateSet),
             );
     }
 }
