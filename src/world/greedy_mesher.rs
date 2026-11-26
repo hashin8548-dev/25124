@@ -73,6 +73,13 @@ impl VoxelGrid {
         if renderable.len() != self.cells.len() {
             return Err("renderable mask does not match the voxel grid volume".to_owned());
         }
+        if renderable
+            .iter()
+            .zip(&self.cells)
+            .any(|(is_renderable, palette)| *is_renderable && *palette == 0)
+        {
+            return Err("air cells cannot be marked as renderable".to_owned());
+        }
         let mut buffers = BTreeMap::<u8, MeshBuffers>::new();
         for axis in 0..3 {
             let u = (axis + 1) % 3;
@@ -119,7 +126,7 @@ impl VoxelGrid {
                             } else {
                                 let adjacent_index =
                                     self.index(neighbour[0], neighbour[1], neighbour[2]);
-                                renderable[adjacent_index]
+                                self.cells[adjacent_index] != 0 && renderable[adjacent_index]
                             };
                             if !adjacent_is_mergeable {
                                 mask[v_index * self.dimensions[u] + u_index] = palette;
@@ -179,6 +186,13 @@ impl VoxelGrid {
     pub fn greedy_boxes(&self, mergeable: &[bool]) -> Result<Vec<GreedyBox>, String> {
         if mergeable.len() != self.cells.len() {
             return Err("mergeable mask does not match the voxel grid volume".to_owned());
+        }
+        if mergeable
+            .iter()
+            .zip(&self.cells)
+            .any(|(is_mergeable, palette)| *is_mergeable && *palette == 0)
+        {
+            return Err("air cells cannot be marked as mergeable".to_owned());
         }
         let mut visited = vec![false; self.cells.len()];
         let mut boxes = Vec::new();
