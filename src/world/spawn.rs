@@ -8,8 +8,8 @@ use bevy::{gltf::prelude::GltfAssetLabel, prelude::*};
 
 use crate::{
     config::{
-        AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ChunkFile,
-        ColliderShape, ComponentDefinition, RuntimeConfig, SweepModeDefinition, VisualDefinition,
+        AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ChunkFile, ColliderShape,
+        ComponentDefinition, RuntimeConfig, SweepModeDefinition, VisualDefinition,
     },
     persistence::{
         PersistRuntimeState, PersistedBodyState, PersistedFragment, PersistedFragmentState,
@@ -87,7 +87,11 @@ pub(super) fn spawn_world(
     }
 
     let mut restored_fragment_count = 0_usize;
-    for (instance_id, state) in world_state.fragments.iter().filter(|(_, state)| state.chunk_id.is_none()) {
+    for (instance_id, state) in world_state
+        .fragments
+        .iter()
+        .filter(|(_, state)| state.chunk_id.is_none())
+    {
         let Some(definition) = config.components.definitions.get(&state.definition_id) else {
             warn!(
                 "Skipping fragment '{}' because component definition '{}' is unavailable",
@@ -128,7 +132,6 @@ pub(super) fn spawn_world(
     );
 }
 
-
 /// Spawns one validated chunk. Static non-fracturable cells use greedy render meshes and
 /// material-homogeneous compound colliders. Interactive cells remain independent rigid bodies.
 #[allow(clippy::too_many_arguments)]
@@ -151,17 +154,14 @@ pub(super) fn spawn_chunk(
     ];
     let volume = dimensions[0] * dimensions[1] * dimensions[2];
     let mut cells = vec![0_u8; volume];
-    let index = |x: usize, y: usize, z: usize| {
-        (y * dimensions[2] + z) * dimensions[0] + x
-    };
+    let index = |x: usize, y: usize, z: usize| (y * dimensions[2] + z) * dimensions[0] + x;
 
     for layer in &chunk.layers {
         for (z, row) in layer.rows.iter().enumerate() {
             for (x, character) in row.chars().enumerate() {
-                cells[index(x, layer.y as usize, z)] = character
-                    .to_digit(16)
-                    .ok_or_else(|| format!("chunk '{}' contains a non-hex palette cell", chunk.id))?
-                    as u8;
+                cells[index(x, layer.y as usize, z)] = character.to_digit(16).ok_or_else(|| {
+                    format!("chunk '{}' contains a non-hex palette cell", chunk.id)
+                })? as u8;
             }
         }
     }
@@ -172,9 +172,20 @@ pub(super) fn spawn_chunk(
     let mut mergeable = vec![false; volume];
     let mut definitions_by_palette = BTreeMap::new();
     for (palette_index, definition_id) in chunk.palette.iter().enumerate().skip(1) {
-        let definition = config.components.definitions.get(definition_id)
-            .ok_or_else(|| format!("chunk '{}' references missing definition '{definition_id}'", chunk.id))?;
-        definitions_by_palette.insert(palette_index as u8, (definition_id.clone(), definition.clone()));
+        let definition = config
+            .components
+            .definitions
+            .get(definition_id)
+            .ok_or_else(|| {
+                format!(
+                    "chunk '{}' references missing definition '{definition_id}'",
+                    chunk.id
+                )
+            })?;
+        definitions_by_palette.insert(
+            palette_index as u8,
+            (definition_id.clone(), definition.clone()),
+        );
     }
 
     for y in 0..dimensions[1] {
@@ -185,7 +196,10 @@ pub(super) fn spawn_chunk(
                     continue;
                 }
                 let Some((_, definition)) = definitions_by_palette.get(&palette) else {
-                    return Err(format!("chunk '{}' references palette index {palette} outside its palette", chunk.id));
+                    return Err(format!(
+                        "chunk '{}' references palette index {palette} outside its palette",
+                        chunk.id
+                    ));
                 };
                 mergeable[index(x, y, z)] = matches!(definition.body_type, BodyType::Static)
                     && definition.destructibility.is_none()
@@ -204,29 +218,48 @@ pub(super) fn spawn_chunk(
     // Batch static cells by palette entry. This keeps independent physical material response
     // while dramatically reducing entities, draw calls, and collider shape count for terrain.
     if config.engine.streaming.greedy_meshing_enabled {
-        let boxes = grid.greedy_boxes(&mergeable)
-            .map_err(|error| format!("chunk '{}' greedy collider generation failed: {error}", chunk.id))?;
+        let boxes = grid.greedy_boxes(&mergeable).map_err(|error| {
+            format!(
+                "chunk '{}' greedy collider generation failed: {error}",
+                chunk.id
+            )
+        })?;
         let mut collider_shapes = BTreeMap::<u8, Vec<(Vec3, Quat, Collider)>>::new();
         for greedy_box in boxes {
-            collider_shapes.entry(greedy_box.palette_index).or_default().push((
-                greedy_box.center_m,
-                Quat::IDENTITY,
-                Collider::cuboid(
-                    greedy_box.full_size_m.x,
-                    greedy_box.full_size_m.y,
-                    greedy_box.full_size_m.z,
-                ),
-            ));
+            collider_shapes
+                .entry(greedy_box.palette_index)
+                .or_default()
+                .push((
+                    greedy_box.center_m,
+                    Quat::IDENTITY,
+                    Collider::cuboid(
+                        greedy_box.full_size_m.x,
+                        greedy_box.full_size_m.y,
+                        greedy_box.full_size_m.z,
+                    ),
+                ));
         }
 
-        let mut mesh_by_palette = grid.build_greedy_meshes(&mergeable)
-            .map_err(|error| format!("chunk '{}' greedy mesh generation failed: {error}", chunk.id))?;
+        let mut mesh_by_palette = grid.build_greedy_meshes(&mergeable).map_err(|error| {
+            format!(
+                "chunk '{}' greedy mesh generation failed: {error}",
+                chunk.id
+            )
+        })?;
         for (palette, shapes) in collider_shapes {
             let Some((definition_id, definition)) = definitions_by_palette.get(&palette) else {
                 continue;
             };
-            let physical_material = config.materials.materials.get(&definition.material)
-                .ok_or_else(|| format!("chunk '{}' definition '{}' has no physical material", chunk.id, definition_id))?;
+            let physical_material = config
+                .materials
+                .materials
+                .get(&definition.material)
+                .ok_or_else(|| {
+                    format!(
+                        "chunk '{}' definition '{}' has no physical material",
+                        chunk.id, definition_id
+                    )
+                })?;
             let Some(mesh) = mesh_by_palette.remove(&palette) else {
                 continue;
             };
@@ -260,18 +293,34 @@ pub(super) fn spawn_chunk(
                 if palette == 0 || mergeable[index(x, y, z)] {
                     continue;
                 }
-                let (definition_id, authored_definition) = definitions_by_palette.get(&palette)
-                    .ok_or_else(|| format!("chunk '{}' references invalid palette index {palette}", chunk.id))?;
+                let (definition_id, authored_definition) =
+                    definitions_by_palette.get(&palette).ok_or_else(|| {
+                        format!(
+                            "chunk '{}' references invalid palette index {palette}",
+                            chunk.id
+                        )
+                    })?;
                 let instance_id = voxel_instance_id(&chunk.id, x as u32, y as u32, z as u32);
                 if journal.fractured.contains(&instance_id) {
                     continue;
                 }
 
-                let physical_material = config.materials.materials.get(&authored_definition.material)
-                    .ok_or_else(|| format!("component '{}' has unknown material '{}'", definition_id, authored_definition.material))?;
+                let physical_material = config
+                    .materials
+                    .materials
+                    .get(&authored_definition.material)
+                    .ok_or_else(|| {
+                        format!(
+                            "component '{}' has unknown material '{}'",
+                            definition_id, authored_definition.material
+                        )
+                    })?;
                 let mut definition = authored_definition.clone();
                 let ColliderShape::Cuboid { half_extents } = &mut definition.collider else {
-                    return Err(format!("chunk '{}' palette definition '{}' is not a cuboid", chunk.id, definition_id));
+                    return Err(format!(
+                        "chunk '{}' palette definition '{}' is not a cuboid",
+                        chunk.id, definition_id
+                    ));
                 };
                 for extent in half_extents {
                     *extent *= chunk.voxel_size_m;
@@ -282,11 +331,12 @@ pub(super) fn spawn_chunk(
                 } else {
                     None
                 };
-                let position = chunk_origin + Vec3::new(
-                    (x as f32 + 0.5) * chunk.voxel_size_m,
-                    (y as f32 + 0.5) * chunk.voxel_size_m,
-                    (z as f32 + 0.5) * chunk.voxel_size_m,
-                );
+                let position = chunk_origin
+                    + Vec3::new(
+                        (x as f32 + 0.5) * chunk.voxel_size_m,
+                        (y as f32 + 0.5) * chunk.voxel_size_m,
+                        (z as f32 + 0.5) * chunk.voxel_size_m,
+                    );
                 let entity = spawn_body(
                     commands,
                     &instance_id,
@@ -302,7 +352,9 @@ pub(super) fn spawn_chunk(
                     &mut visual_mesh_cache,
                     &mut visual_material_cache,
                 );
-                commands.entity(entity).insert(ChunkMembership(chunk.id.clone()));
+                commands
+                    .entity(entity)
+                    .insert(ChunkMembership(chunk.id.clone()));
 
                 let ColliderShape::Cuboid { half_extents } = &definition.collider else {
                     unreachable!("chunk palette definitions were checked above");
@@ -312,16 +364,21 @@ pub(super) fn spawn_chunk(
                     chunk.coordinate[1] * chunk.dimensions[1] as i32 + y as i32,
                     chunk.coordinate[2] * chunk.dimensions[2] as i32 + z as i32,
                 ];
-                voxel_bodies.insert(coordinate, SpawnedVoxelBody {
-                    id: instance_id,
-                    entity,
+                voxel_bodies.insert(
                     coordinate,
-                    chunk_id: chunk.id.clone(),
-                    rotation: saved.map(|state| Quat::from_array(state.rotation_xyzw)).unwrap_or(Quat::IDENTITY),
-                    half_extents: Vec3::from_array(*half_extents),
-                    body_type: definition.body_type,
-                    bond_strength: definition.bond_strength.clone(),
-                });
+                    SpawnedVoxelBody {
+                        id: instance_id,
+                        entity,
+                        coordinate,
+                        chunk_id: chunk.id.clone(),
+                        rotation: saved
+                            .map(|state| Quat::from_array(state.rotation_xyzw))
+                            .unwrap_or(Quat::IDENTITY),
+                        half_extents: Vec3::from_array(*half_extents),
+                        body_type: definition.body_type,
+                        bond_strength: definition.bond_strength.clone(),
+                    },
+                );
                 newly_spawned.push(coordinate);
             }
         }
@@ -353,14 +410,14 @@ pub(super) fn spawn_chunk(
                 continue;
             };
             if first.id >= second.id
-                || (matches!(first.body_type, BodyType::Static) && matches!(second.body_type, BodyType::Static))
+                || (matches!(first.body_type, BodyType::Static)
+                    && matches!(second.body_type, BodyType::Static))
             {
                 continue;
             }
-            let Some(strength) = combine_bond_strength(
-                first.bond_strength.as_ref(),
-                second.bond_strength.as_ref(),
-            ) else {
+            let Some(strength) =
+                combine_bond_strength(first.bond_strength.as_ref(), second.bond_strength.as_ref())
+            else {
                 continue;
             };
             let bond_id = format!("bond:{}|{}", first.id, second.id);
@@ -391,23 +448,45 @@ pub(super) fn spawn_chunk(
                 face_size,
                 strength,
             );
-            commands.entity(joint).insert(ChunkMembership(chunk.id.clone()));
+            commands
+                .entity(joint)
+                .insert(ChunkMembership(chunk.id.clone()));
             active_bond_ids.insert(bond_id);
         }
     }
 
     // Restore detached fragments only when their owning chunk enters the active set.
-    let restored_ids: Vec<_> = world_state.fragments.iter()
+    let restored_ids: Vec<_> = world_state
+        .fragments
+        .iter()
         .filter(|(_, state)| state.chunk_id.as_deref() == Some(chunk.id.as_str()))
         .map(|(id, _)| id.clone())
         .collect();
     for id in restored_ids {
-        let state = world_state.fragments.get(&id).cloned()
-            .ok_or_else(|| format!("fragment state '{id}' disappeared during chunk restoration"))?;
-        let definition = config.components.definitions.get(&state.definition_id)
-            .ok_or_else(|| format!("fragment '{id}' references missing definition '{}'", state.definition_id))?;
-        let physical_material = config.materials.materials.get(&definition.material)
-            .ok_or_else(|| format!("fragment '{}' references missing material '{}'", id, definition.material))?;
+        let state =
+            world_state.fragments.get(&id).cloned().ok_or_else(|| {
+                format!("fragment state '{id}' disappeared during chunk restoration")
+            })?;
+        let definition = config
+            .components
+            .definitions
+            .get(&state.definition_id)
+            .ok_or_else(|| {
+                format!(
+                    "fragment '{id}' references missing definition '{}'",
+                    state.definition_id
+                )
+            })?;
+        let physical_material = config
+            .materials
+            .materials
+            .get(&definition.material)
+            .ok_or_else(|| {
+                format!(
+                    "fragment '{}' references missing material '{}'",
+                    id, definition.material
+                )
+            })?;
         spawn_saved_fragment(
             commands,
             &id,
