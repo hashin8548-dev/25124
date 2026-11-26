@@ -12,7 +12,7 @@ use crate::{
         ComponentDefinition, RuntimeConfig, SweepModeDefinition, VisualDefinition,
     },
     persistence::{
-        PersistedBodyState, PersistedFragment, PersistedFragmentState, PersistRuntimeState,
+        PersistRuntimeState, PersistedBodyState, PersistedFragment, PersistedFragmentState,
         PersistentObjectId, WorldStateFile,
     },
     physics::{DestructibleBody, RollingResistance, spawn_voxel_bond},
@@ -107,12 +107,7 @@ pub(super) fn spawn_world(
                     }
 
                     let definition_id = &chunk.palette[palette_index];
-                    let instance_id = voxel_instance_id(
-                        &chunk.id,
-                        x as u32,
-                        layer.y,
-                        z as u32,
-                    );
+                    let instance_id = voxel_instance_id(&chunk.id, x as u32, layer.y, z as u32);
                     if world_state.fractured.contains(&instance_id) {
                         continue;
                     }
@@ -218,10 +213,9 @@ pub(super) fn spawn_world(
             {
                 continue;
             }
-            let Some(strength) = combine_bond_strength(
-                first.bond_strength.as_ref(),
-                second.bond_strength.as_ref(),
-            ) else {
+            let Some(strength) =
+                combine_bond_strength(first.bond_strength.as_ref(), second.bond_strength.as_ref())
+            else {
                 continue;
             };
 
@@ -268,16 +262,14 @@ pub(super) fn spawn_world(
         let Some(definition) = config.components.definitions.get(&state.definition_id) else {
             warn!(
                 "Skipping fragment '{}' because component definition '{}' is unavailable",
-                instance_id,
-                state.definition_id
+                instance_id, state.definition_id
             );
             continue;
         };
         let Some(physical_material) = config.materials.materials.get(&definition.material) else {
             warn!(
                 "Skipping fragment '{}' because material '{}' is unavailable",
-                instance_id,
-                definition.material
+                instance_id, definition.material
             );
             continue;
         };
@@ -403,10 +395,8 @@ fn spawn_body(
         });
     }
 
-    if let (
-        Some(destructibility),
-        ColliderShape::Cuboid { half_extents },
-    ) = (&definition.destructibility, &definition.collider)
+    if let (Some(destructibility), ColliderShape::Cuboid { half_extents }) =
+        (&definition.destructibility, &definition.collider)
     {
         entity.insert(DestructibleBody::new(
             instance_id,
@@ -447,7 +437,9 @@ fn combine_bond_strength(
             tensile_strength_pa: first.tensile_strength_pa.min(second.tensile_strength_pa),
             shear_strength_pa: first.shear_strength_pa.min(second.shear_strength_pa),
             bending_strength_pa: first.bending_strength_pa.min(second.bending_strength_pa),
-            torsional_strength_pa: first.torsional_strength_pa.min(second.torsional_strength_pa),
+            torsional_strength_pa: first
+                .torsional_strength_pa
+                .min(second.torsional_strength_pa),
         }),
     }
 }
