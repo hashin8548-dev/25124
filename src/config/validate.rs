@@ -591,6 +591,26 @@ mod tests {
     }
 
     #[test]
+    fn every_indexed_chunk_payload_matches_its_region_metadata() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let config = RuntimeConfig::load(
+            root.join("data"),
+            root.join("assets"),
+            root.join("worlds/sandbox/world.json"),
+        )
+        .expect("sample region metadata should validate");
+
+        for source in &config.chunks {
+            let contents = std::fs::read_to_string(&source.path)
+                .unwrap_or_else(|error| panic!("could not read chunk '{}': {error}", source.id));
+            let chunk: super::super::schema::ChunkFile = serde_json::from_str(&contents)
+                .unwrap_or_else(|error| panic!("chunk '{}' contains invalid JSON: {error}", source.id));
+            super::validate_chunk_file(&chunk, source, &config.components)
+                .unwrap_or_else(|error| panic!("chunk '{}' failed payload validation: {error:#}", source.id));
+        }
+    }
+
+    #[test]
     fn model_scene_selectors_are_explicit_and_numeric() {
         use super::validate_asset_path;
 
