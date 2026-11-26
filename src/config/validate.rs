@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use anyhow::{Result, ensure};
 
+use super::load::ChunkSource;
 use super::schema::{
     AlphaMode, BodyType, ChunkFile, ColliderShape, ComponentCatalog, EngineSettings,
     MaterialCatalog, WorldManifest,
@@ -15,7 +16,7 @@ pub fn validate_all(
     materials: &MaterialCatalog,
     components: &ComponentCatalog,
     world: &WorldManifest,
-    chunks: &[ChunkFile],
+    chunks: &[ChunkSource],
 ) -> Result<()> {
     ensure!(
         engine.schema_version == SCHEMA_VERSION,
@@ -137,6 +138,20 @@ pub fn validate_all(
             .iter()
             .all(|value| value.is_finite()),
         "key light rotation must contain only finite values"
+    );
+
+    let streaming = &engine.streaming;
+    ensure!(
+        streaming.unload_radius_chunks > streaming.load_radius_chunks,
+        "streaming.unload_radius_chunks must exceed load_radius_chunks to provide hysteresis"
+    );
+    ensure!(
+        (1..=16).contains(&streaming.max_parallel_chunk_loads),
+        "streaming.max_parallel_chunk_loads must be between 1 and 16"
+    );
+    ensure!(
+        (1..=256).contains(&streaming.max_chunk_spawns_per_frame),
+        "streaming.max_chunk_spawns_per_frame must be between 1 and 256"
     );
 
     ensure!(
@@ -280,12 +295,6 @@ pub fn validate_all(
     let mut chunk_ids = HashSet::new();
     let mut chunk_coordinates = HashSet::new();
     for chunk in chunks {
-        ensure!(
-            chunk.schema_version == SCHEMA_VERSION,
-            "unsupported schema version {} in chunk '{}'",
-            chunk.schema_version,
-            chunk.id
-        );
         ensure!(!chunk.id.trim().is_empty(), "chunk id cannot be empty");
         ensure!(
             chunk_ids.insert(chunk.id.as_str()),
@@ -298,10 +307,7 @@ pub fn validate_all(
             chunk.coordinate
         );
         ensure!(
-            chunk
-                .dimensions
-                .iter()
-                .all(|dimension| (1..=32).contains(dimension)),
+            chunk.dimensions.iter().all(|dimension| (1..=32).contains(dimension)),
             "chunk '{}' dimensions must each be in [1, 32]",
             chunk.id
         );
@@ -310,72 +316,116 @@ pub fn validate_all(
             "chunk '{}' voxel_size_m must be positive and finite",
             chunk.id
         );
-        ensure!(
-            !chunk.palette.is_empty() && chunk.palette.len() <= 16 && chunk.palette[0] == "air",
-            "chunk '{}' palette must contain 1-16 entries and reserve index zero for 'air'",
-            chunk.id
-        );
-        for (index, definition_id) in chunk.palette.iter().enumerate().skip(1) {
-            let Some(definition) = components.definitions.get(definition_id) else {
-                anyhow::bail!(
-                    "chunk '{}' palette entry {index} references unknown definition '{definition_id}'",
-                    chunk.id
-                );
-            };
-            ensure!(
-                matches!(&definition.collider, ColliderShape::Cuboid { .. }),
-                "chunk '{}' palette entry '{definition_id}' must use a cuboid collider",
+    }
+
+    Ok(())
+}
+
+/// Validates a chunk payload after its asynchronous read completes.
+pub fn validate_chunk_file(
+    chunk: &ChunkFile,
+    source: &ChunkSource,
+    components: &ComponentCatalog,
+) -> Result<()> {
+    ensure!(
+        chunk.schema_version == SCHEMA_VERSION,
+        "unsupported schema version {} in chunk '{}'",
+        chunk.schema_version,
+        chunk.id
+    );
+    ensure!(chunk.id == source.id, "chunk id '{}' does not match region index id '{}'", chunk.id, source.id);
+    ensure!(
+        chunk.coordinate == source.coordinate,
+        "chunk '{}' coordinates do not match its region index",
+        chunk.id
+    );
+    ensure!(
+        chunk.dimensions == source.dimensions,
+        "chunk '{}' dimensions do not match its region index",
+        chunk.id
+    );
+    ensure!(
+        (chunk.voxel_size_m - source.voxel_size_m).abs() <= f32::EPSILON * source.voxel_size_m.max(1.0),
+        "chunk '{}' voxel size does not match its region index",
+        chunk.id
+    );
+    ensure!(
+        chunk.dimensions.iter().all(|dimension| (1..=32).contains(dimension)),
+        "chunk '{}' dimensions must each be in [1, 32]",
+        chunk.id
+    );
+    ensure!(
+        chunk.voxel_size_m.is_finite() && chunk.voxel_size_m > 0.0,
+        "chunk '{}' voxel_size_m must be positive and finite",
+        chunk.id
+    );
+    ensure!(
+        !chunk.palette.is_empty() && chunk.palette.len() <= 16 && chunk.palette[0] == "air",
+        "chunk '{}' palette must contain 1-16 entries and reserve index zero for 'air'",
+        chunk.id
+    );
+
+    for (index, definition_id) in chunk.palette.iter().enumerate().skip(1) {
+        let Some(definition) = components.definitions.get(definition_id) else {
+            anyhow::bail!(
+                "chunk '{}' palette entry {index} references unknown definition '{definition_id}'",
                 chunk.id
             );
-        }
-        let mut layer_ids = HashSet::new();
-        for layer in &chunk.layers {
+        };
+        ensure!(
+            matches!(&definition.collider, ColliderShape::Cuboid { .. }),
+            "chunk '{}' palette entry '{definition_id}' must use a cuboid collider",
+            chunk.id
+        );
+    }
+
+    let mut layer_ids = HashSet::new();
+    for layer in &chunk.layers {
+        ensure!(
+            layer.y < chunk.dimensions[1],
+            "chunk '{}' layer y={} is outside its height",
+            chunk.id,
+            layer.y
+        );
+        ensure!(
+            layer_ids.insert(layer.y),
+            "chunk '{}' has duplicate layer y={}",
+            chunk.id,
+            layer.y
+        );
+        ensure!(
+            layer.rows.len() == chunk.dimensions[2] as usize,
+            "chunk '{}' layer {} must contain exactly {} rows",
+            chunk.id,
+            layer.y,
+            chunk.dimensions[2]
+        );
+        for (z, row) in layer.rows.iter().enumerate() {
             ensure!(
-                layer.y < chunk.dimensions[1],
-                "chunk '{}' layer y={} is outside its height",
-                chunk.id,
-                layer.y
-            );
-            ensure!(
-                layer_ids.insert(layer.y),
-                "chunk '{}' has duplicate layer y={}",
-                chunk.id,
-                layer.y
-            );
-            ensure!(
-                layer.rows.len() == chunk.dimensions[2] as usize,
-                "chunk '{}' layer {} must contain exactly {} rows",
+                row.len() == chunk.dimensions[0] as usize && row.is_ascii(),
+                "chunk '{}' layer {} row {} must contain exactly {} ASCII palette characters",
                 chunk.id,
                 layer.y,
-                chunk.dimensions[2]
+                z,
+                chunk.dimensions[0]
             );
-            for (z, row) in layer.rows.iter().enumerate() {
-                ensure!(
-                    row.len() == chunk.dimensions[0] as usize && row.is_ascii(),
-                    "chunk '{}' layer {} row {} must contain exactly {} ASCII palette characters",
-                    chunk.id,
-                    layer.y,
-                    z,
-                    chunk.dimensions[0]
-                );
-                for (x, character) in row.chars().enumerate() {
-                    let Some(palette_index) = character.to_digit(16) else {
-                        anyhow::bail!(
-                            "chunk '{}' layer {} row {} column {} has invalid palette character '{}'",
-                            chunk.id,
-                            layer.y,
-                            z,
-                            x,
-                            character
-                        );
-                    };
-                    ensure!(
-                        palette_index < chunk.palette.len() as u32,
-                        "chunk '{}' references palette index {} outside its palette",
+            for (x, character) in row.chars().enumerate() {
+                let Some(palette_index) = character.to_digit(16) else {
+                    anyhow::bail!(
+                        "chunk '{}' layer {} row {} column {} has invalid palette character '{}'",
                         chunk.id,
-                        palette_index
+                        layer.y,
+                        z,
+                        x,
+                        character
                     );
-                }
+                };
+                ensure!(
+                    palette_index < chunk.palette.len() as u32,
+                    "chunk '{}' references palette index {} outside its palette",
+                    chunk.id,
+                    palette_index
+                );
             }
         }
     }
