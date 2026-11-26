@@ -163,6 +163,33 @@
         "metallic": 0,
         "alpha_mode": "opaque"
       }
+    },
+    "block.bedrock": {
+      "body_type": "static",
+      "collider": {
+        "kind": "cuboid",
+        "half_extents": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "material": "concrete",
+      "swept_ccd": null,
+      "destructibility": null,
+      "bond_strength": null,
+      "visual": {
+        "model": null,
+        "color_srgba": [
+          0.25,
+          0.29,
+          0.34,
+          1
+        ],
+        "perceptual_roughness": 0.94,
+        "metallic": 0,
+        "alpha_mode": "opaque"
+      }
     }
   }
 }
