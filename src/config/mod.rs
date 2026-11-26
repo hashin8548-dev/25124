@@ -4,6 +4,7 @@ mod validate;
 
 pub use load::RuntimeConfig;
 pub use schema::{
-    AlphaMode, BodyType, CcdFilterDefinition, ColliderShape, ComponentDefinition,
+    AlphaMode, BodyType, CcdFilterDefinition, ChunkFile, ChunkLayer, ChunkReference,
+    ColliderShape, ComponentDefinition, DestructibilityDefinition, RegionManifest,
     SweepModeDefinition, VisualDefinition,
 };
