@@ -7,9 +7,7 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 
 use super::{
-    schema::{
-        ChunkFile, ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest,
-    },
+    schema::{ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest},
     validate::validate_all,
 };
 
@@ -19,13 +17,23 @@ pub struct ProjectPaths {
     pub world_state: PathBuf,
 }
 
+/// A validated spatial index entry. The chunk JSON itself is deliberately not loaded here.
+#[derive(Clone, Debug)]
+pub struct ChunkSource {
+    pub id: String,
+    pub coordinate: [i32; 3],
+    pub dimensions: [u32; 3],
+    pub voxel_size_m: f32,
+    pub path: PathBuf,
+}
+
 #[derive(bevy::prelude::Resource, Clone, Debug)]
 pub struct RuntimeConfig {
     pub engine: EngineSettings,
     pub materials: MaterialCatalog,
     pub components: ComponentCatalog,
     pub world: WorldManifest,
-    pub chunks: Vec<ChunkFile>,
+    pub chunks: Vec<ChunkSource>,
     pub paths: ProjectPaths,
 }
 
@@ -68,7 +76,7 @@ impl RuntimeConfig {
             world_override.unwrap_or_else(|| PathBuf::from("worlds/sandbox/world.json")),
         );
 
-        Self::load(root, data_dir, assets_dir, world_manifest).map(Some)
+        Self::load(data_dir, assets_dir, world_manifest).map(Some)
     }
 
     pub fn load(
@@ -101,7 +109,7 @@ impl RuntimeConfig {
     }
 }
 
-fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkFile>> {
+fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSource>> {
     let world_directory = world_path
         .parent()
         .context("world manifest path has no parent directory")?;
@@ -152,33 +160,34 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkFil
                     reference.path, region.id
                 )
             })?;
+            ensure!(
+                reference.dimensions.iter().all(|dimension| (1..=32).contains(dimension)),
+                "chunk '{}' dimensions must each be in [1, 32]",
+                reference.id
+            );
+            ensure!(
+                reference.voxel_size_m.is_finite() && reference.voxel_size_m > 0.0,
+                "chunk '{}' voxel_size_m must be positive and finite",
+                reference.id
+            );
 
-            let chunk_path = region_directory.join(&reference.path);
-            let chunk: ChunkFile = read_json(&chunk_path)?;
             ensure!(
-                chunk.id == reference.id,
-                "region '{}' references chunk '{}' but file '{}' declares id '{}'",
-                region.id,
-                reference.id,
-                chunk_path.display(),
-                chunk.id
-            );
-            ensure!(
-                chunk.coordinate == reference.coordinate,
-                "chunk '{}' coordinate does not match its region index",
-                chunk.id
-            );
-            ensure!(
-                chunk_ids.insert(chunk.id.clone()),
+                chunk_ids.insert(reference.id.clone()),
                 "duplicate chunk id '{}'",
-                chunk.id
+                reference.id
             );
             ensure!(
-                chunk_coordinates.insert(chunk.coordinate),
+                chunk_coordinates.insert(reference.coordinate),
                 "multiple chunks occupy coordinate {:?}",
-                chunk.coordinate
+                reference.coordinate
             );
-            chunks.push(chunk);
+            chunks.push(ChunkSource {
+                id: reference.id.clone(),
+                coordinate: reference.coordinate,
+                dimensions: reference.dimensions,
+                voxel_size_m: reference.voxel_size_m,
+                path: region_directory.join(&reference.path),
+            });
         }
     }
 
@@ -249,7 +258,7 @@ mod tests {
     use crate::config::RuntimeConfig;
 
     #[test]
-    fn checked_in_configuration_loads_external_chunk_files() {
+    fn checked_in_configuration_loads_region_indexes_without_loading_chunk_bodies() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let config = RuntimeConfig::load(
             root.join("data"),
@@ -261,10 +270,9 @@ mod tests {
         assert_eq!(config.world.id, "sandbox");
         assert_eq!(config.world.objects.len(), 4);
         assert_eq!(config.chunks.len(), 4);
-        assert_eq!(
-            config.world.objects[1].definition,
-            config.world.objects[2].definition
-        );
+        assert!(config.chunks.iter().all(|source| source.path.is_file()));
+        assert_eq!(config.chunks[0].dimensions, [16, 16, 16]);
+        assert_eq!(config.chunks[0].voxel_size_m, 1.0);
     }
 
     #[test]
