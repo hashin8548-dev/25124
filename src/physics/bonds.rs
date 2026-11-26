@@ -74,32 +74,35 @@ pub fn calculate_bond_stress(
     }
 }
 
-pub fn spawn_voxel_bond(
-    commands: &mut Commands,
-    id: String,
-    body1: Entity,
-    body2: Entity,
-    local_anchor1: Vec3,
-    local_anchor2: Vec3,
-    normal_local: Vec3,
-    face_size_m: f32,
-    strength: BondStrengthDefinition,
-) -> Entity {
+/// Data required to create one rigid structural connection.
+#[derive(Clone, Debug)]
+pub struct VoxelBondSpec {
+    pub id: String,
+    pub body1: Entity,
+    pub body2: Entity,
+    pub local_anchor1: Vec3,
+    pub local_anchor2: Vec3,
+    pub normal_local: Vec3,
+    pub face_size_m: f32,
+    pub strength: BondStrengthDefinition,
+}
+
+pub fn spawn_voxel_bond(commands: &mut Commands, spec: VoxelBondSpec) -> Entity {
     commands
         .spawn((
-            Name::new(id.clone()),
-            FixedJoint::new(body1, body2)
-                .with_local_anchor1(local_anchor1)
-                .with_local_anchor2(local_anchor2),
+            Name::new(spec.id.clone()),
+            FixedJoint::new(spec.body1, spec.body2)
+                .with_local_anchor1(spec.local_anchor1)
+                .with_local_anchor2(spec.local_anchor2),
             JointForces::new(),
             JointCollisionDisabled,
             VoxelBond {
-                id,
-                body1,
-                body2,
-                normal_local,
-                face_size_m,
-                strength,
+                id: spec.id,
+                body1: spec.body1,
+                body2: spec.body2,
+                normal_local: spec.normal_local,
+                face_size_m: spec.face_size_m,
+                strength: spec.strength,
             },
         ))
         .id()
