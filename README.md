@@ -37,6 +37,7 @@ The Rust source owns systems and validation, not scenario-specific visuals or UI
 - Restitution threshold is configured explicitly (1.0 m/s in the sample). Avian treats lower-speed contacts as inelastic to prevent contact jitter; tune this per project if the sample is too dissipative for a chosen material.
 - Avian island sleeping is enabled with configurable linear/angular thresholds (0.15 m/s and 0.15 rad/s in the sample) and a 0.5 s rest interval. Bodies are not manually zeroed: resting islands enter the engine's sleeping state, and contact/force changes wake them.
 - Contact-start/end counters and a live contact-pair ledger are available to other engine systems.
+- Material-specific rolling resistance is applied as a contact impulse only while supported by a contact normal; it does not add global angular damping.
 - Camera is a non-physical spectator/editor camera (W/A/S/D, Space/Ctrl, Shift, mouse look). It pauses with the main menu.
 
 The solver settings are external in `data/engine.json`. Restitution belongs to the material definition; it is not a constant baked into source. Avian describes restitution as an approximation: sequential contact solving, friction, speculative collision, and multiple contact points affect the energy response. This is a numerical rigid-body simulation, not a claim of exact continuum-material physics.
@@ -50,7 +51,9 @@ Any cuboid component definition may contain an optional `destructibility` block:
 
 The fracture system observes Avian's pre-solver contact-normal speed and contact impulse. When the threshold is crossed, it replaces the original cuboid with a grid of dynamic fragments. Fragment dimensions tile the original collider volume; fragments inherit the original rigid body's linear/angular velocity field. A fractured static block receives the measured contact impulse when its fragments are spawned. Damage and fragment generation are therefore data-driven rather than tied to object names.
 
-Current constraints are deliberate and validated: fracture targets must use cuboid colliders and procedural primitive visuals. Imported glTF fracture geometry is not yet implemented. Fragment pieces remain rigid bodies; this is not yet a deformable continuum, stress/strain solver, or bond-based fracture simulation.
+A component may also define `bond_strength` with tensile, shear, bending and torsional limits in pascals. Adjacent authored voxels with bond definitions are connected by fixed joints. Joint force and torque are converted to nominal face stresses; a bond is removed when any configured mode exceeds its threshold. This is a beam/section approximation for voxel-scale connections, not a finite-element or continuum stress solver.
+
+Current constraints are deliberate and validated: impact-fracture targets must use cuboid colliders and procedural primitive visuals. Imported glTF fracture geometry is not yet implemented. Fragment pieces remain rigid bodies. The bond-stress calculation is an approximate rigid-body joint failure model, not a deformable continuum simulation.
 
 ## Voxel world format
 
@@ -63,7 +66,9 @@ World data is a hierarchy rather than a monolithic world JSON:
 
 The sample overworld contains four 16×16×16 chunks. The chunk coordinate, dimensions and voxel size determine its world-space origin. Each occupied voxel receives a stable ID based on chunk ID and cell coordinates, so runtime transforms, fracture state and saves can refer to a block independently of its neighbours.
 
-Chunks are stored and validated independently, but the current loader reads all referenced regions/chunks at startup and spawns one collider entity per occupied cell. Region streaming, unload/reload boundaries, greedy render meshing, chunk edit transactions and cross-chunk neighbour invalidation are follow-on systems—not features claimed by this initial chunked format.
+Startup reads region indexes and spatial metadata only. Chunk payloads are read asynchronously when the spectator camera approaches, with configured limits for parallel file reads and per-frame chunk spawns. A wider unload radius provides hysteresis. Before unload, dynamic voxel transforms/velocities and detached-fragment state are retained in the world-state resource; broken bonds and fractures remain journaled.
+
+Static, non-fracturable cells are greedily merged into exposed-face render meshes and material-specific compound colliders. Dynamic, destructible, bonded and imported-model cells remain independent rigid bodies. Bond reconnection uses stable voxel identities across chunk boundaries, so loading order does not create duplicate joints. Chunk editing/transactional authoring and seam-aware cross-chunk face merging remain future work.
 
 ## Menu and controls
 
@@ -76,7 +81,7 @@ The main menu is loaded from `assets/ui/main_menu.json`. It configures title/sub
 | Left Shift | Sprint |
 | Mouse | Look |
 | Escape | Open/close main menu |
-| F5 | Save rigid-body state, fracture IDs and fragment state |
+| F5 | Save rigid-body state, fracture IDs, broken bonds and fragment state |
 
 The camera is intentionally non-physical. It is not a player character and does not participate in collisions.
 
@@ -103,7 +108,21 @@ Paths may be absolute or relative to `--root`. The executable resolves its porta
 
 F5 writes `state.json` atomically and keeps backup/recovery generations. It stores dynamic object transforms and velocities, fractured instance IDs, and live fragment transforms/velocities. Authored static transforms remain in manifests/chunks. Unresolved object records are retained to support content that is temporarily unavailable.
 
-## Validation
+## Local validation
+
+No GitHub-hosted CI workflow is enabled. Run the repository checks on the local development machine with:
+
+```powershell
+./scripts/validate.ps1
+```
+
+The script checks formatting, type-checks every target, runs all tests and runs Clippy with warnings denied. To omit the lint pass:
+
+```powershell
+./scripts/validate.ps1 -SkipClippy
+```
+
+The equivalent individual commands are:
 
 ```powershell
 cargo fmt --all -- --check
