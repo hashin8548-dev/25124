@@ -30,7 +30,11 @@ struct MeshBuffers {
 }
 
 impl VoxelGrid {
-    pub fn from_cells(dimensions: [usize; 3], voxel_size_m: f32, cells: Vec<u8>) -> Result<Self, String> {
+    pub fn from_cells(
+        dimensions: [usize; 3],
+        voxel_size_m: f32,
+        cells: Vec<u8>,
+    ) -> Result<Self, String> {
         let expected = dimensions
             .iter()
             .try_fold(1_usize, |volume, dimension| volume.checked_mul(*dimension))
@@ -42,9 +46,16 @@ impl VoxelGrid {
             return Err("voxel size must be positive and finite".to_owned());
         }
         if cells.len() != expected {
-            return Err(format!("voxel cell count {} does not match grid volume {expected}", cells.len()));
+            return Err(format!(
+                "voxel cell count {} does not match grid volume {expected}",
+                cells.len()
+            ));
         }
-        Ok(Self { dimensions, voxel_size_m, cells })
+        Ok(Self {
+            dimensions,
+            voxel_size_m,
+            cells,
+        })
     }
 
     pub fn cell(&self, x: usize, y: usize, z: usize) -> u8 {
@@ -89,7 +100,9 @@ impl VoxelGrid {
                             cell[u] = u_index;
                             cell[v] = v_index;
                             let mut neighbour = cell;
-                            if neighbour_axis >= 0 && neighbour_axis < self.dimensions[axis] as isize {
+                            if neighbour_axis >= 0
+                                && neighbour_axis < self.dimensions[axis] as isize
+                            {
                                 neighbour[axis] = neighbour_axis as usize;
                             } else {
                                 neighbour[axis] = self.dimensions[axis];
@@ -99,10 +112,13 @@ impl VoxelGrid {
                             if palette == 0 || !renderable[cell_index] {
                                 continue;
                             }
-                            let adjacent_is_mergeable = if neighbour_axis < 0 || neighbour_axis >= self.dimensions[axis] as isize {
+                            let adjacent_is_mergeable = if neighbour_axis < 0
+                                || neighbour_axis >= self.dimensions[axis] as isize
+                            {
                                 false
                             } else {
-                                let adjacent_index = self.index(neighbour[0], neighbour[1], neighbour[2]);
+                                let adjacent_index =
+                                    self.index(neighbour[0], neighbour[1], neighbour[2]);
                                 renderable[adjacent_index]
                             };
                             if !adjacent_is_mergeable {
@@ -264,9 +280,7 @@ fn greedy_mask_rectangles(
                 continue;
             }
             let mut rect_width = 1;
-            while u + rect_width < width
-                && mask[v * width + u + rect_width] == palette
-            {
+            while u + rect_width < width && mask[v * width + u + rect_width] == palette {
                 rect_width += 1;
             }
             let mut rect_height = 1;
@@ -320,9 +334,13 @@ fn append_face(
         [0.0, size[v]],
     ]);
     if sign > 0.0 {
-        buffers.indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        buffers
+            .indices
+            .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
     } else {
-        buffers.indices.extend([base, base + 2, base + 1, base, base + 3, base + 2]);
+        buffers
+            .indices
+            .extend([base, base + 2, base + 1, base, base + 3, base + 2]);
     }
 }
 
@@ -347,7 +365,10 @@ mod tests {
         let grid = VoxelGrid::from_cells([16, 1, 16], 1.0, vec![1; 16 * 16]).unwrap();
         let boxes = grid.greedy_boxes(&vec![true; 16 * 16]).unwrap();
         assert_eq!(boxes.len(), 1);
-        assert_eq!(boxes[0].full_size_m, bevy::prelude::Vec3::new(16.0, 1.0, 16.0));
+        assert_eq!(
+            boxes[0].full_size_m,
+            bevy::prelude::Vec3::new(16.0, 1.0, 16.0)
+        );
     }
 
     #[test]
