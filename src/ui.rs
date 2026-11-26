@@ -2,9 +2,11 @@ use std::path::Path;
 
 use bevy::{
     app::AppExit,
+    picking::hover::Hovered,
     prelude::*,
     text::{FontSize, TextFont},
-    ui::widget::Button,
+    ui::Pressed,
+    ui_widgets::{Activate, Button, observe},
 };
 use serde::Deserialize;
 
@@ -16,15 +18,7 @@ impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MenuState>()
             .add_systems(Startup, setup_menu)
-            .add_systems(
-                Update,
-                (
-                    handle_menu_buttons,
-                    toggle_menu_with_escape,
-                    update_button_styles,
-                    sync_menu_visibility,
-                ),
-            );
+            .add_systems(Update, (toggle_menu_with_escape, update_button_styles, sync_menu_visibility));
     }
 }
 
@@ -215,6 +209,7 @@ fn setup_menu(
                     panel
                         .spawn((
                             Button,
+                            Hovered::default(),
                             Node {
                                 width: Val::Px(menu.button_width_px),
                                 height: Val::Px(menu.button_height_px),
@@ -228,6 +223,7 @@ fn setup_menu(
                                 normal: button_color,
                                 hovered: button_hover_color,
                             },
+                            observe(handle_menu_action),
                         ))
                         .with_children(|button| {
                             button.spawn((
@@ -253,25 +249,24 @@ fn load_menu(path: &Path) -> Result<MenuAsset, String> {
     Ok(menu)
 }
 
-fn handle_menu_buttons(
-    buttons: Query<(&Interaction, &MenuAction), (Changed<Interaction>, With<Button>)>,
+fn handle_menu_action(
+    activate: On<Activate>,
+    actions: Query<&MenuAction>,
     mut state: ResMut<MenuState>,
     mut virtual_time: ResMut<Time<Virtual>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
-    for (interaction, action) in &buttons {
-        if *interaction != Interaction::Pressed {
-            continue;
-        }
+    let Ok(action) = actions.get(activate.entity) else {
+        return;
+    };
 
-        match action.0.as_str() {
-            "start" | "resume" => {
-                state.visible = false;
-                virtual_time.unpause();
-            }
-            "quit" => app_exit.write(AppExit::Success),
-            _ => unreachable!("menu actions are validated during asset loading"),
+    match action.0.as_str() {
+        "start" | "resume" => {
+            state.visible = false;
+            virtual_time.unpause();
         }
+        "quit" => app_exit.write(AppExit::Success),
+        _ => unreachable!("menu actions are validated during asset loading"),
     }
 }
 
@@ -294,14 +289,15 @@ fn toggle_menu_with_escape(
 
 fn update_button_styles(
     mut buttons: Query<
-        (&Interaction, &MenuButtonColors, &mut BackgroundColor),
-        (Changed<Interaction>, With<Button>),
+        (&Hovered, Has<Pressed>, &MenuButtonColors, &mut BackgroundColor),
+        With<Button>,
     >,
 ) {
-    for (interaction, colors, mut background) in &mut buttons {
-        background.0 = match interaction {
-            Interaction::Hovered | Interaction::Pressed => colors.hovered,
-            Interaction::None => colors.normal,
+    for (hovered, pressed, colors, mut background) in &mut buttons {
+        background.0 = if pressed || hovered.get() {
+            colors.hovered
+        } else {
+            colors.normal
         };
     }
 }
