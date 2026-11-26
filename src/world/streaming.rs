@@ -43,6 +43,7 @@ pub(super) fn update_chunk_streaming(
     journal: Res<DestructionJournal>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
     bodies: Query<
         (
             &PersistentObjectId,
@@ -237,7 +238,7 @@ pub(super) fn update_chunk_streaming(
             &journal,
             &mut state.voxel_bodies,
             &mut state.active_bond_ids,
-            &AssetServer::from_world_placeholder(),
+            &asset_server,
             &mut meshes,
             &mut materials,
         ) {
