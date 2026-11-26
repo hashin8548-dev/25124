@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use avian3d::prelude::{AngularVelocity, LinearVelocity};
 use bevy::prelude::*;
 
-use crate::physics::DestructionJournal;
+use crate::{config::{BodyType, RuntimeConfig}, physics::DestructionJournal};
 
 #[derive(Component, Clone, Debug)]
 pub struct PersistentObjectId(pub String);
@@ -30,6 +30,22 @@ pub struct WorldSaveTarget {
     pub state_path: PathBuf,
 }
 
+fn known_static_world_object_ids(config: &RuntimeConfig) -> HashSet<String> {
+    config
+        .world
+        .objects
+        .iter()
+        .filter_map(|instance| {
+            config
+                .components
+                .definitions
+                .get(&instance.definition)
+                .filter(|definition| matches!(definition.body_type, BodyType::Static))
+                .map(|_| instance.id.clone())
+        })
+        .collect()
+}
+
 pub struct PersistencePlugin;
 
 impl Plugin for PersistencePlugin {
@@ -41,6 +57,7 @@ impl Plugin for PersistencePlugin {
 fn save_world_on_f5(
     keys: Res<ButtonInput<KeyCode>>,
     target: Res<WorldSaveTarget>,
+    config: Res<RuntimeConfig>,
     previous_state: Res<WorldStateFile>,
     destruction_journal: Res<DestructionJournal>,
     bodies: Query<
@@ -69,7 +86,13 @@ fn save_world_on_f5(
     let mut snapshot = WorldStateFile::new(target.world_id.clone());
     // Keep body records for chunks that are currently streamed out. Live entities below
     // overwrite their own IDs with current runtime state.
-    snapshot.bodies = previous_state.bodies.clone();
+    let static_ids = known_static_world_object_ids(&config);
+    snapshot.bodies = previous_state
+        .bodies
+        .iter()
+        .filter(|(id, _)| !static_ids.contains(*id))
+        .map(|(id, state)| (id.clone(), state.clone()))
+        .collect();
     snapshot.fractured = destruction_journal.fractured.clone();
     snapshot.broken_bonds = destruction_journal.broken_bonds.clone();
     snapshot.fragments = previous_state.fragments.clone();
