@@ -474,26 +474,20 @@ pub(super) fn spawn_chunk(
             world_state.fragments.get(&id).cloned().ok_or_else(|| {
                 format!("fragment state '{id}' disappeared during chunk restoration")
             })?;
-        let definition = config
-            .components
-            .definitions
-            .get(&state.definition_id)
-            .ok_or_else(|| {
-                format!(
-                    "fragment '{id}' references missing definition '{}'",
-                    state.definition_id
-                )
-            })?;
-        let physical_material = config
-            .materials
-            .materials
-            .get(&definition.material)
-            .ok_or_else(|| {
-                format!(
-                    "fragment '{}' references missing material '{}'",
-                    id, definition.material
-                )
-            })?;
+        let Some(definition) = config.components.definitions.get(&state.definition_id) else {
+            warn!(
+                "Preserving streamed fragment '{}' because component definition '{}' is unavailable",
+                id, state.definition_id
+            );
+            continue;
+        };
+        let Some(physical_material) = config.materials.materials.get(&definition.material) else {
+            warn!(
+                "Preserving streamed fragment '{}' because material '{}' is unavailable",
+                id, definition.material
+            );
+            continue;
+        };
         spawn_saved_fragment(
             commands,
             &id,
