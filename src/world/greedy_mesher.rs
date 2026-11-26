@@ -6,6 +6,8 @@ use bevy::{
     prelude::*,
 };
 
+use crate::config::MAX_CHUNK_DIMENSION;
+
 /// Dense, chunk-local palette grid. Index zero is air; non-zero indices are occupied cells.
 #[derive(Clone, Debug)]
 pub struct VoxelGrid {
@@ -39,7 +41,9 @@ impl VoxelGrid {
             .iter()
             .try_fold(1_usize, |volume, dimension| volume.checked_mul(*dimension))
             .ok_or_else(|| "voxel dimensions overflow addressable memory".to_owned())?;
-        if dimensions.contains(&0) || dimensions.iter().any(|dimension| *dimension > 32) {
+        if dimensions.contains(&0) || dimensions
+                .iter()
+                .any(|dimension| *dimension > MAX_CHUNK_DIMENSION as usize) {
             return Err("voxel dimensions must each be in [1, 32]".to_owned());
         }
         if !voxel_size_m.is_finite() || voxel_size_m <= 0.0 {
