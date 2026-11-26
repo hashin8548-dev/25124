@@ -58,6 +58,7 @@ impl DestructibleBody {
 #[derive(Resource, Clone, Debug, Default)]
 pub struct DestructionJournal {
     pub fractured: BTreeSet<String>,
+    pub broken_bonds: BTreeSet<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -72,6 +73,7 @@ pub(super) fn restore_destruction_journal(
     mut journal: ResMut<DestructionJournal>,
 ) {
     journal.fractured.clone_from(&state.fractured);
+    journal.broken_bonds.clone_from(&state.broken_bonds);
 }
 
 pub(super) fn fracture_on_new_impacts(
