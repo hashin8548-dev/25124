@@ -23,7 +23,6 @@ use crate::{
 pub(crate) struct SpawnedVoxelBody {
     pub(crate) id: String,
     pub(crate) entity: Entity,
-    pub(crate) coordinate: [i32; 3],
     pub(crate) chunk_id: String,
     pub(crate) rotation: Quat,
     pub(crate) half_extents: Vec3,
@@ -201,7 +200,8 @@ pub(super) fn spawn_chunk(
                         chunk.id
                     ));
                 };
-                mergeable[index(x, y, z)] = matches!(definition.body_type, BodyType::Static)
+                mergeable[index(x, y, z)] = config.engine.streaming.greedy_meshing_enabled
+                    && matches!(definition.body_type, BodyType::Static)
                     && definition.destructibility.is_none()
                     && definition.bond_strength.is_none()
                     && definition.visual.model.is_none();
@@ -369,7 +369,6 @@ pub(super) fn spawn_chunk(
                     SpawnedVoxelBody {
                         id: instance_id,
                         entity,
-                        coordinate,
                         chunk_id: chunk.id.clone(),
                         rotation: saved
                             .map(|state| Quat::from_array(state.rotation_xyzw))
@@ -409,9 +408,8 @@ pub(super) fn spawn_chunk(
             let Some(second) = voxel_bodies.get(&neighbour_coordinate).cloned() else {
                 continue;
             };
-            if first.id >= second.id
-                || (matches!(first.body_type, BodyType::Static)
-                    && matches!(second.body_type, BodyType::Static))
+            if matches!(first.body_type, BodyType::Static)
+                && matches!(second.body_type, BodyType::Static)
             {
                 continue;
             }
@@ -420,28 +418,36 @@ pub(super) fn spawn_chunk(
             else {
                 continue;
             };
-            let bond_id = format!("bond:{}|{}", first.id, second.id);
+
+            // Canonical endpoint order keeps the local bond frame independent of which chunk
+            // happened to stream first. The neighbour scan itself visits both signs.
+            let (body_a, body_b, direction_a) = if first.id < second.id {
+                (&first, &second, direction)
+            } else {
+                (&second, &first, -direction)
+            };
+            let bond_id = format!("bond:{}|{}", body_a.id, body_b.id);
             if active_bond_ids.contains(&bond_id) || journal.broken_bonds.contains(&bond_id) {
                 continue;
             }
 
-            let local_axis1 = first.rotation.inverse() * direction;
-            let local_axis2 = second.rotation.inverse() * -direction;
-            let anchor1 = local_axis1 * first.half_extents[axis];
-            let anchor2 = local_axis2 * second.half_extents[axis];
+            let local_axis1 = body_a.rotation.inverse() * direction_a;
+            let local_axis2 = body_b.rotation.inverse() * -direction_a;
+            let anchor1 = local_axis1 * body_a.half_extents[axis];
+            let anchor2 = local_axis2 * body_b.half_extents[axis];
             let other_axes = match axis {
                 0 => [1, 2],
                 1 => [0, 2],
                 _ => [0, 1],
             };
-            let face_area = (first.half_extents[other_axes[0]] * 2.0)
-                * (first.half_extents[other_axes[1]] * 2.0);
+            let face_area = (body_a.half_extents[other_axes[0]] * 2.0)
+                * (body_a.half_extents[other_axes[1]] * 2.0);
             let face_size = face_area.sqrt();
             let joint = spawn_voxel_bond(
                 commands,
                 bond_id.clone(),
-                first.entity,
-                second.entity,
+                body_a.entity,
+                body_b.entity,
                 anchor1,
                 anchor2,
                 local_axis1,
