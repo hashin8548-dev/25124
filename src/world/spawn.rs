@@ -16,8 +16,7 @@ use crate::{
         PersistentObjectId, WorldStateFile,
     },
     physics::{
-        DestructibleBody, DestructibleBodySpec, RollingResistance, VoxelBondSpec,
-        spawn_voxel_bond,
+        DestructibleBody, DestructibleBodySpec, RollingResistance, VoxelBondSpec, spawn_voxel_bond,
     },
     world::{ChunkMembership, greedy_mesher::VoxelGrid, voxel_instance_id},
 };
