@@ -47,15 +47,15 @@ fn run() -> Result<()> {
 
 fn report_saved_state_compatibility(config: &RuntimeConfig, world_state: &WorldStateFile) {
     for id in world_state.bodies.keys() {
-        if let Some((chunk_id, coordinate)) = parse_voxel_instance_id(id) {
-            if config.chunks.iter().any(|chunk| {
+        if let Some((chunk_id, coordinate)) = parse_voxel_instance_id(id)
+            && config.chunks.iter().any(|chunk| {
                 chunk.id == chunk_id
                     && coordinate[0] < chunk.dimensions[0]
                     && coordinate[1] < chunk.dimensions[1]
                     && coordinate[2] < chunk.dimensions[2]
-            }) {
-                continue;
-            }
+            })
+        {
+            continue;
         }
 
         let Some(instance) = config
