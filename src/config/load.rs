@@ -7,7 +7,10 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 
 use super::{
-    schema::{ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest},
+    schema::{
+        ComponentCatalog, EngineSettings, MaterialCatalog, MAX_CHUNK_DIMENSION,
+        RegionManifest, WorldManifest,
+    },
     validate::validate_all,
 };
 
