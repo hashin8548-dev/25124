@@ -20,15 +20,15 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub(super) struct SpawnedVoxelBody {
-    pub(super) id: String,
-    pub(super) entity: Entity,
-    pub(super) coordinate: [i32; 3],
-    pub(super) chunk_id: String,
-    pub(super) rotation: Quat,
-    pub(super) half_extents: Vec3,
-    pub(super) body_type: BodyType,
-    pub(super) bond_strength: Option<BondStrengthDefinition>,
+pub(crate) struct SpawnedVoxelBody {
+    pub(crate) id: String,
+    pub(crate) entity: Entity,
+    pub(crate) coordinate: [i32; 3],
+    pub(crate) chunk_id: String,
+    pub(crate) rotation: Quat,
+    pub(crate) half_extents: Vec3,
+    pub(crate) body_type: BodyType,
+    pub(crate) bond_strength: Option<BondStrengthDefinition>,
 }
 
 pub(super) fn spawn_world(
