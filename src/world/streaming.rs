@@ -108,13 +108,14 @@ pub(super) fn update_chunk_streaming(
 
     // Cancel reads that are no longer relevant. Dropping the task drops its future; no
     // chunk is allowed to become resident simply because it was requested earlier.
+    let load_limit = config.engine.streaming.load_radius_chunks as f32;
     let unload_limit = config.engine.streaming.unload_radius_chunks as f32;
     let cancelled: Vec<String> = state
         .pending
         .iter()
         .filter(|(_, pending)| {
             distance_to_chunk_aabb(camera_position, &pending.source)
-                > chunk_radius_m(&pending.source, unload_limit)
+                > chunk_radius_m(&pending.source, load_limit)
         })
         .map(|(id, _)| id.clone())
         .collect();
@@ -201,7 +202,6 @@ pub(super) fn update_chunk_streaming(
 
     // Discard completed reads that became irrelevant while waiting in the spawn queue.
     // This prevents stale ready items from consuming the per-frame spawn budget.
-    let load_limit = config.engine.streaming.load_radius_chunks as f32;
     state.ready.retain(|(source, _)| {
         distance_to_chunk_aabb(camera_position, source) <= chunk_radius_m(source, load_limit)
     });
@@ -216,7 +216,7 @@ pub(super) fn update_chunk_streaming(
                 && !state.pending.contains_key(&source.id)
                 && !state.ready.iter().any(|(queued, _)| queued.id == source.id)
                 && distance_to_chunk_aabb(camera_position, source)
-                    <= chunk_radius_m(source, config.engine.streaming.load_radius_chunks as f32)
+                    <= chunk_radius_m(source, load_limit)
         })
         .cloned()
         .collect();
@@ -249,7 +249,7 @@ pub(super) fn update_chunk_streaming(
             break;
         };
         if distance_to_chunk_aabb(camera_position, &source)
-            > chunk_radius_m(&source, config.engine.streaming.load_radius_chunks as f32)
+            > chunk_radius_m(&source, load_limit)
         {
             continue;
         }
