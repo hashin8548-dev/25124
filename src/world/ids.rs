@@ -8,7 +8,10 @@ mod tests {
 
     #[test]
     fn voxel_ids_are_stable_and_coordinate_specific() {
-        assert_eq!(voxel_instance_id("chunk_0_0", 1, 2, 3), "voxel:chunk_0_0:1:2:3");
+        assert_eq!(
+            voxel_instance_id("chunk_0_0", 1, 2, 3),
+            "voxel:chunk_0_0:1:2:3"
+        );
         assert_ne!(
             voxel_instance_id("chunk_0_0", 1, 2, 3),
             voxel_instance_id("chunk_0_0", 3, 2, 1)
