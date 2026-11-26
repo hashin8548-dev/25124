@@ -1,6 +1,6 @@
 mod state;
 
-pub use state::WorldStateFile;
+pub use state::{PersistedBodyState, PersistedFragmentState, WorldStateFile};
 
 use std::{
     collections::HashSet,
