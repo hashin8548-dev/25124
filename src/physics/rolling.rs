@@ -47,8 +47,7 @@ impl RollingResistance {
             }
             ColliderShape::Sphere { radius } => {
                 let radius = radius * scale;
-                let mass =
-                    (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3) * density_kg_m3;
+                let mass = (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3) * density_kg_m3;
                 let moment = 0.4 * mass * radius * radius;
                 (mass, radius, Vec3::splat(moment))
             }
@@ -58,15 +57,13 @@ impl RollingResistance {
             } => {
                 let radius = radius * scale;
                 let length = segment_length * scale;
-                let cylinder_mass =
-                    std::f32::consts::PI * radius * radius * length * density_kg_m3;
-                let cap_mass =
-                    (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3) * density_kg_m3;
+                let cylinder_mass = std::f32::consts::PI * radius * radius * length * density_kg_m3;
+                let cap_mass = (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3) * density_kg_m3;
                 let mass = cylinder_mass + cap_mass;
                 // Approximate the two hemispherical caps as a centred sphere. The axial
                 // moment is exact for that decomposition; the transverse moment is conservative.
-                let axial = 0.5 * cylinder_mass * radius * radius
-                    + 0.4 * cap_mass * radius * radius;
+                let axial =
+                    0.5 * cylinder_mass * radius * radius + 0.4 * cap_mass * radius * radius;
                 let transverse = cylinder_mass * (3.0 * radius * radius + length * length) / 12.0
                     + cap_mass * (0.4 * radius * radius + 0.25 * length * length);
                 (mass, radius, Vec3::new(transverse, axial, transverse))
@@ -241,8 +238,7 @@ mod tests {
             let normal = Vec3::Y;
             let result = dissipate_rolling_spin(omega, normal, inertia, 0.7);
             assert!(
-                rotational_energy(result, inertia)
-                    <= rotational_energy(omega, inertia) + 1.0e-5
+                rotational_energy(result, inertia) <= rotational_energy(omega, inertia) + 1.0e-5
             );
             for axis in 0..3 {
                 assert!(
