@@ -174,6 +174,12 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
             !fragment.definition_id.trim().is_empty(),
             "fragment '{id}' has an empty component definition id"
         );
+        if let Some(chunk_id) = &fragment.chunk_id {
+            ensure!(
+                !chunk_id.trim().is_empty(),
+                "fragment '{id}' has an empty owning chunk id"
+            );
+        }
         ensure!(
             fragment
                 .half_extents_m
