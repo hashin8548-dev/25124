@@ -64,7 +64,7 @@ World data is a hierarchy rather than a monolithic world JSON:
 3. Each chunk declares dimensions, voxel size, a block-definition palette, and sparse Y layers. Each row stores one hexadecimal palette index per X cell; rows are ordered along Z. Palette index `0` is air.
 4. Non-air palette entries reference cuboid component definitions in `data/components.json`; voxel dimensions scale from the referenced collider dimensions using the chunk's `voxel_size_m`.
 
-The sample overworld contains four 16×16×16 chunks. The chunk coordinate, dimensions and voxel size determine its world-space origin. Each occupied voxel receives a stable ID based on chunk ID and cell coordinates, so runtime transforms, fracture state and saves can refer to a block independently of its neighbours.
+The sample overworld contains four 16×16×16 chunks. All chunks in one world share dimensions and voxel size so integer chunk coordinates map to one consistent voxel lattice. The chunk coordinate, dimensions and voxel size determine its world-space origin. Each occupied voxel receives a stable ID based on chunk ID and cell coordinates, so runtime transforms, fracture state and saves can refer to a block independently of its neighbours.
 
 Startup reads region indexes and spatial metadata only. Chunk payloads are read asynchronously when the spectator camera approaches, with configured limits for parallel file reads and per-frame chunk spawns. A wider unload radius provides hysteresis. Before unload, dynamic voxel transforms/velocities and detached-fragment state are retained in the world-state resource; broken bonds and fractures remain journaled.
 
