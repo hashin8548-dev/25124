@@ -41,9 +41,11 @@ impl VoxelGrid {
             .iter()
             .try_fold(1_usize, |volume, dimension| volume.checked_mul(*dimension))
             .ok_or_else(|| "voxel dimensions overflow addressable memory".to_owned())?;
-        if dimensions.contains(&0) || dimensions
+        if dimensions.contains(&0)
+            || dimensions
                 .iter()
-                .any(|dimension| *dimension > MAX_CHUNK_DIMENSION as usize) {
+                .any(|dimension| *dimension > MAX_CHUNK_DIMENSION as usize)
+        {
             return Err("voxel dimensions must each be in [1, 32]".to_owned());
         }
         if !voxel_size_m.is_finite() || voxel_size_m <= 0.0 {
@@ -389,25 +391,15 @@ mod tests {
 
     #[test]
     fn greedy_collider_boxes_cover_each_mergeable_cell_once() {
-        let cells = vec![
-            1, 1, 2,
-            1, 0, 0,
-            0, 0, 0,
-            1, 0, 0,
-        ];
+        let cells = vec![1, 1, 2, 1, 0, 0, 0, 0, 0, 1, 0, 0];
         let grid = VoxelGrid::from_cells([3, 2, 2], 0.5, cells).unwrap();
         let mergeable = [
-            true, true, true,
-            true, false, false,
-            false, false, false,
-            true, false, false,
+            true, true, true, true, false, false, false, false, false, true, false, false,
         ];
         let boxes = grid.greedy_boxes(&mergeable).unwrap();
         let total_volume = boxes
             .iter()
-            .map(|box_| {
-                box_.full_size_m.x * box_.full_size_m.y * box_.full_size_m.z
-            })
+            .map(|box_| box_.full_size_m.x * box_.full_size_m.y * box_.full_size_m.z)
             .sum::<f32>();
         assert!((total_volume - 5.0 * 0.5_f32.powi(3)).abs() < 1.0e-6);
         assert_eq!(
