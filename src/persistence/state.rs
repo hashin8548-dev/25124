@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
 };
@@ -311,7 +311,10 @@ where
                 previous_temp_path.display()
             )
         })?;
-        File::open(&previous_temp_path)
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&previous_temp_path)
             .with_context(|| {
                 format!(
                     "could not open staged previous save '{}'",
