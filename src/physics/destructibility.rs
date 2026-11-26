@@ -152,7 +152,9 @@ pub(super) fn fracture_on_new_impacts(
     }
 
     for (entity, impact) in candidates {
-        let Ok((target, transform, linear_velocity, angular_velocity, chunk_membership)) = targets.get(entity) else {
+        let Ok((target, transform, linear_velocity, angular_velocity, chunk_membership)) =
+            targets.get(entity)
+        else {
             continue;
         };
         let target = target.clone();
