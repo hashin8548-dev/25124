@@ -1,13 +1,8 @@
 name: Rust validation
 
 on:
-  push:
-    branches:
-      - main
-      - foundation/physics-first-core
-  pull_request:
-    branches:
-      - main
+  # GitHub-hosted runners are intentionally opt-in; validation is performed locally.
+  workflow_dispatch:
 
 permissions:
   contents: read
