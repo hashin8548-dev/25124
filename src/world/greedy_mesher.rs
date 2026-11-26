@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn two_adjacent_voxels_merge_shared_faces_into_one_mesh_surface() {
-        let mut cells = vec![0_u8; 2 * 1 * 1];
+        let mut cells = vec![0_u8; 2];
         cells[0] = 1;
         cells[1] = 1;
         let grid = VoxelGrid::from_cells([2, 1, 1], 1.0, cells).unwrap();
