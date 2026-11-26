@@ -61,6 +61,7 @@ impl DestructibleBody {
             visual: spec.visual.clone(),
         }
     }
+}
 
 #[derive(Resource, Clone, Debug, Default)]
 pub struct DestructionJournal {
