@@ -256,7 +256,7 @@ mod tests {
         .expect("sample configuration should validate");
 
         assert_eq!(config.world.id, "sandbox");
-        assert_eq!(config.world.objects.len(), 5);
+        assert_eq!(config.world.objects.len(), 4);
         assert_eq!(config.chunks.len(), 4);
         assert_eq!(
             config.world.objects[1].definition,
