@@ -13,7 +13,13 @@
         0,
         -1
       ],
-      "path": "chunks/chunk_-1_0_-1.json"
+      "path": "chunks/chunk_-1_0_-1.json",
+      "dimensions": [
+        16,
+        16,
+        16
+      ],
+      "voxel_size_m": 1
     },
     {
       "id": "chunk_-1_0",
@@ -22,7 +28,13 @@
         0,
         0
       ],
-      "path": "chunks/chunk_-1_0_0.json"
+      "path": "chunks/chunk_-1_0_0.json",
+      "dimensions": [
+        16,
+        16,
+        16
+      ],
+      "voxel_size_m": 1
     },
     {
       "id": "chunk_0_-1",
@@ -31,7 +43,13 @@
         0,
         -1
       ],
-      "path": "chunks/chunk_0_0_-1.json"
+      "path": "chunks/chunk_0_0_-1.json",
+      "dimensions": [
+        16,
+        16,
+        16
+      ],
+      "voxel_size_m": 1
     },
     {
       "id": "chunk_0_0",
@@ -40,7 +58,13 @@
         0,
         0
       ],
-      "path": "chunks/chunk_0_0_0.json"
+      "path": "chunks/chunk_0_0_0.json",
+      "dimensions": [
+        16,
+        16,
+        16
+      ],
+      "voxel_size_m": 1
     }
   ]
 }
