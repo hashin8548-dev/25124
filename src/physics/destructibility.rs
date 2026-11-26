@@ -95,7 +95,7 @@ pub(super) fn fracture_on_new_impacts(
                 impact_speed = impact_speed.max((-point.normal_speed).max(0.0));
                 let impulse = manifold.normal * point.normal_impulse;
                 impulse_on_first += impulse;
-                torque_on_first += (point.point) .cross(impulse);
+                torque_on_first += point.point.cross(impulse);
             }
         }
 
@@ -119,7 +119,7 @@ pub(super) fn fracture_on_new_impacts(
                 speed_m_s: impact_speed,
                 linear_impulse_ns: impulse_on_first * sign,
                 angular_impulse_nms: (torque_on_first
-                    - transform.translation.cross(Vec3::ZERO))
+                    - transform.translation.cross(impulse_on_first))
                     * sign,
             };
             candidates
@@ -284,8 +284,14 @@ mod tests {
                 original.z * 2.0 / counts[2] as f32 * 0.5,
             );
             let fragment_count = (counts[0] * counts[1] * counts[2]) as f32;
-            let original_volume = (original * 2.0).element_product(Vec3::ONE);
-            let fragment_volume = (fragment_half * 2.0).element_product(Vec3::ONE) * fragment_count;
+            let original_full_size = original * 2.0;
+            let fragment_full_size = fragment_half * 2.0;
+            let original_volume =
+                original_full_size.x * original_full_size.y * original_full_size.z;
+            let fragment_volume = fragment_full_size.x
+                * fragment_full_size.y
+                * fragment_full_size.z
+                * fragment_count;
             assert!((original_volume - fragment_volume).abs() < 1.0e-6);
         }
     }
