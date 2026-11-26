@@ -153,11 +153,17 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
     }
 
     for id in &state.fractured {
-        ensure!(!id.trim().is_empty(), "save contains an empty fractured object id");
+        ensure!(
+            !id.trim().is_empty(),
+            "save contains an empty fractured object id"
+        );
     }
 
     for id in &state.broken_bonds {
-        ensure!(!id.trim().is_empty(), "save contains an empty broken bond id");
+        ensure!(
+            !id.trim().is_empty(),
+            "save contains an empty broken bond id"
+        );
     }
 
     for (id, fragment) in &mut state.fragments {
@@ -167,11 +173,16 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
             "fragment '{id}' has an empty component definition id"
         );
         ensure!(
-            fragment.half_extents_m.iter().all(|value| value.is_finite() && *value > 0.0),
+            fragment
+                .half_extents_m
+                .iter()
+                .all(|value| value.is_finite() && *value > 0.0),
             "fragment '{id}' has invalid half extents"
         );
         ensure!(
-            fragment.translation_m.iter()
+            fragment
+                .translation_m
+                .iter()
                 .chain(fragment.rotation_xyzw.iter())
                 .chain(fragment.linear_velocity_m_s.iter())
                 .chain(fragment.angular_velocity_rad_s.iter())
@@ -179,7 +190,9 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
             "save contains non-finite fragment state for '{id}'"
         );
 
-        let norm_squared = fragment.rotation_xyzw.iter()
+        let norm_squared = fragment
+            .rotation_xyzw
+            .iter()
             .map(|component| component * component)
             .sum::<f32>();
         ensure!(
