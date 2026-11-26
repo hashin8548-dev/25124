@@ -35,6 +35,8 @@ pub struct ChunkStreamingState {
     active_bond_ids: HashSet<String>,
 }
 
+// Separate ECS queries/resources keep read/write access tracking precise for the scheduler.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn update_chunk_streaming(
     mut commands: Commands,
     config: Res<RuntimeConfig>,
