@@ -91,6 +91,11 @@ pub fn validate_all(
         ensure!(material.static_friction.is_finite() && material.static_friction >= 0.0, "material '{id}' static friction must be finite and non-negative");
         ensure!(material.dynamic_friction.is_finite() && material.dynamic_friction >= 0.0, "material '{id}' dynamic friction must be finite and non-negative");
         ensure!(material.restitution.is_finite() && (0.0..=1.0).contains(&material.restitution), "material '{id}' restitution must be in [0, 1]");
+        ensure!(
+            material.rolling_resistance_coefficient.is_finite()
+                && (0.0..=1.0).contains(&material.rolling_resistance_coefficient),
+            "material '{id}' rolling resistance coefficient must be in [0, 1]"
+        );
     }
 
     ensure!(!components.definitions.is_empty(), "component catalogue is empty");
