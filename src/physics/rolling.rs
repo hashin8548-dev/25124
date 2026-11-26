@@ -7,8 +7,8 @@ use crate::config::ColliderShape;
 
 /// Contact-only rolling resistance, with principal moments of inertia in body-local space.
 ///
-/// This is a Coulomb-style rolling-resistance impulse model. It acts only on the component of
-/// angular velocity tangent to a supporting contact normal; spin about the normal is left alone.
+/// This is a Coulomb-style rolling-resistance impulse model. It applies torque only in the
+/// contact plane, so it introduces no angular impulse about the supporting contact normal.
 #[derive(Component, Clone, Copy, Debug)]
 pub struct RollingResistance {
     pub coefficient: f32,
