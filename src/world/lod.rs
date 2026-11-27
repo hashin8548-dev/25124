@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::{
-    camera::FreeFlyCamera, config::RuntimeConfig, engine::AppMode,
-    physics::DestructionJournal, world::parse_voxel_instance_id,
+    camera::FreeFlyCamera, config::RuntimeConfig, engine::AppMode, physics::DestructionJournal,
+    world::parse_voxel_instance_id,
 };
 
 /// Visual-only level-of-detail membership for every static voxel in a resident chunk.
