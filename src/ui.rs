@@ -1629,10 +1629,11 @@ fn color_from_srgba(value: [f32; 4]) -> Color {
 #[cfg(test)]
 mod tests {
     use super::{
-        MenuAsset, MenuButtonDefinition, default_world_empty_description,
-        default_world_format_label, default_world_metadata_max_fields, default_world_objects_label,
-        default_world_preview_label, default_world_regions_label, default_world_version_prefix,
-        menu_visibility_targets, scroll_position_after_delta, world_metadata_lines,
+        MenuAsset, MenuButtonDefinition, default_empty_library_title, default_empty_library_hint, default_quit_confirm_title, default_quit_confirm_message, default_quit_confirm_label, default_quit_cancel_label, default_library_navigation_hint, default_pause_controls_hint, default_pause_title, default_world_count_template, default_library_warning_template, default_modal_backdrop_srgba, default_notice_srgba, default_success_srgba, default_library_warning_srgba, default_panel_border_srgba, default_panel_shadow_srgba, default_panel_shadow_blur_px, default_panel_shadow_offset_y_px, default_button_border_srgba, default_button_active_border_srgba, default_danger_button_srgba, default_danger_button_hover_srgba, default_panel_radius_px, default_card_radius_px,
+        default_world_empty_description, default_world_format_label,
+        default_world_metadata_max_fields, default_world_objects_label, default_world_preview_label,
+        default_world_regions_label, default_world_version_prefix, menu_visibility_targets,
+        scroll_position_after_delta, world_metadata_lines,
     };
     use bevy::prelude::Visibility;
     use std::collections::BTreeMap;
