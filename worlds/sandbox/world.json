@@ -2,6 +2,13 @@
   "schema_version": 1,
   "id": "sandbox",
   "name": "Physics Sandbox",
+  "description": "A compact destructible testbed for rigid-body impacts, bonded voxel structures, and chunk streaming.",
+  "preview_asset": null,
+  "metadata": {
+    "category": "physics sandbox",
+    "author": "sample content",
+    "features": ["rigid bodies", "destructible voxels", "bonded structures", "chunk streaming"]
+  },
   "gravity_m_s2": null,
   "regions": [
     "regions/overworld.json"

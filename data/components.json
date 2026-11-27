@@ -126,10 +126,12 @@
         "alpha_mode": "opaque"
       },
       "bond_strength": {
+        "elastic_modulus_pa": 30000000000,
         "tensile_strength_pa": 3000000,
         "shear_strength_pa": 2000000,
         "bending_strength_pa": 4000000,
-        "torsional_strength_pa": 2000000
+        "torsional_strength_pa": 2000000,
+        "damage_rate_per_s": 2.0
       }
     },
     "block.structural_timber": {
@@ -146,10 +148,12 @@
       "swept_ccd": null,
       "destructibility": null,
       "bond_strength": {
+        "elastic_modulus_pa": 11000000000,
         "tensile_strength_pa": 35000000,
         "shear_strength_pa": 7000000,
         "bending_strength_pa": 55000000,
-        "torsional_strength_pa": 5000000
+        "torsional_strength_pa": 5000000,
+        "damage_rate_per_s": 1.25
       },
       "visual": {
         "model": null,

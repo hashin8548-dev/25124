@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use avian3d::prelude::{
     AngularVelocity, Collider, ColliderDensity, CollisionEventsEnabled, Collisions, Friction,
@@ -67,6 +67,7 @@ impl DestructibleBody {
 pub struct DestructionJournal {
     pub fractured: BTreeSet<String>,
     pub broken_bonds: BTreeSet<String>,
+    pub damaged_bonds: BTreeMap<String, f32>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -82,6 +83,7 @@ pub(super) fn restore_destruction_journal(
 ) {
     journal.fractured.clone_from(&state.fractured);
     journal.broken_bonds.clone_from(&state.broken_bonds);
+    journal.damaged_bonds.clone_from(&state.damaged_bonds);
 }
 
 // Bevy system parameters stay explicit so ECS access, change detection, and scheduling remain visible.
@@ -273,9 +275,6 @@ pub(super) fn fracture_on_new_impacts(
                             ..default()
                         },
                     ));
-                    if let Some(chunk_id) = &owning_chunk {
-                        fragment.insert(ChunkMembership(chunk_id.clone()));
-                    }
                     if let Some(chunk_id) = &owning_chunk {
                         fragment.insert(ChunkMembership(chunk_id.clone()));
                     }

@@ -4,6 +4,13 @@ use avian3d::{
 };
 use bevy::prelude::*;
 
+#[derive(States, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) enum AppMode {
+    #[default]
+    WorldLibrary,
+    Simulation,
+}
+
 use crate::{
     camera::CameraPlugin,
     config::RuntimeConfig,
@@ -22,7 +29,8 @@ impl Plugin for EnginePlugin {
         let physics = &config.engine.physics;
         let gravity = config.world.gravity_m_s2.unwrap_or(physics.gravity_m_s2);
 
-        app.add_plugins(PhysicsPlugins::default())
+        app.init_state::<AppMode>()
+            .add_plugins(PhysicsPlugins::default())
             .insert_resource(Time::<Fixed>::from_hz(physics.fixed_hz))
             .insert_resource(SubstepCount(physics.substeps))
             .insert_resource(TimeToSleep(physics.sleep_after_seconds))

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     env, fs,
     path::{Path, PathBuf},
 };
@@ -7,7 +7,10 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 
 use super::{
-    schema::{ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest},
+    schema::{
+        ComponentCatalog, EngineSettings, MaterialCatalog, RegionManifest, WorldManifest,
+        WorldObjectInstance,
+    },
     validate::validate_all,
 };
 
@@ -15,6 +18,8 @@ const REGION_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Debug)]
 pub struct ProjectPaths {
+    pub project_root: PathBuf,
+    pub data_dir: PathBuf,
     pub assets_dir: PathBuf,
     pub world_state: PathBuf,
 }
@@ -31,6 +36,13 @@ pub struct ChunkSource {
     pub path: PathBuf,
 }
 
+#[derive(Clone, Debug)]
+pub struct ObjectChunkSource {
+    pub id: String,
+    pub coordinate: [i32; 3],
+    pub objects: Vec<WorldObjectInstance>,
+}
+
 #[derive(bevy::prelude::Resource, Clone, Debug)]
 pub struct RuntimeConfig {
     pub engine: EngineSettings,
@@ -38,7 +50,10 @@ pub struct RuntimeConfig {
     pub components: ComponentCatalog,
     pub world: WorldManifest,
     pub chunks: Vec<ChunkSource>,
+    pub object_chunks: Vec<ObjectChunkSource>,
     pub paths: ProjectPaths,
+    /// True when no explicit --world argument was supplied.
+    pub start_in_library: bool,
 }
 
 impl RuntimeConfig {
@@ -75,12 +90,45 @@ impl RuntimeConfig {
             &root,
             assets_override.unwrap_or_else(|| PathBuf::from("assets")),
         );
-        let world_manifest = resolve_path(
-            &root,
-            world_override.unwrap_or_else(|| PathBuf::from("worlds/sandbox/world.json")),
-        );
+        let start_in_library = world_override.is_none();
+        let mut config = if let Some(path) = world_override {
+            Self::load(data_dir, assets_dir, resolve_path(&root, path))?
+        } else {
+            let library = super::library::WorldLibrary::discover(&root)?;
+            let mut selected = None;
+            let mut load_errors = Vec::new();
 
-        Self::load(data_dir, assets_dir, world_manifest).map(Some)
+            for entry in library.entries {
+                match Self::load(
+                    data_dir.clone(),
+                    assets_dir.clone(),
+                    entry.manifest_path.clone(),
+                ) {
+                    Ok(config) => {
+                        selected = Some(config);
+                        break;
+                    }
+                    Err(error) => {
+                        load_errors.push(format!("{}: {error:#}", entry.manifest_path.display()))
+                    }
+                }
+            }
+
+            selected.with_context(|| {
+                if load_errors.is_empty() {
+                    "no valid worlds were found beneath the worlds directory".to_owned()
+                } else {
+                    format!(
+                        "no world could be loaded for library bootstrap. Candidates failed: {}",
+                        load_errors.join("; ")
+                    )
+                }
+            })?
+        };
+
+        config.paths.project_root = root;
+        config.start_in_library = start_in_library;
+        Ok(Some(config))
     }
 
     pub fn load(
@@ -92,12 +140,25 @@ impl RuntimeConfig {
         let materials: MaterialCatalog = read_json(&data_dir.join("materials.json"))?;
         let components: ComponentCatalog = read_json(&data_dir.join("components.json"))?;
         let world: WorldManifest = read_json(&world_manifest_path)?;
+        bevy::log::debug!(
+            "Loaded world '{}' presentation metadata: description={} chars, preview_asset={}, metadata_fields={}",
+            world.name,
+            world.description.chars().count(),
+            world.preview_asset.is_some(),
+            world.metadata.len()
+        );
         let chunks = load_regions(&world_manifest_path, &world)?;
+        let object_chunks =
+            build_object_chunks(&world.objects, engine.streaming.object_chunk_size_m)?;
 
         validate_all(&engine, &materials, &components, &world, &chunks)
             .context("configuration validation failed")?;
 
         let world_state_path = world_manifest_path.with_file_name("state.json");
+        let project_root = data_dir
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
 
         Ok(Self {
             engine,
@@ -105,12 +166,61 @@ impl RuntimeConfig {
             components,
             world,
             chunks,
+            object_chunks,
             paths: ProjectPaths {
+                project_root,
+                data_dir,
                 assets_dir,
                 world_state: world_state_path,
             },
+            start_in_library: false,
         })
     }
+}
+
+pub(crate) fn object_chunk_coordinate(position_m: [f32; 3], chunk_size_m: f32) -> Result<[i32; 3]> {
+    ensure!(
+        chunk_size_m.is_finite() && chunk_size_m > 0.0,
+        "object chunk size must be positive and finite"
+    );
+    let mut coordinate = [0_i32; 3];
+    for axis in 0..3 {
+        ensure!(
+            position_m[axis].is_finite(),
+            "world object position must be finite"
+        );
+        let chunk_coordinate = (position_m[axis] / chunk_size_m).floor();
+        ensure!(
+            chunk_coordinate >= i32::MIN as f32 && chunk_coordinate <= i32::MAX as f32,
+            "world object position exceeds the object chunk coordinate range"
+        );
+        coordinate[axis] = chunk_coordinate as i32;
+    }
+    Ok(coordinate)
+}
+
+fn build_object_chunks(
+    objects: &[WorldObjectInstance],
+    chunk_size_m: f32,
+) -> Result<Vec<ObjectChunkSource>> {
+    let mut groups = BTreeMap::<[i32; 3], Vec<WorldObjectInstance>>::new();
+    for object in objects {
+        let coordinate = object_chunk_coordinate(object.position_m, chunk_size_m)
+            .with_context(|| format!("could not spatially index world object '{}'", object.id))?;
+        groups.entry(coordinate).or_default().push(object.clone());
+    }
+
+    Ok(groups
+        .into_iter()
+        .map(|(coordinate, objects)| ObjectChunkSource {
+            id: format!(
+                "objects_{}_{}_{}",
+                coordinate[0], coordinate[1], coordinate[2]
+            ),
+            coordinate,
+            objects,
+        })
+        .collect())
 }
 
 fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSource>> {
@@ -323,6 +433,25 @@ mod tests {
         assert!(config.chunks.iter().all(|source| source.path.is_file()));
         assert_eq!(config.chunks[0].dimensions, [16, 16, 16]);
         assert_eq!(config.chunks[0].voxel_size_m, 1.0);
+        assert_eq!(config.object_chunks.len(), 2);
+        assert_eq!(config.object_chunks[0].coordinate, [-1, 0, 0]);
+        assert_eq!(config.object_chunks[0].objects.len(), 2);
+        assert_eq!(config.object_chunks[1].coordinate, [0, 0, 0]);
+        assert_eq!(config.object_chunks[1].objects.len(), 2);
+    }
+
+    #[test]
+    fn object_chunk_coordinates_use_floor_for_negative_world_positions() {
+        assert_eq!(
+            super::object_chunk_coordinate([-0.01, 0.0, 16.0], 16.0).unwrap(),
+            [-1, 0, 1]
+        );
+        assert_eq!(
+            super::object_chunk_coordinate([-16.0, -16.01, 0.0], 16.0).unwrap(),
+            [-1, -2, 0]
+        );
+        assert!(super::object_chunk_coordinate([f32::NAN, 0.0, 0.0], 16.0).is_err());
+        assert!(super::object_chunk_coordinate([0.0; 3], 0.0).is_err());
     }
 
     #[test]

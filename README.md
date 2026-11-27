@@ -26,6 +26,11 @@ worlds/
 
 The Rust source owns systems and validation, not scenario-specific visuals or UI markup. New physical objects are defined in `data/components.json`, with physical properties referencing `data/materials.json`. `assets/ui/main_menu.json` controls the menu independently of source code.
 
+## World library
+
+Launching without --world opens the world library. It discovers every world.json recursively beneath worlds/ and lists discovered worlds in stable name/ID order. Selecting an entry validates that world's manifest, region index and chunk metadata, then restores that world's own state.json. No world simulation is spawned before selection. Add a new world by creating a folder with a valid world.json; the library does not require source-code registration or a hard-coded scenario list.
+
+Passing --world <path> remains available for direct startup and development automation. It bypasses the library and starts the specified world.
 ## Simulation
 
 - SI-style scale: one world unit is one metre, linear velocities are m/s, angular velocities are rad/s, gravity is m/s², and density is kg/m³.
@@ -51,9 +56,9 @@ Any cuboid component definition may contain an optional `destructibility` block:
 
 The fracture system observes Avian's pre-solver contact-normal speed and contact impulse. When the threshold is crossed, it replaces the original cuboid with a grid of dynamic fragments. Fragment dimensions tile the original collider volume; fragments inherit the original rigid body's linear/angular velocity field. A fractured static block receives the measured contact impulse when its fragments are spawned. Damage and fragment generation are therefore data-driven rather than tied to object names.
 
-A component may also define `bond_strength` with tensile, shear, bending and torsional limits in pascals. Adjacent authored voxels with bond definitions are connected by fixed joints. Joint force and torque are converted to nominal face stresses; a bond is removed when any configured mode exceeds its threshold. This is a beam/section approximation for voxel-scale connections, not a finite-element or continuum stress solver.
+A component may define bond_strength with elastic modulus, separate tensile/compressive strengths, shear, bending and torsional limits in pascals, and a progressive-damage rate. Adjacent authored voxels with bond definitions are connected by fixed joints. Avian joint force and torque are converted to nominal face stresses. A matrix-free, diagonally preconditioned conjugate-gradient truss solve estimates gravity-driven axial load sharing through connected paths that reach static supports. Multiple paths share load by member stiffness; after a member fails, the next solve redistributes its load to the surviving graph. Damage accumulates above 50% utilization and is persisted in save format 2. Existing version-1 saves are upgraded on load.
 
-Current constraints are deliberate and validated: impact-fracture targets must use cuboid colliders and procedural primitive visuals. Imported glTF fracture geometry is not yet implemented. Fragment pieces remain rigid bodies. The bond-stress calculation is an approximate rigid-body joint failure model, not a deformable continuum simulation.
+Current constraints are deliberate and validated: impact-fracture targets must use cuboid colliders and procedural primitive visuals. Imported glTF fracture geometry is not yet implemented. Fragment pieces remain rigid bodies. The structural network is a small-displacement, linear-elastic axial truss approximation under gravity. Avian remains authoritative for rigid-body motion and local joint/contact response; the truss does not model continuum strain, plasticity, buckling, shear/bending redistribution, or arbitrary external load cases. These limitations are explicit rather than claiming finite-element accuracy.
 
 ## Voxel world format
 
@@ -66,9 +71,9 @@ World data is a hierarchy rather than a monolithic world JSON:
 
 The sample overworld contains four 16×16×16 chunks. All chunks in one world share dimensions and voxel size so integer chunk coordinates map to one consistent voxel lattice. The chunk coordinate, dimensions and voxel size determine its world-space origin. Each occupied voxel receives a stable ID based on chunk ID and cell coordinates, so runtime transforms, fracture state and saves can refer to a block independently of its neighbours.
 
-Startup reads region indexes and spatial metadata only. Chunk payloads are read asynchronously when the spectator camera approaches, with configured limits for parallel file reads and per-frame chunk spawns. A wider unload radius provides hysteresis. Before unload, dynamic voxel transforms/velocities and detached-fragment state are retained in the world-state resource; broken bonds and fractures remain journaled.
+Startup reads region indexes and spatial metadata only. Voxel payloads are read asynchronously when the spectator camera approaches, with configured limits for parallel file reads and per-frame spawns. Authored `world.objects` are also partitioned into deterministic spatial object chunks using `object_chunk_size_m`; they enter the same residency scheduler and share its spawn budget. Both chunk types use load/unload radii with hysteresis. Before unload, dynamic body transforms/velocities and detached-fragment state are preserved; chunk-owned joints are removed with their endpoint entities, and broken bonds/fractures remain journaled.
 
-Static, non-fracturable cells are greedily merged into exposed-face render meshes and material-specific compound colliders. Dynamic, destructible, bonded and imported-model cells remain independent rigid bodies. Bond reconnection uses stable voxel identities across chunk boundaries, so loading order does not create duplicate joints. Chunk editing/transactional authoring and seam-aware cross-chunk face merging remain future work.
+Voxel rendering has a separate mask from physics batching. Intact static cells—including destructible and bonded concrete platform cells—participate in visual LOD, while only non-interactive static cells may merge into a compound collider. Dynamic bodies, fractured cells, imported-model visuals, and blended visuals are never folded into those batches. Optional visual LOD is configured in `data/engine.json`: full-resolution LOD0, factor-two LOD1, factor-four LOD2, and factor-eight LOD3 are generated where chunk dimensions permit. Transitions use distance to the chunk bounds, not just its center. Proxies are render-only; exact LOD0 colliders remain active. If a voxel in a chunk fractures, its coarse snapshot is hidden so the chunk shows exact surviving cells rather than a stale proxy. Authored object chunks currently stream at their authored mesh detail; coarse object-proxy generation is not yet implemented. Bond reconnection uses stable voxel identities across chunk boundaries, so loading order does not create duplicate joints. Chunk editing/transactional authoring and seam-aware cross-chunk face merging remain future work.
 
 ## Menu and controls
 
@@ -83,7 +88,7 @@ The main menu is loaded from `assets/ui/main_menu.json`. It configures title/sub
 | Escape | Open/close main menu |
 | F5 | Save rigid-body state, fracture IDs, broken bonds and fragment state |
 
-The camera is intentionally non-physical. It is not a player character and does not participate in collisions.
+The camera is intentionally non-physical. It is not a player character and does not participate in collisions. World-library startup shows the selectable world collection first; Escape toggles the in-world menu while a simulation is active.
 
 ## Authoring
 
@@ -106,7 +111,7 @@ cargo run -- --root . --data data --assets assets --world worlds/sandbox/world.j
 
 Paths may be absolute or relative to `--root`. The executable resolves its portable root from the directory beside the executable when that directory contains `data/`; development runs fall back to the current working directory.
 
-F5 writes `state.json` atomically and keeps backup/recovery generations. It stores dynamic object transforms and velocities, fractured instance IDs, and live fragment transforms/velocities. Authored static transforms remain in manifests/chunks. Unresolved object records are retained to support content that is temporarily unavailable.
+F5 writes `state.json` atomically and keeps backup/recovery generations. It stores dynamic object transforms and velocities, fractured instance IDs, progressive bond damage, broken bonds, and live fragment transforms/velocities. Save format 2 migrates version-1 files on load. Authored static transforms remain in manifests/chunks. Unresolved object records are retained to support content that is temporarily unavailable.
 
 ## Local validation
 

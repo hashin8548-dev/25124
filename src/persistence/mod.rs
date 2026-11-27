@@ -10,6 +10,7 @@ use bevy::prelude::*;
 use crate::{
     config::{BodyType, RuntimeConfig},
     physics::DestructionJournal,
+    ui::MenuState,
 };
 
 #[derive(Component, Clone, Debug)]
@@ -60,8 +61,11 @@ impl Plugin for PersistencePlugin {
     }
 }
 
+// Bevy injects each resource and query separately so component access remains explicit.
+#[allow(clippy::too_many_arguments)]
 fn save_world_on_f5(
     keys: Res<ButtonInput<KeyCode>>,
+    menu: Res<MenuState>,
     target: Res<WorldSaveTarget>,
     config: Res<RuntimeConfig>,
     previous_state: Res<WorldStateFile>,
@@ -83,7 +87,7 @@ fn save_world_on_f5(
         &AngularVelocity,
     )>,
 ) {
-    if !keys.just_pressed(KeyCode::F5) {
+    if menu.visible || !keys.just_pressed(KeyCode::F5) {
         return;
     }
 
@@ -101,6 +105,7 @@ fn save_world_on_f5(
         .collect();
     snapshot.fractured = destruction_journal.fractured.clone();
     snapshot.broken_bonds = destruction_journal.broken_bonds.clone();
+    snapshot.damaged_bonds = destruction_journal.damaged_bonds.clone();
     snapshot.fragments = previous_state.fragments.clone();
 
     for (id, transform, linear_velocity, angular_velocity) in &bodies {

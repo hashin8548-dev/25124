@@ -1,5 +1,6 @@
 mod greedy_mesher;
 mod ids;
+mod lod;
 mod spawn;
 mod streaming;
 
@@ -19,12 +20,12 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<streaming::ChunkStreamingState>()
-            .add_systems(Startup, spawn::spawn_world)
             .add_systems(
                 Update,
                 streaming::update_chunk_streaming
                     .after(crate::physics::ContactUpdateSet)
                     .in_set(ChunkStreamingUpdateSet),
-            );
+            )
+            .add_systems(Update, lod::update_chunk_lod.after(ChunkStreamingUpdateSet));
     }
 }

@@ -1,7 +1,7 @@
 {
-  "schema_version": 1,
-  "title": "PHYSICS SANDBOX",
-  "subtitle": "A MATERIAL AND DESTRUCTION SIMULATION",
+  "schema_version": 2,
+  "title": "WORLD LIBRARY",
+  "subtitle": "SELECT A WORLD TO LOAD",
   "background_srgba": [
     0.012,
     0.02,
@@ -52,11 +52,19 @@
   "button_width_px": 360,
   "button_height_px": 54,
   "button_font_size_px": 16,
+  "world_card_height_px": 116,
+  "world_card_gap_px": 12,
+  "world_preview_size_px": 84,
+  "world_description_size_px": 11,
+  "world_metadata_size_px": 9,
+  "world_empty_description_text": "No description supplied.",
+  "world_preview_fallback_label": "WORLD",
+  "world_preview_version_prefix": "V",
+  "world_format_label": "FORMAT",
+  "world_regions_label": "REGIONS",
+  "world_objects_label": "OBJECTS",
+  "world_metadata_max_fields": 3,
   "buttons": [
-    {
-      "label": "START SIMULATION",
-      "action": "start"
-    },
     {
       "label": "RESUME",
       "action": "resume"

@@ -9,7 +9,8 @@ use bevy::{gltf::prelude::GltfAssetLabel, prelude::*};
 use crate::{
     config::{
         AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ChunkFile, ColliderShape,
-        ComponentDefinition, RuntimeConfig, SweepModeDefinition, VisualDefinition,
+        ComponentDefinition, ObjectChunkSource, RuntimeConfig, SweepModeDefinition,
+        VisualDefinition, object_chunk_coordinate,
     },
     persistence::{
         PersistRuntimeState, PersistedBodyState, PersistedFragment, PersistedFragmentState,
@@ -18,8 +19,24 @@ use crate::{
     physics::{
         DestructibleBody, DestructibleBodySpec, RollingResistance, VoxelBondSpec, spawn_voxel_bond,
     },
-    world::{ChunkMembership, greedy_mesher::VoxelGrid, voxel_instance_id},
+    world::{ChunkMembership, greedy_mesher::VoxelGrid, lod::ChunkLodVisual, voxel_instance_id},
 };
+
+fn object_lod_enabled(body_type: BodyType, lod_enabled: bool) -> bool {
+    lod_enabled && matches!(body_type, BodyType::Static)
+}
+
+fn static_cell_render_policy(
+    body_type: BodyType,
+    intact: bool,
+    destructible: bool,
+    bonded: bool,
+    greedy_meshing_enabled: bool,
+) -> (bool, bool) {
+    let lod_renderable = matches!(body_type, BodyType::Static) && intact;
+    let greedy_mergeable = lod_renderable && greedy_meshing_enabled && !destructible && !bonded;
+    (lod_renderable, greedy_mergeable)
+}
 
 #[derive(Clone)]
 pub(crate) struct SpawnedVoxelBody {
@@ -32,22 +49,31 @@ pub(crate) struct SpawnedVoxelBody {
     pub(crate) bond_strength: Option<BondStrengthDefinition>,
 }
 
-pub(super) fn spawn_world(
-    mut commands: Commands,
-    config: Res<RuntimeConfig>,
-    world_state: Res<WorldStateFile>,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+#[allow(clippy::too_many_arguments)]
+pub(super) fn spawn_object_chunk(
+    commands: &mut Commands,
+    source: &ObjectChunkSource,
+    config: &RuntimeConfig,
+    world_state: &WorldStateFile,
+    asset_server: &AssetServer,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
 ) {
     let mut mesh_cache = HashMap::<MeshKey, Handle<Mesh>>::new();
     let mut material_cache = HashMap::<VisualMaterialKey, Handle<StandardMaterial>>::new();
+    let chunk_size_m = config.engine.streaming.object_chunk_size_m;
+    let chunk_extent_m = chunk_size_m;
+    let chunk_center = Vec3::from_array(
+        source
+            .coordinate
+            .map(|axis| (axis as f32 + 0.5) * chunk_size_m),
+    );
+    let lod_settings = &config.engine.streaming;
 
-    for instance in &config.world.objects {
+    for instance in &source.objects {
         if world_state.fractured.contains(&instance.id) {
             continue;
         }
-
         let definition = config
             .components
             .definitions
@@ -58,7 +84,6 @@ pub(super) fn spawn_world(
             .materials
             .get(&definition.material)
             .expect("material references are validated before app startup");
-
         let saved = if matches!(definition.body_type, BodyType::Dynamic) {
             world_state.bodies.get(&instance.id)
         } else {
@@ -69,30 +94,50 @@ pub(super) fn spawn_world(
             rotation: rotation_from_degrees(instance.rotation_degrees_xyz),
             ..default()
         };
-
-        spawn_body(
-            &mut commands,
+        let entity = spawn_body(
+            commands,
             &instance.id,
             &instance.definition,
             definition,
             physical_material,
             transform,
             saved,
-            &config,
-            &asset_server,
-            &mut meshes,
-            &mut materials,
+            config,
+            asset_server,
+            meshes,
+            materials,
             &mut mesh_cache,
             &mut material_cache,
         );
+        let mut object_entity = commands.entity(entity);
+        object_entity.insert(ChunkMembership(source.id.clone()));
+        if object_lod_enabled(definition.body_type, lod_settings.lod_enabled) {
+            object_entity.insert(ChunkLodVisual {
+                chunk_id: source.id.clone(),
+                level: 0,
+                max_level: 0,
+                center: chunk_center,
+                half_extents: Vec3::splat(chunk_extent_m * 0.5),
+                near_distance_m: lod_settings.lod_near_distance_chunks * chunk_extent_m,
+                mid_distance_m: lod_settings.lod_mid_distance_chunks * chunk_extent_m,
+                far_distance_m: lod_settings.lod_far_distance_chunks * chunk_extent_m,
+                unload_distance_m: lod_settings.unload_radius_chunks as f32 * chunk_extent_m,
+                fallback_on_damage: false,
+            });
+        }
     }
 
+    // Older saves did not record an object-chunk ID for fragments created from authored
+    // objects. Rehome those records by their last world position as they enter the new index.
     let mut restored_fragment_count = 0_usize;
-    for (instance_id, state) in world_state
-        .fragments
-        .iter()
-        .filter(|(_, state)| state.chunk_id.is_none())
-    {
+    for (instance_id, state) in &world_state.fragments {
+        let belongs_to_chunk = state.chunk_id.as_deref() == Some(source.id.as_str())
+            || (state.chunk_id.is_none()
+                && object_chunk_coordinate(state.translation_m, chunk_size_m)
+                    .is_ok_and(|coordinate| coordinate == source.coordinate));
+        if !belongs_to_chunk {
+            continue;
+        }
         let Some(definition) = config.components.definitions.get(&state.definition_id) else {
             warn!(
                 "Skipping fragment '{}' because component definition '{}' is unavailable",
@@ -107,17 +152,18 @@ pub(super) fn spawn_world(
             );
             continue;
         };
-
+        let mut restored_state = state.clone();
+        restored_state.chunk_id = Some(source.id.clone());
         spawn_saved_fragment(
-            &mut commands,
+            commands,
             instance_id,
-            state,
+            &restored_state,
             definition,
             physical_material,
-            &config,
-            &asset_server,
-            &mut meshes,
-            &mut materials,
+            config,
+            asset_server,
+            meshes,
+            materials,
             &mut mesh_cache,
             &mut material_cache,
         );
@@ -125,11 +171,10 @@ pub(super) fn spawn_world(
     }
 
     info!(
-        "Loaded world '{}' with {} authored objects and {} unchunked saved fragments; {} chunks are indexed for streaming",
-        config.world.name,
-        config.world.objects.len(),
-        restored_fragment_count,
-        config.chunks.len()
+        "Streamed authored-object chunk '{}' with {} objects and {} restored fragments",
+        source.id,
+        source.objects.len(),
+        restored_fragment_count
     );
 }
 
@@ -171,6 +216,7 @@ pub(super) fn spawn_chunk(
         .map_err(|error| format!("chunk '{}' has invalid voxel data: {error}", chunk.id))?;
 
     let mut mergeable = vec![false; volume];
+    let mut lod_renderable = vec![false; volume];
     let mut definitions_by_palette = BTreeMap::new();
     for (palette_index, definition_id) in chunk.palette.iter().enumerate().skip(1) {
         let definition = config
@@ -202,10 +248,19 @@ pub(super) fn spawn_chunk(
                         chunk.id
                     ));
                 };
-                mergeable[index(x, y, z)] = config.engine.streaming.greedy_meshing_enabled
-                    && matches!(definition.body_type, BodyType::Static)
-                    && definition.destructibility.is_none()
-                    && definition.bond_strength.is_none()
+                let instance_id = voxel_instance_id(&chunk.id, x as u32, y as u32, z as u32);
+                let intact = !journal.fractured.contains(&instance_id);
+                let (is_lod_renderable, is_greedy_mergeable) = static_cell_render_policy(
+                    definition.body_type,
+                    intact,
+                    definition.destructibility.is_some(),
+                    definition.bond_strength.is_some(),
+                    config.engine.streaming.greedy_meshing_enabled,
+                );
+                lod_renderable[index(x, y, z)] = is_lod_renderable
+                    && definition.visual.model.is_none()
+                    && matches!(definition.visual.alpha_mode, AlphaMode::Opaque);
+                mergeable[index(x, y, z)] = is_greedy_mergeable
                     && definition.visual.model.is_none()
                     && matches!(definition.visual.alpha_mode, AlphaMode::Opaque);
             }
@@ -218,6 +273,23 @@ pub(super) fn spawn_chunk(
         chunk.coordinate[2] as f32 * dimensions[2] as f32 * chunk.voxel_size_m,
     );
 
+    let lod_settings = &config.engine.streaming;
+    let chunk_extent_m = dimensions.iter().copied().max().unwrap_or(0) as f32 * chunk.voxel_size_m;
+    let lod_center = chunk_origin
+        + Vec3::from_array(dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5));
+    let lod_near_distance_m = lod_settings.lod_near_distance_chunks * chunk_extent_m;
+    let lod_mid_distance_m = lod_settings.lod_mid_distance_chunks * chunk_extent_m;
+    let lod_far_distance_m = lod_settings.lod_far_distance_chunks * chunk_extent_m;
+    let lod_unload_distance_m = lod_settings.unload_radius_chunks as f32 * chunk_extent_m;
+    let max_lod_level = if dimensions.iter().all(|dimension| dimension % 8 == 0) {
+        3
+    } else if dimensions.iter().all(|dimension| dimension % 4 == 0) {
+        2
+    } else if dimensions.iter().all(|dimension| dimension % 2 == 0) {
+        1
+    } else {
+        0
+    };
     // Batch static cells by palette entry. This keeps independent physical material response
     // while dramatically reducing entities, draw calls, and collider shape count for terrain.
     if config.engine.streaming.greedy_meshing_enabled {
@@ -267,7 +339,7 @@ pub(super) fn spawn_chunk(
                 continue;
             };
 
-            commands.spawn((
+            let mut static_components = commands.spawn((
                 Name::new(format!("chunk:{}:static:{}", chunk.id, definition_id)),
                 ChunkMembership(chunk.id.clone()),
                 RigidBody::Static,
@@ -280,7 +352,238 @@ pub(super) fn spawn_chunk(
                 Mesh3d(meshes.add(mesh)),
                 MeshMaterial3d(materials.add(standard_material_from_visual(&definition.visual))),
                 Transform::from_translation(chunk_origin),
+                if lod_settings.lod_enabled {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Visible
+                },
             ));
+            if lod_settings.lod_enabled {
+                static_components.insert(ChunkLodVisual {
+                    chunk_id: chunk.id.clone(),
+                    level: 0,
+                    max_level: 0,
+                    center: lod_center,
+                    half_extents: Vec3::from_array(
+                        dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                    ),
+                    near_distance_m: lod_near_distance_m,
+                    mid_distance_m: lod_mid_distance_m,
+                    far_distance_m: lod_far_distance_m,
+                    unload_distance_m: lod_unload_distance_m,
+                    fallback_on_damage: true,
+                });
+            }
+        }
+    }
+
+    // LOD0 is a full-resolution, render-only greedy surface over every intact static opaque
+    // voxel. Destructible and bonded cells keep their independent physics bodies; their cube
+    // renderers are hidden below while this merged surface is intact.
+    if lod_settings.lod_enabled {
+        let detailed_meshes = grid.build_greedy_meshes(&lod_renderable).map_err(|error| {
+            format!("chunk '{}' LOD0 mesh generation failed: {error}", chunk.id)
+        })?;
+        for (palette, mesh) in detailed_meshes {
+            let Some((definition_id, definition)) = definitions_by_palette.get(&palette) else {
+                continue;
+            };
+            commands.spawn((
+                Name::new(format!("chunk:{}:lod0:{}", chunk.id, definition_id)),
+                ChunkMembership(chunk.id.clone()),
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(materials.add(standard_material_from_visual(&definition.visual))),
+                Transform::from_translation(chunk_origin),
+                Visibility::Visible,
+                ChunkLodVisual {
+                    chunk_id: chunk.id.clone(),
+                    level: 0,
+                    max_level: max_lod_level,
+                    center: lod_center,
+                    half_extents: Vec3::from_array(
+                        dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                    ),
+                    near_distance_m: lod_near_distance_m,
+                    mid_distance_m: lod_mid_distance_m,
+                    far_distance_m: lod_far_distance_m,
+                    unload_distance_m: lod_unload_distance_m,
+                    fallback_on_damage: false,
+                },
+            ));
+        }
+    }
+
+    // Progressive 2x, 4x and 8x visual proxies use the same intact-static source mask.
+    if lod_settings.lod_enabled && dimensions.iter().all(|dimension| dimension % 2 == 0) {
+        let coarse = grid
+            .downsample_by_two(&lod_renderable)
+            .map_err(|error| format!("chunk '{}' LOD downsampling failed: {error}", chunk.id))?;
+        let coarse_renderable: Vec<bool> =
+            (0..coarse.dimensions[0] * coarse.dimensions[1] * coarse.dimensions[2])
+                .map(|linear| {
+                    coarse.cell(
+                        linear % coarse.dimensions[0],
+                        (linear / coarse.dimensions[0]) / coarse.dimensions[2],
+                        (linear / coarse.dimensions[0]) % coarse.dimensions[2],
+                    ) != 0
+                })
+                .collect();
+        for (palette, mesh) in coarse
+            .build_greedy_meshes(&coarse_renderable)
+            .map_err(|error| {
+                format!(
+                    "chunk '{}' coarse mesh generation failed: {error}",
+                    chunk.id
+                )
+            })?
+        {
+            let Some((definition_id, definition)) = definitions_by_palette.get(&palette) else {
+                continue;
+            };
+            commands.spawn((
+                Name::new(format!("chunk:{}:lod1:{}", chunk.id, definition_id)),
+                ChunkMembership(chunk.id.clone()),
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(materials.add(standard_material_from_visual(&definition.visual))),
+                Transform::from_translation(chunk_origin),
+                Visibility::Hidden,
+                ChunkLodVisual {
+                    chunk_id: chunk.id.clone(),
+                    level: 1,
+                    max_level: max_lod_level,
+                    center: lod_center,
+                    half_extents: Vec3::from_array(
+                        dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                    ),
+                    near_distance_m: lod_near_distance_m,
+                    mid_distance_m: lod_mid_distance_m,
+                    far_distance_m: lod_far_distance_m,
+                    unload_distance_m: lod_unload_distance_m,
+                    fallback_on_damage: false,
+                },
+            ));
+        }
+
+        // A second factor-two pass provides a far-distance LOD when the authored chunk
+        // dimensions support exact 4x aggregation on every axis.
+        if lod_settings.lod_enabled && max_lod_level >= 2 {
+            let far_grid = coarse
+                .downsample_by_two(&coarse_renderable)
+                .map_err(|error| {
+                    format!("chunk '{}' far LOD downsampling failed: {error}", chunk.id)
+                })?;
+            let far_renderable: Vec<bool> =
+                (0..far_grid.dimensions[0] * far_grid.dimensions[1] * far_grid.dimensions[2])
+                    .map(|linear| {
+                        far_grid.cell(
+                            linear % far_grid.dimensions[0],
+                            (linear / far_grid.dimensions[0]) / far_grid.dimensions[2],
+                            (linear / far_grid.dimensions[0]) % far_grid.dimensions[2],
+                        ) != 0
+                    })
+                    .collect();
+
+            for (palette, mesh) in
+                far_grid
+                    .build_greedy_meshes(&far_renderable)
+                    .map_err(|error| {
+                        format!(
+                            "chunk '{}' far LOD mesh generation failed: {error}",
+                            chunk.id
+                        )
+                    })?
+            {
+                let Some((definition_id, definition)) = definitions_by_palette.get(&palette) else {
+                    continue;
+                };
+                commands.spawn((
+                    Name::new(format!("chunk:{}:lod2:{}", chunk.id, definition_id)),
+                    ChunkMembership(chunk.id.clone()),
+                    Mesh3d(meshes.add(mesh)),
+                    MeshMaterial3d(
+                        materials.add(standard_material_from_visual(&definition.visual)),
+                    ),
+                    Transform::from_translation(chunk_origin),
+                    Visibility::Hidden,
+                    ChunkLodVisual {
+                        chunk_id: chunk.id.clone(),
+                        level: 2,
+                        max_level: max_lod_level,
+                        center: lod_center,
+                        half_extents: Vec3::from_array(
+                            dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                        ),
+                        near_distance_m: lod_near_distance_m,
+                        mid_distance_m: lod_mid_distance_m,
+                        far_distance_m: lod_far_distance_m,
+                        unload_distance_m: lod_unload_distance_m,
+                        fallback_on_damage: false,
+                    },
+                ));
+            }
+
+            if max_lod_level >= 3 {
+                let ultra_far_grid =
+                    far_grid
+                        .downsample_by_two(&far_renderable)
+                        .map_err(|error| {
+                            format!(
+                                "chunk '{}' ultra-far LOD downsampling failed: {error}",
+                                chunk.id
+                            )
+                        })?;
+                let ultra_far_renderable: Vec<bool> = (0..ultra_far_grid.dimensions[0]
+                    * ultra_far_grid.dimensions[1]
+                    * ultra_far_grid.dimensions[2])
+                    .map(|linear| {
+                        ultra_far_grid.cell(
+                            linear % ultra_far_grid.dimensions[0],
+                            (linear / ultra_far_grid.dimensions[0]) / ultra_far_grid.dimensions[2],
+                            (linear / ultra_far_grid.dimensions[0]) % ultra_far_grid.dimensions[2],
+                        ) != 0
+                    })
+                    .collect();
+
+                for (palette, mesh) in ultra_far_grid
+                    .build_greedy_meshes(&ultra_far_renderable)
+                    .map_err(|error| {
+                        format!(
+                            "chunk '{}' ultra-far LOD mesh generation failed: {error}",
+                            chunk.id
+                        )
+                    })?
+                {
+                    let Some((definition_id, definition)) = definitions_by_palette.get(&palette)
+                    else {
+                        continue;
+                    };
+                    commands.spawn((
+                        Name::new(format!("chunk:{}:lod3:{}", chunk.id, definition_id)),
+                        ChunkMembership(chunk.id.clone()),
+                        Mesh3d(meshes.add(mesh)),
+                        MeshMaterial3d(
+                            materials.add(standard_material_from_visual(&definition.visual)),
+                        ),
+                        Transform::from_translation(chunk_origin),
+                        Visibility::Hidden,
+                        ChunkLodVisual {
+                            chunk_id: chunk.id.clone(),
+                            level: 3,
+                            max_level: max_lod_level,
+                            center: lod_center,
+                            half_extents: Vec3::from_array(
+                                dimensions
+                                    .map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                            ),
+                            near_distance_m: lod_near_distance_m,
+                            mid_distance_m: lod_mid_distance_m,
+                            far_distance_m: lod_far_distance_m,
+                            unload_distance_m: lod_unload_distance_m,
+                            fallback_on_damage: false,
+                        },
+                    ));
+                }
+            }
         }
     }
 
@@ -355,9 +658,27 @@ pub(super) fn spawn_chunk(
                     &mut visual_mesh_cache,
                     &mut visual_material_cache,
                 );
-                commands
-                    .entity(entity)
-                    .insert(ChunkMembership(chunk.id.clone()));
+                let mut chunk_entity = commands.entity(entity);
+                chunk_entity.insert(ChunkMembership(chunk.id.clone()));
+                if lod_settings.lod_enabled && lod_renderable[index(x, y, z)] {
+                    // Keep exact per-cell rendering available for the damaged-chunk fallback,
+                    // but avoid drawing it over the merged full-resolution LOD0 surface.
+                    chunk_entity.insert(Visibility::Hidden);
+                    chunk_entity.insert(ChunkLodVisual {
+                        chunk_id: chunk.id.clone(),
+                        level: 0,
+                        max_level: 0,
+                        center: lod_center,
+                        half_extents: Vec3::from_array(
+                            dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                        ),
+                        near_distance_m: lod_near_distance_m,
+                        mid_distance_m: lod_mid_distance_m,
+                        far_distance_m: lod_far_distance_m,
+                        unload_distance_m: lod_unload_distance_m,
+                        fallback_on_damage: true,
+                    });
+                }
 
                 let ColliderShape::Cuboid { half_extents } = &definition.collider else {
                     unreachable!("chunk palette definitions were checked above");
@@ -644,12 +965,18 @@ fn combine_bond_strength(
         (None, None) => None,
         (Some(strength), None) | (None, Some(strength)) => Some(strength.clone()),
         (Some(first), Some(second)) => Some(BondStrengthDefinition {
+            elastic_modulus_pa: 2.0 * first.elastic_modulus_pa * second.elastic_modulus_pa
+                / (first.elastic_modulus_pa + second.elastic_modulus_pa),
             tensile_strength_pa: first.tensile_strength_pa.min(second.tensile_strength_pa),
+            compressive_strength_pa: first
+                .compressive_strength_pa
+                .min(second.compressive_strength_pa),
             shear_strength_pa: first.shear_strength_pa.min(second.shear_strength_pa),
             bending_strength_pa: first.bending_strength_pa.min(second.bending_strength_pa),
             torsional_strength_pa: first
                 .torsional_strength_pa
                 .min(second.torsional_strength_pa),
+            damage_rate_per_s: first.damage_rate_per_s.max(second.damage_rate_per_s),
         }),
     }
 }
@@ -873,4 +1200,43 @@ fn rotation_from_degrees(rotation_xyz: [f32; 3]) -> Quat {
         rotation_xyz[1].to_radians(),
         rotation_xyz[2].to_radians(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{object_lod_enabled, static_cell_render_policy};
+    use crate::config::BodyType;
+
+    #[test]
+    fn legacy_dynamic_objects_keep_rendering_when_they_move_out_of_their_source_chunk() {
+        assert!(object_lod_enabled(BodyType::Static, true));
+        assert!(!object_lod_enabled(BodyType::Dynamic, true));
+        assert!(!object_lod_enabled(BodyType::Static, false));
+    }
+
+    #[test]
+    fn destructible_and_bonded_static_platform_cells_receive_lod_without_being_merged() {
+        let (lod, greedy) = static_cell_render_policy(BodyType::Static, true, true, true, true);
+        assert!(lod);
+        assert!(!greedy);
+    }
+
+    #[test]
+    fn intact_plain_static_terrain_can_be_greedily_merged_and_rendered() {
+        let (lod, greedy) = static_cell_render_policy(BodyType::Static, true, false, false, true);
+        assert!(lod);
+        assert!(greedy);
+    }
+
+    #[test]
+    fn destroyed_or_dynamic_cells_are_not_static_lod_sources() {
+        assert_eq!(
+            static_cell_render_policy(BodyType::Static, false, true, true, true),
+            (false, false)
+        );
+        assert_eq!(
+            static_cell_render_policy(BodyType::Dynamic, true, false, false, true),
+            (false, false)
+        );
+    }
 }

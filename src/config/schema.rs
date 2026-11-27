@@ -52,14 +52,29 @@ pub struct RenderingSettings {
     pub shadows_enabled: bool,
 }
 
+fn default_object_chunk_size_m() -> f32 {
+    16.0
+}
+
+fn default_lod_mid_distance_chunks() -> f32 {
+    1.75
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StreamingSettings {
     pub load_radius_chunks: u32,
     pub unload_radius_chunks: u32,
+    #[serde(default = "default_object_chunk_size_m")]
+    pub object_chunk_size_m: f32,
     pub max_parallel_chunk_loads: u32,
     pub max_chunk_spawns_per_frame: u32,
     pub greedy_meshing_enabled: bool,
+    pub lod_enabled: bool,
+    pub lod_near_distance_chunks: f32,
+    #[serde(default = "default_lod_mid_distance_chunks")]
+    pub lod_mid_distance_chunks: f32,
+    pub lod_far_distance_chunks: f32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -108,14 +123,30 @@ pub struct DestructibilityDefinition {
     pub fragments_per_axis: [u32; 3],
 }
 
-/// Material-level failure thresholds for voxel-to-voxel structural bonds.
+/// Material-level stiffness, progressive damage and section failure limits for structural bonds.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BondStrengthDefinition {
+    #[serde(default = "default_elastic_modulus_pa")]
+    pub elastic_modulus_pa: f32,
     pub tensile_strength_pa: f32,
+    #[serde(default = "default_compressive_strength_pa")]
+    pub compressive_strength_pa: f32,
     pub shear_strength_pa: f32,
     pub bending_strength_pa: f32,
     pub torsional_strength_pa: f32,
+    #[serde(default = "default_damage_rate_per_s")]
+    pub damage_rate_per_s: f32,
+}
+
+fn default_elastic_modulus_pa() -> f32 {
+    1.0e9
+}
+fn default_compressive_strength_pa() -> f32 {
+    1.0e7
+}
+fn default_damage_rate_per_s() -> f32 {
+    1.0
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Hash)]
@@ -180,6 +211,12 @@ pub struct WorldManifest {
     pub schema_version: u32,
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub preview_asset: Option<String>,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, serde_json::Value>,
     pub gravity_m_s2: Option<[f32; 3]>,
     #[serde(default)]
     pub regions: Vec<String>,
@@ -233,4 +270,29 @@ pub struct WorldObjectInstance {
     pub definition: String,
     pub position_m: [f32; 3],
     pub rotation_degrees_xyz: [f32; 3],
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StreamingSettings;
+
+    #[test]
+    fn legacy_streaming_settings_default_new_spatial_and_lod_fields() {
+        let settings: StreamingSettings = serde_json::from_str(
+            r#"{
+                "load_radius_chunks": 2,
+                "unload_radius_chunks": 3,
+                "max_parallel_chunk_loads": 2,
+                "max_chunk_spawns_per_frame": 2,
+                "greedy_meshing_enabled": true,
+                "lod_enabled": true,
+                "lod_near_distance_chunks": 1.0,
+                "lod_far_distance_chunks": 2.5
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(settings.object_chunk_size_m, 16.0);
+        assert_eq!(settings.lod_mid_distance_chunks, 1.75);
+    }
 }

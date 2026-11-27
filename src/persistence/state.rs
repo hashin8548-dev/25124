@@ -20,6 +20,8 @@ pub struct WorldStateFile {
     #[serde(default)]
     pub broken_bonds: BTreeSet<String>,
     #[serde(default)]
+    pub damaged_bonds: BTreeMap<String, f32>,
+    #[serde(default)]
     pub fragments: BTreeMap<String, PersistedFragmentState>,
 }
 
@@ -48,11 +50,12 @@ pub struct PersistedFragmentState {
 impl WorldStateFile {
     pub fn new(world_id: String) -> Self {
         Self {
-            format_version: 1,
+            format_version: 2,
             world_id,
             bodies: BTreeMap::new(),
             fractured: BTreeSet::new(),
             broken_bonds: BTreeSet::new(),
+            damaged_bonds: BTreeMap::new(),
             fragments: BTreeMap::new(),
         }
     }
@@ -112,7 +115,7 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
         .with_context(|| format!("invalid save file '{}'", path.display()))?;
 
     ensure!(
-        state.format_version == 1,
+        (1..=2).contains(&state.format_version),
         "unsupported save format version {} in '{}'",
         state.format_version,
         path.display()
@@ -168,6 +171,17 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
         );
     }
 
+    for (id, damage) in &state.damaged_bonds {
+        ensure!(
+            !id.trim().is_empty(),
+            "save contains an empty damaged bond id"
+        );
+        ensure!(
+            damage.is_finite() && (0.0..1.0).contains(damage),
+            "save contains invalid progressive damage for bond '{id}'"
+        );
+    }
+    state.format_version = 2;
     for (id, fragment) in &mut state.fragments {
         ensure!(!id.trim().is_empty(), "save contains an empty fragment id");
         ensure!(
@@ -482,6 +496,7 @@ mod tests {
 
     fn sample_state() -> WorldStateFile {
         let mut state = WorldStateFile::new("test-world".to_owned());
+        state.damaged_bonds.insert("bond-a".to_owned(), 0.75);
         state.bodies.insert(
             "body-a".to_owned(),
             PersistedBodyState {
@@ -525,10 +540,27 @@ mod tests {
 
         assert_eq!(loaded.bodies.len(), 1);
         assert_eq!(loaded.bodies["body-a"].translation_m, [1.0, 2.0, 3.0]);
+        assert_eq!(loaded.damaged_bonds["bond-a"], 0.75);
 
         cleanup_save_files(&path);
     }
 
+    #[test]
+    fn version_one_save_migrates_to_version_two_without_losing_legacy_state() {
+        let path = unique_save_path("version-one-migration");
+        let mut legacy = serde_json::to_value(sample_state()).unwrap();
+        legacy["format_version"] = serde_json::json!(1);
+        legacy.as_object_mut().unwrap().remove("damaged_bonds");
+        std::fs::write(&path, serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
+
+        let loaded = WorldStateFile::load_or_default(&path, "test-world")
+            .expect("version-one save should migrate");
+        assert_eq!(loaded.format_version, 2);
+        assert!(loaded.damaged_bonds.is_empty());
+        assert_eq!(loaded.bodies["body-a"].translation_m, [1.0, 2.0, 3.0]);
+
+        cleanup_save_files(&path);
+    }
     #[test]
     fn non_unit_quaternion_is_normalized_during_load() {
         let path = unique_save_path("normalize");

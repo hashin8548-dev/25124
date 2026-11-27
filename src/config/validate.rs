@@ -9,7 +9,7 @@ use super::schema::{
 };
 
 const SCHEMA_VERSION: u32 = 1;
-const ENGINE_SCHEMA_VERSION: u32 = 2;
+const ENGINE_SCHEMA_VERSION: u32 = 3;
 const CAMERA_PITCH_LIMIT_DEGREES: f32 = 89.0;
 
 pub fn validate_all(
@@ -147,6 +147,25 @@ pub fn validate_all(
         "streaming.unload_radius_chunks must exceed load_radius_chunks to provide hysteresis"
     );
     ensure!(
+        streaming.object_chunk_size_m.is_finite() && streaming.object_chunk_size_m > 0.0,
+        "streaming.object_chunk_size_m must be positive and finite"
+    );
+    ensure!(
+        streaming.lod_near_distance_chunks.is_finite() && streaming.lod_near_distance_chunks > 0.0,
+        "streaming.lod_near_distance_chunks must be positive and finite"
+    );
+    ensure!(
+        streaming.lod_mid_distance_chunks.is_finite()
+            && streaming.lod_mid_distance_chunks > streaming.lod_near_distance_chunks,
+        "streaming.lod_mid_distance_chunks must exceed the near distance"
+    );
+    ensure!(
+        streaming.lod_far_distance_chunks.is_finite()
+            && streaming.lod_far_distance_chunks > streaming.lod_mid_distance_chunks
+            && streaming.lod_far_distance_chunks <= streaming.unload_radius_chunks as f32,
+        "streaming.lod_far_distance_chunks must exceed the mid distance and not exceed the unload radius"
+    );
+    ensure!(
         (1..=16).contains(&streaming.max_parallel_chunk_loads),
         "streaming.max_parallel_chunk_loads must be between 1 and 16"
     );
@@ -228,10 +247,13 @@ pub fn validate_all(
             );
             ensure!(
                 [
+                    bond_strength.elastic_modulus_pa,
                     bond_strength.tensile_strength_pa,
+                    bond_strength.compressive_strength_pa,
                     bond_strength.shear_strength_pa,
                     bond_strength.bending_strength_pa,
                     bond_strength.torsional_strength_pa,
+                    bond_strength.damage_rate_per_s,
                 ]
                 .iter()
                 .all(|value| value.is_finite() && *value > 0.0),

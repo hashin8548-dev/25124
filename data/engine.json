@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "physics": {
     "meters_per_unit": 1,
     "gravity_m_s2": [
@@ -8,12 +8,12 @@
       0
     ],
     "fixed_hz": 120,
-    "substeps": 8,
+    "substeps": 16,
     "restitution_threshold_m_s": 1,
-    "restitution_iterations": 4,
+    "restitution_iterations": 16,
     "contact_damping_ratio": 10,
     "contact_frequency_factor": 1.5,
-    "max_overlap_solve_speed_m_s": 0.5,
+    "max_overlap_solve_speed_m_s": 1.0,
     "warm_start_coefficient": 1,
     "sleep_linear_threshold_m_s": 0.15,
     "sleep_angular_threshold_rad_s": 0.15,
@@ -43,8 +43,13 @@
   "streaming": {
     "load_radius_chunks": 2,
     "unload_radius_chunks": 3,
+    "object_chunk_size_m": 16.0,
     "max_parallel_chunk_loads": 2,
     "max_chunk_spawns_per_frame": 2,
-    "greedy_meshing_enabled": true
+    "greedy_meshing_enabled": true,
+    "lod_enabled": true,
+    "lod_near_distance_chunks": 1.0,
+    "lod_mid_distance_chunks": 1.75,
+    "lod_far_distance_chunks": 2.5
   }
 }
