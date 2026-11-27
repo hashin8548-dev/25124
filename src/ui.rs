@@ -1879,13 +1879,6 @@ fn handle_world_selection(
         }
     };
     selected.paths.project_root = project_root.clone();
-    if let Err(error) = remember_world_manifest(
-        &project_root,
-        &selection.0,
-        &mut menu_state.preferences,
-    ) {
-        warn!("Could not remember selected world '{}': {error}", selection.0.display());
-    }
     apply_user_preferences(&mut selected, &menu_state.preferences);
 
     let selected_state =
@@ -1904,6 +1897,14 @@ fn handle_world_selection(
                 return;
             }
         };
+
+    if let Err(error) = remember_world_manifest(
+        &project_root,
+        &selection.0,
+        &mut menu_state.preferences,
+    ) {
+        warn!("Could not remember selected world '{}': {error}", selection.0.display());
+    }
 
     gravity.0 = Vec3::from_array(
         selected
@@ -2045,13 +2046,6 @@ fn handle_create_world(
         }
     };
     selected.paths.project_root = project_root.clone();
-    if let Err(error) = remember_world_manifest(
-        &project_root,
-        &manifest_path,
-        &mut menu_state.preferences,
-    ) {
-        warn!("Could not remember new world '{}': {error}", manifest_path.display());
-    }
     apply_user_preferences(&mut selected, &menu_state.preferences);
 
     let selected_state =
@@ -2064,6 +2058,14 @@ fn handle_create_world(
                 return;
             }
         };
+
+    if let Err(error) = remember_world_manifest(
+        &project_root,
+        &manifest_path,
+        &mut menu_state.preferences,
+    ) {
+        warn!("Could not remember new world '{}': {error}", manifest_path.display());
+    }
 
     gravity.0 = Vec3::from_array(
         selected
