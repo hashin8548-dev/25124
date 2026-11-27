@@ -1,8 +1,8 @@
 """Convert the supplied FBX deformation skeleton to a Bevy-loadable GLB.
 
-This script is run by GitHub Actions. It deliberately exports no animation clips:
-the human action JSON files are motion-goal inputs to the physics controller, not
-skeletal animation clips."""
+This script runs in GitHub Actions. It deliberately disables FBX animation import and
+glTF animation export: human action JSON files are physics-motion inputs, not clips.
+"""
 from pathlib import Path
 import bpy
 
@@ -17,7 +17,17 @@ def main() -> None:
         raise FileNotFoundError(f"Missing source character model: {SOURCE}")
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.fbx(filepath=str(SOURCE), use_anim=False)
+
+    # Blender 5.x uses the built-in ufbx importer under bpy.ops.wm.fbx_import.
+    # Inspect its RNA contract so an API change fails before an accidental
+    # animation import or silent fallback to a different importer.
+    importer = bpy.ops.wm.fbx_import
+    supported = {prop.identifier for prop in importer.get_rna_type().properties}
+    required = {"filepath", "use_anim"}
+    missing = required - supported
+    if missing:
+        raise RuntimeError(f"Blender FBX importer lacks required no-animation options: {sorted(missing)}")
+    importer(filepath=str(SOURCE), use_anim=False)
 
     meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
     armatures = [obj for obj in bpy.context.scene.objects if obj.type == "ARMATURE"]
@@ -26,7 +36,7 @@ def main() -> None:
     if not armatures:
         raise RuntimeError("FBX import produced no deformation armature")
 
-    # Ensure the complete imported mesh + skin hierarchy is exported.
+    # FBX source is the static deformation skeleton; export only mesh + skin.
     bpy.ops.object.select_all(action="DESELECT")
     for obj in meshes + armatures:
         obj.select_set(True)
