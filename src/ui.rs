@@ -152,6 +152,8 @@ struct MenuAsset {
     subtitle: String,
     #[serde(default = "default_home_buttons")]
     home_buttons: Vec<MenuButtonDefinition>,
+    #[serde(default)]
+    home_layout: HomeLayoutDefinition,
     #[serde(default = "default_empty_library_title")]
     empty_library_title: String,
     #[serde(default = "default_empty_library_hint")]
@@ -413,6 +415,56 @@ fn default_home_buttons() -> Vec<MenuButtonDefinition> {
             action: "settings".to_owned(),
         },
     ]
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct HomeLayoutDefinition {
+    left_percent: f32,
+    top_percent: f32,
+    panel_width_px: f32,
+    panel_height_percent: f32,
+    title_frame_width_px: f32,
+    title_frame_height_px: f32,
+    title_font_size_px: f32,
+    eyebrow_font_size_px: f32,
+    version_font_size_px: f32,
+    actions_top_gap_px: f32,
+    action_list_gap_px: f32,
+    action_row_width_px: f32,
+    action_row_height_px: f32,
+    action_button_width_px: f32,
+    action_button_height_px: f32,
+    action_button_left_px: f32,
+    action_button_padding_left_px: f32,
+    action_font_size_px: f32,
+    cursor_font_size_px: f32,
+}
+
+impl Default for HomeLayoutDefinition {
+    fn default() -> Self {
+        Self {
+            left_percent: 3.125,
+            top_percent: 10.9,
+            panel_width_px: 600.0,
+            panel_height_percent: 86.0,
+            title_frame_width_px: 540.0,
+            title_frame_height_px: 190.0,
+            title_font_size_px: 104.0,
+            eyebrow_font_size_px: 16.0,
+            version_font_size_px: 18.0,
+            actions_top_gap_px: 82.0,
+            action_list_gap_px: 16.0,
+            action_row_width_px: 540.0,
+            action_row_height_px: 76.0,
+            action_button_width_px: 465.0,
+            action_button_height_px: 76.0,
+            action_button_left_px: 36.0,
+            action_button_padding_left_px: 48.0,
+            action_font_size_px: 32.0,
+            cursor_font_size_px: 27.0,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -694,6 +746,39 @@ impl MenuAsset {
                     .to_owned(),
             );
         }
+        let home_dimensions = [
+            self.home_layout.panel_width_px,
+            self.home_layout.panel_height_percent,
+            self.home_layout.title_frame_width_px,
+            self.home_layout.title_frame_height_px,
+            self.home_layout.title_font_size_px,
+            self.home_layout.eyebrow_font_size_px,
+            self.home_layout.version_font_size_px,
+            self.home_layout.actions_top_gap_px,
+            self.home_layout.action_list_gap_px,
+            self.home_layout.action_row_width_px,
+            self.home_layout.action_row_height_px,
+            self.home_layout.action_button_width_px,
+            self.home_layout.action_button_height_px,
+            self.home_layout.action_button_left_px,
+            self.home_layout.action_button_padding_left_px,
+            self.home_layout.action_font_size_px,
+            self.home_layout.cursor_font_size_px,
+        ];
+        if !home_dimensions.iter().all(|value| value.is_finite() && *value > 0.0)
+            || !self.home_layout.left_percent.is_finite()
+            || !(0.0..100.0).contains(&self.home_layout.left_percent)
+            || !self.home_layout.top_percent.is_finite()
+            || !(0.0..100.0).contains(&self.home_layout.top_percent)
+            || self.home_layout.panel_height_percent > 100.0
+            || self.home_layout.title_frame_width_px > self.home_layout.panel_width_px
+            || self.home_layout.action_button_left_px + self.home_layout.action_button_width_px
+                > self.home_layout.action_row_width_px
+            || self.home_layout.action_button_height_px > self.home_layout.action_row_height_px
+        {
+            return Err("home layout dimensions must be finite, positive, and internally consistent".to_owned());
+        }
+
         if self.home_buttons.len() != 4 {
             return Err("menu must define exactly four home buttons".to_owned());
         }
@@ -861,16 +946,16 @@ fn setup_menu(
                 HomeOnly,
                 Visibility::Hidden,
                 Node {
-                    width: Val::Px(600.0),
-                    height: Val::Percent(86.0),
+                    width: Val::Px(menu.home_layout.panel_width_px),
+                    height: Val::Percent(menu.home_layout.panel_height_percent),
                     position_type: PositionType::Absolute,
-                    left: Val::Percent(3.125),
-                    top: Val::Percent(10.9),
+                    left: Val::Percent(menu.home_layout.left_percent),
+                    top: Val::Percent(menu.home_layout.top_percent),
                     padding: UiRect::all(Val::Px(0.0)),
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::FlexStart,
                     justify_content: JustifyContent::FlexStart,
-                    row_gap: Val::Px(16.0),
+                    row_gap: Val::Px(menu.home_layout.action_list_gap_px),
                     ..default()
                 },
                 TabGroup::modal(),
@@ -878,8 +963,8 @@ fn setup_menu(
             .with_children(|panel| {
                 panel.spawn((
                     Node {
-                        width: Val::Px(540.0),
-                        height: Val::Px(190.0),
+                        width: Val::Px(menu.home_layout.title_frame_width_px),
+                        height: Val::Px(menu.home_layout.title_frame_height_px),
                         padding: UiRect::axes(Val::Px(34.0), Val::Px(14.0)),
                         flex_direction: FlexDirection::Column,
                         justify_content: JustifyContent::SpaceBetween,
@@ -911,7 +996,7 @@ fn setup_menu(
                         row.spawn((
                             Text::new("III"),
                             TextFont {
-                                font_size: FontSize::Px(16.0),
+                                font_size: FontSize::Px(menu.home_layout.eyebrow_font_size_px),
                                 ..default()
                             },
                             TextColor(subtitle_color),
@@ -928,7 +1013,7 @@ fn setup_menu(
                     frame.spawn((
                         Text::new(menu.title.clone()),
                         TextFont {
-                            font_size: FontSize::Px(104.0),
+                            font_size: FontSize::Px(menu.home_layout.title_font_size_px),
                             ..default()
                         },
                         TextColor(title_color),
@@ -943,9 +1028,9 @@ fn setup_menu(
                     ))
                     .with_children(|row| {
                         row.spawn((
-                            Text::new("v0.1.0"),
+                            Text::new(format!("v{}", env!("CARGO_PKG_VERSION"))),
                             TextFont {
-                                font_size: FontSize::Px(18.0),
+                                font_size: FontSize::Px(menu.home_layout.version_font_size_px),
                                 ..default()
                             },
                             TextColor(subtitle_color),
@@ -955,7 +1040,7 @@ fn setup_menu(
 
                 panel.spawn(Node {
                     width: Val::Px(1.0),
-                    height: Val::Px(82.0),
+                    height: Val::Px(menu.home_layout.actions_top_gap_px),
                     ..default()
                 });
 
@@ -965,8 +1050,8 @@ fn setup_menu(
                         let mut button_entity = None;
                         panel
                             .spawn(Node {
-                                width: Val::Px(540.0),
-                                height: Val::Px(76.0),
+                                width: Val::Px(menu.home_layout.action_row_width_px),
+                                height: Val::Px(menu.home_layout.action_row_height_px),
                                 position_type: PositionType::Relative,
                                 ..default()
                             })
@@ -977,10 +1062,10 @@ fn setup_menu(
                                         TabIndex($tab),
                                         Hovered::default(),
                                         Node {
-                                            width: Val::Px(465.0),
-                                            height: Val::Px(76.0),
-                                            margin: UiRect::left(Val::Px(36.0)),
-                                            padding: UiRect::left(Val::Px(48.0)),
+                                            width: Val::Px(menu.home_layout.action_button_width_px),
+                                            height: Val::Px(menu.home_layout.action_button_height_px),
+                                            margin: UiRect::left(Val::Px(menu.home_layout.action_button_left_px)),
+                                            padding: UiRect::left(Val::Px(menu.home_layout.action_button_padding_left_px)),
                                             border: UiRect::all(Val::Px(1.5)),
                                             border_radius: BorderRadius::all(Val::Px(0.0)),
                                             align_items: AlignItems::Center,
@@ -1010,7 +1095,7 @@ fn setup_menu(
                                         button.spawn((
                                             Text::new(label),
                                             TextFont {
-                                                font_size: FontSize::Px(32.0),
+                                                font_size: FontSize::Px(menu.home_layout.action_font_size_px),
                                                 ..default()
                                             },
                                             TextColor(button_text_color),
@@ -1023,15 +1108,15 @@ fn setup_menu(
                                     Visibility::Hidden,
                                     Node {
                                         width: Val::Px(28.0),
-                                        height: Val::Px(36.0),
+                                        height: Val::Px(menu.home_layout.cursor_font_size_px + 9.0),
                                         position_type: PositionType::Absolute,
                                         left: Val::Px(0.0),
-                                        top: Val::Px(20.0),
+                                        top: Val::Px((menu.home_layout.action_row_height_px - menu.home_layout.cursor_font_size_px) * 0.5),
                                         ..default()
                                     },
                                     Text::new("▶"),
                                     TextFont {
-                                        font_size: FontSize::Px(27.0),
+                                        font_size: FontSize::Px(menu.home_layout.cursor_font_size_px),
                                         ..default()
                                     },
                                     TextColor(title_color),
@@ -1088,8 +1173,8 @@ fn setup_menu(
                     let mut button_entity = None;
                     panel
                         .spawn(Node {
-                            width: Val::Px(540.0),
-                            height: Val::Px(76.0),
+                            width: Val::Px(menu.home_layout.action_row_width_px),
+                            height: Val::Px(menu.home_layout.action_row_height_px),
                             position_type: PositionType::Relative,
                             ..default()
                         })
@@ -1100,10 +1185,10 @@ fn setup_menu(
                                     TabIndex(0),
                                     Hovered::default(),
                                     Node {
-                                        width: Val::Px(465.0),
-                                        height: Val::Px(76.0),
-                                        margin: UiRect::left(Val::Px(36.0)),
-                                        padding: UiRect::left(Val::Px(48.0)),
+                                        width: Val::Px(menu.home_layout.action_button_width_px),
+                                        height: Val::Px(menu.home_layout.action_button_height_px),
+                                        margin: UiRect::left(Val::Px(menu.home_layout.action_button_left_px)),
+                                        padding: UiRect::left(Val::Px(menu.home_layout.action_button_padding_left_px)),
                                         border: UiRect::all(Val::Px(1.5)),
                                         border_radius: BorderRadius::all(Val::Px(0.0)),
                                         align_items: AlignItems::Center,
@@ -1133,7 +1218,7 @@ fn setup_menu(
                                     button.spawn((
                                         Text::new(label),
                                         TextFont {
-                                            font_size: FontSize::Px(32.0),
+                                            font_size: FontSize::Px(menu.home_layout.action_font_size_px),
                                             ..default()
                                         },
                                         TextColor(button_text_color),
@@ -1146,15 +1231,15 @@ fn setup_menu(
                                 Visibility::Hidden,
                                 Node {
                                     width: Val::Px(28.0),
-                                    height: Val::Px(36.0),
+                                    height: Val::Px(menu.home_layout.cursor_font_size_px + 9.0),
                                     position_type: PositionType::Absolute,
                                     left: Val::Px(0.0),
-                                    top: Val::Px(20.0),
+                                    top: Val::Px((menu.home_layout.action_row_height_px - menu.home_layout.cursor_font_size_px) * 0.5),
                                     ..default()
                                 },
                                 Text::new("▶"),
                                 TextFont {
-                                    font_size: FontSize::Px(27.0),
+                                    font_size: FontSize::Px(menu.home_layout.cursor_font_size_px),
                                     ..default()
                                 },
                                 TextColor(title_color),
@@ -1199,18 +1284,18 @@ fn setup_menu(
                 } else {
                     panel
                         .spawn(Node {
-                            width: Val::Px(540.0),
-                            height: Val::Px(76.0),
+                            width: Val::Px(menu.home_layout.action_row_width_px),
+                            height: Val::Px(menu.home_layout.action_row_height_px),
                             position_type: PositionType::Relative,
                             ..default()
                         })
                         .with_children(|item| {
                             item.spawn((
                                 Node {
-                                    width: Val::Px(465.0),
-                                    height: Val::Px(76.0),
-                                    margin: UiRect::left(Val::Px(36.0)),
-                                    padding: UiRect::left(Val::Px(48.0)),
+                                    width: Val::Px(menu.home_layout.action_button_width_px),
+                                    height: Val::Px(menu.home_layout.action_button_height_px),
+                                    margin: UiRect::left(Val::Px(menu.home_layout.action_button_left_px)),
+                                    padding: UiRect::left(Val::Px(menu.home_layout.action_button_padding_left_px)),
                                     border: UiRect::all(Val::Px(1.0)),
                                     border_radius: BorderRadius::all(Val::Px(0.0)),
                                     align_items: AlignItems::Center,
@@ -1282,9 +1367,9 @@ fn setup_menu(
                     TextColor(notice_color),
                     notice_colors,
                     Node {
-                        width: Val::Px(540.0),
+                        width: Val::Px(menu.home_layout.action_row_width_px),
                         min_height: Val::Px(18.0),
-                        margin: UiRect::left(Val::Px(36.0)),
+                        margin: UiRect::left(Val::Px(menu.home_layout.action_button_left_px)),
                         ..default()
                     },
                 ));
@@ -3070,6 +3155,7 @@ mod tests {
             title: "Title".to_owned(),
             subtitle: "Subtitle".to_owned(),
             home_buttons: default_home_buttons(),
+            home_layout: HomeLayoutDefinition::default(),
             empty_library_title: default_empty_library_title(),
             empty_library_hint: default_empty_library_hint(),
             quit_confirm_title: default_quit_confirm_title(),
