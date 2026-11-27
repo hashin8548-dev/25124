@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use bevy::prelude::*;
 use anyhow::{Result, ensure};
+use bevy::prelude::*;
 
 use crate::config::{ChunkFile, ChunkLayer, ChunkSource, WorldGeneration};
 
@@ -20,10 +20,18 @@ pub(super) fn rebase_world_origin(
     mut world_state: ResMut<crate::persistence::WorldStateFile>,
     mut queries: ParamSet<(
         Query<&Transform, With<crate::camera::FreeFlyCamera>>,
-        Query<(&mut Transform, Option<&mut crate::world::lod::ChunkLodVisual>)>,
+        Query<(
+            &mut Transform,
+            Option<&mut crate::world::lod::ChunkLodVisual>,
+        )>,
     )>,
 ) {
-    let Some(camera_position) = queries.p0().iter().next().map(|transform| transform.translation) else {
+    let Some(camera_position) = queries
+        .p0()
+        .iter()
+        .next()
+        .map(|transform| transform.translation)
+    else {
         return;
     };
     if camera_position.abs().max_element() <= 4096.0 {
@@ -46,15 +54,20 @@ pub(super) fn rebase_world_origin(
     }
 
     for state in world_state.bodies.values_mut() {
-        state.translation_m = (bevy::prelude::Vec3::from_array(state.translation_m) - shift).to_array();
+        state.translation_m =
+            (bevy::prelude::Vec3::from_array(state.translation_m) - shift).to_array();
     }
     for state in world_state.fragments.values_mut() {
-        state.translation_m = (bevy::prelude::Vec3::from_array(state.translation_m) - shift).to_array();
+        state.translation_m =
+            (bevy::prelude::Vec3::from_array(state.translation_m) - shift).to_array();
     }
 
     origin.0 += shift.as_dvec3();
     world_state.origin_m = origin.0.to_array();
-    info!("Rebased world origin by {:?}; absolute origin is {:?}", shift, origin.0);
+    info!(
+        "Rebased world origin by {:?}; absolute origin is {:?}",
+        shift, origin.0
+    );
 }
 
 /// Produces the bounded set of platform chunks near the absolute camera position.
@@ -114,13 +127,23 @@ pub(crate) fn generate_platform_chunk(
     } = generation;
 
     ensure!(source.generated, "source '{}' is not procedural", source.id);
-    ensure!(source.dimensions == [32, CHUNK_HEIGHT, 32], "unexpected procedural chunk dimensions");
-    ensure!(*size_units <= 255_000_000 && *size_units >= 32 && size_units % 2 == 0,
-        "flat platform size must be an even value in [32, 255000000]");
-    ensure!((1..CHUNK_HEIGHT).contains(border_height_units),
-        "border height must be in [1, {}]", CHUNK_HEIGHT - 1);
-    ensure!((1..=16).contains(border_thickness_units),
-        "border thickness must be in [1, 16]");
+    ensure!(
+        source.dimensions == [32, CHUNK_HEIGHT, 32],
+        "unexpected procedural chunk dimensions"
+    );
+    ensure!(
+        *size_units <= 255_000_000 && *size_units >= 32 && size_units % 2 == 0,
+        "flat platform size must be an even value in [32, 255000000]"
+    );
+    ensure!(
+        (1..CHUNK_HEIGHT).contains(border_height_units),
+        "border height must be in [1, {}",
+        CHUNK_HEIGHT - 1
+    );
+    ensure!(
+        (1..=16).contains(border_thickness_units),
+        "border thickness must be in [1, 16]"
+    );
 
     let size = *size_units as i64;
     let min_cell = -(size / 2);
@@ -188,7 +211,10 @@ mod tests {
     fn generator_creates_flat_interior_and_continuous_perimeter() {
         let recipe = generation(256);
         let sources = platform_sources_near(DVec3::new(16.0, 0.0, -112.0), &recipe, 0);
-        let center = sources.iter().find(|source| source.coordinate == [0, 0, -4]).unwrap();
+        let center = sources
+            .iter()
+            .find(|source| source.coordinate == [0, 0, -4])
+            .unwrap();
         let chunk = generate_platform_chunk(center, &recipe).unwrap();
 
         assert_eq!(chunk.dimensions, [32, 8, 32]);
@@ -207,7 +233,11 @@ mod tests {
         let sources = platform_sources_near(DVec3::new(edge_x * 32.0, 0.0, 0.0), &recipe, 2);
         assert!(sources.len() <= 36);
         assert!(sources.iter().all(|source| source.generated));
-        assert!(sources.iter().any(|source| source.coordinate[0] > 3_900_000));
+        assert!(
+            sources
+                .iter()
+                .any(|source| source.coordinate[0] > 3_900_000)
+        );
     }
 
     #[test]
