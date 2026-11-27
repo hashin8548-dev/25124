@@ -53,7 +53,7 @@ pub struct PersistedFragmentState {
 impl WorldStateFile {
     pub fn new(world_id: String) -> Self {
         Self {
-            format_version: 2,
+            format_version: 3,
             world_id,
             origin_m: [0.0; 3],
             bodies: BTreeMap::new(),
