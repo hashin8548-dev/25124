@@ -24,7 +24,10 @@ impl Plugin for HumanPlugin {
                 FixedPostUpdate,
                 actuation::drive_human_action_pose.in_set(avian3d::schedule::PhysicsSystems::First),
             )
-            .add_systems(Update, input::update_human_controls);
+            .add_systems(
+                Update,
+                input::update_human_controls.run_if(in_state(AppMode::Simulation)),
+            );
     }
 }
 
