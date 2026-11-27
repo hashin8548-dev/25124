@@ -47,6 +47,7 @@ impl Plugin for MenuPlugin {
                     sync_menu_visibility,
                     update_world_list_scroll,
                     sync_menu_feedback,
+                    sync_settings_labels,
                     sync_quit_confirmation_visibility,
                 ),
             );
@@ -1832,7 +1833,15 @@ fn handle_world_selection(
             return;
         }
     };
-    selected.paths.project_root = project_root;
+    selected.paths.project_root = project_root.clone();
+    if let Err(error) = remember_world_manifest(
+        &project_root,
+        &selection.0,
+        &mut menu_state.preferences,
+    ) {
+        warn!("Could not remember selected world '{}': {error}", selection.0.display());
+    }
+    apply_user_preferences(&mut selected, &menu_state.preferences);
 
     let selected_state =
         match WorldStateFile::load_or_default(&selected.paths.world_state, &selected.world.id) {
@@ -1990,7 +1999,15 @@ fn handle_create_world(
             return;
         }
     };
-    selected.paths.project_root = project_root;
+    selected.paths.project_root = project_root.clone();
+    if let Err(error) = remember_world_manifest(
+        &project_root,
+        &manifest_path,
+        &mut menu_state.preferences,
+    ) {
+        warn!("Could not remember new world '{}': {error}", manifest_path.display());
+    }
+    apply_user_preferences(&mut selected, &menu_state.preferences);
 
     let selected_state =
         match WorldStateFile::load_or_default(&selected.paths.world_state, &selected.world.id) {
@@ -2043,6 +2060,97 @@ fn load_menu(path: &Path) -> Result<MenuAsset, String> {
     menu.ensure_required_actions();
     menu.validate()?;
     Ok(menu)
+}
+
+fn handle_navigation_action(
+    activate: On<Activate>,
+    actions: Query<&MenuAction>,
+    mode: Res<State<AppMode>>,
+    mut state: ResMut<MenuState>,
+    mut input_focus: ResMut<InputFocus>,
+) {
+    if *mode.get() != AppMode::WorldLibrary {
+        return;
+    }
+    let Ok(action) = actions.get(activate.entity) else {
+        return;
+    };
+    state.page = match action.0.as_str() {
+        "home" => MenuPage::Home,
+        "worlds" => MenuPage::Worlds,
+        "settings" => MenuPage::Settings,
+        _ => return,
+    };
+    input_focus.clear();
+}
+
+fn handle_setting_action(
+    activate: On<Activate>,
+    actions: Query<&SettingAction>,
+    mode: Res<State<AppMode>>,
+    mut config: ResMut<RuntimeConfig>,
+    mut state: ResMut<MenuState>,
+    mut feedback: ResMut<MenuFeedback>,
+) {
+    if *mode.get() != AppMode::WorldLibrary || state.page != MenuPage::Settings {
+        return;
+    }
+    let Ok(action) = actions.get(activate.entity) else {
+        return;
+    };
+
+    match action.0.as_str() {
+        "render_distance_down" => {
+            state.preferences.render_distance_chunks =
+                state.preferences.render_distance_chunks.saturating_sub(1).max(2);
+        }
+        "render_distance_up" => {
+            state.preferences.render_distance_chunks =
+                (state.preferences.render_distance_chunks + 1).min(8);
+        }
+        "lod_detail_down" => {
+            state.preferences.lod_detail = state.preferences.lod_detail.saturating_sub(1);
+        }
+        "lod_detail_up" => {
+            state.preferences.lod_detail = (state.preferences.lod_detail + 1).min(2);
+        }
+        _ => return,
+    }
+
+    apply_user_preferences(&mut config, &state.preferences);
+    match save_user_preferences(&config.paths.project_root, &state.preferences) {
+        Ok(()) => {
+            feedback.message = format!(
+                "Settings saved · render distance {} chunks · LOD {}",
+                state.preferences.render_distance_chunks,
+                lod_detail_label(state.preferences.lod_detail)
+            );
+            feedback.tone = MenuFeedbackTone::Success;
+        }
+        Err(error) => {
+            warn!("Could not save settings: {error}");
+            feedback.message = format!("Settings applied for this session, but could not be saved: {error}");
+            feedback.tone = MenuFeedbackTone::Notice;
+        }
+    }
+}
+
+fn sync_settings_labels(
+    config: Res<RuntimeConfig>,
+    state: Res<MenuState>,
+    mut render_distance_labels: Query<&mut Text, With<SettingsRenderDistanceValue>>,
+    mut lod_detail_labels: Query<&mut Text, With<SettingsLodDetailValue>>,
+) {
+    if !config.is_changed() && !state.is_changed() {
+        return;
+    }
+
+    for mut text in &mut render_distance_labels {
+        text.0 = format!("{} CHUNKS", config.engine.streaming.load_radius_chunks);
+    }
+    for mut text in &mut lod_detail_labels {
+        text.0 = lod_detail_label(state.preferences.lod_detail).to_owned();
+    }
 }
 
 fn handle_menu_action(
@@ -2184,6 +2292,10 @@ fn toggle_menu_with_escape(
     }
 
     if *mode.get() == AppMode::WorldLibrary {
+        if state.page != MenuPage::Home {
+            state.page = MenuPage::Home;
+            input_focus.clear();
+        }
         return;
     }
 
