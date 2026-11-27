@@ -4,7 +4,7 @@ pub use free_fly::FreeFlyCamera;
 
 use bevy::prelude::*;
 
-pub struct CameraPlugin;
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]\npub(crate) struct CameraUpdateSet;\n\npub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
