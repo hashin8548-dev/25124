@@ -76,12 +76,7 @@ fn sync_physics_settings(
     *fixed_time = Time::<Fixed>::from_hz(physics.fixed_hz);
     substeps.0 = physics.substeps;
     time_to_sleep.0 = physics.sleep_after_seconds;
-    gravity.0 = Vec3::from_array(
-        config
-            .world
-            .gravity_m_s2
-            .unwrap_or(physics.gravity_m_s2),
-    );
+    gravity.0 = Vec3::from_array(config.world.gravity_m_s2.unwrap_or(physics.gravity_m_s2));
     *solver = SolverConfig {
         restitution_threshold: physics.restitution_threshold_m_s,
         restitution_iterations: physics.restitution_iterations as usize,
