@@ -19,7 +19,7 @@ use bevy::{
     ui::Pressed,
     ui_widgets::{Activate, Button, observe},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     config::{RuntimeConfig, WorldLibrary},
@@ -53,9 +53,19 @@ impl Plugin for MenuPlugin {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum MenuPage {
+    #[default]
+    Home,
+    Worlds,
+    Settings,
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct MenuState {
     pub(crate) visible: bool,
+    page: MenuPage,
+    preferences: UserPreferences,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -99,10 +109,25 @@ struct QuitConfirmationPanel;
 struct MenuAction(String);
 
 #[derive(Component)]
+struct HomeOnly;
+
+#[derive(Component)]
 struct LibraryOnly;
 
 #[derive(Component)]
+struct SettingsOnly;
+
+#[derive(Component)]
 struct SimulationOnly;
+
+#[derive(Component)]
+struct SettingAction(String);
+
+#[derive(Component)]
+struct SettingsRenderDistanceValue;
+
+#[derive(Component)]
+struct SettingsLodDetailValue;
 
 #[derive(Component, Clone, Copy)]
 struct MenuButtonColors {
@@ -118,6 +143,8 @@ struct MenuAsset {
     schema_version: u32,
     title: String,
     subtitle: String,
+    #[serde(default = "default_home_buttons")]
+    home_buttons: Vec<MenuButtonDefinition>,
     #[serde(default = "default_empty_library_title")]
     empty_library_title: String,
     #[serde(default = "default_empty_library_hint")]
@@ -360,11 +387,149 @@ fn default_world_metadata_max_fields() -> usize {
     4
 }
 
+fn default_home_buttons() -> Vec<MenuButtonDefinition> {
+    vec![
+        MenuButtonDefinition { label: "CONTINUE".to_owned(), action: "continue".to_owned() },
+        MenuButtonDefinition { label: "NEW WORLD".to_owned(), action: "create_world".to_owned() },
+        MenuButtonDefinition { label: "WORLDS".to_owned(), action: "worlds".to_owned() },
+        MenuButtonDefinition { label: "SETTINGS".to_owned(), action: "settings".to_owned() },
+    ]
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct MenuButtonDefinition {
     label: String,
     action: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+struct UserPreferences {
+    schema_version: u32,
+    last_world_manifest: Option<String>,
+    render_distance_chunks: u32,
+    /// 0 = performance, 1 = balanced, 2 = quality.
+    lod_detail: u8,
+}
+
+impl Default for UserPreferences {
+    fn default() -> Self {
+        Self {
+            schema_version: 1,
+            last_world_manifest: None,
+            render_distance_chunks: 2,
+            lod_detail: 1,
+        }
+    }
+}
+
+fn user_preferences_path(project_root: &Path) -> PathBuf {
+    project_root.join(".25124-preferences.json")
+}
+
+fn load_user_preferences(project_root: &Path) -> UserPreferences {
+    let path = user_preferences_path(project_root);
+    let source = match fs::read_to_string(&path) {
+        Ok(source) => source,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return UserPreferences::default();
+        }
+        Err(error) => {
+            warn!("Could not read preferences '{}': {error}", path.display());
+            return UserPreferences::default();
+        }
+    };
+
+    let preferences: UserPreferences = match serde_json::from_str(&source) {
+        Ok(preferences) => preferences,
+        Err(error) => {
+            warn!("Preferences '{}' are invalid: {error}; using defaults", path.display());
+            return UserPreferences::default();
+        }
+    };
+    if preferences.schema_version != 1
+        || !(2..=8).contains(&preferences.render_distance_chunks)
+        || preferences.lod_detail > 2
+    {
+        warn!("Preferences '{}' contain unsupported or out-of-range values; using defaults", path.display());
+        return UserPreferences::default();
+    }
+    preferences
+}
+
+fn save_user_preferences(project_root: &Path, preferences: &UserPreferences) -> Result<(), String> {
+    let path = user_preferences_path(project_root);
+    let temporary_path = path.with_extension("json.tmp");
+    let contents = serde_json::to_vec_pretty(preferences)
+        .map_err(|error| format!("could not serialize preferences: {error}"))?;
+    fs::write(&temporary_path, contents)
+        .map_err(|error| format!("could not write preferences: {error}"))?;
+    if let Err(first_error) = fs::rename(&temporary_path, &path) {
+        // Windows does not replace an existing destination with rename; preserve the
+        // temporary file until the previous preferences file has been removed.
+        if path.exists() {
+            fs::remove_file(&path)
+                .map_err(|error| format!("could not replace preferences after '{first_error}': {error}"))?;
+            fs::rename(&temporary_path, &path)
+                .map_err(|error| format!("could not commit preferences: {error}"))?;
+        } else {
+            let _ = fs::remove_file(&temporary_path);
+            return Err(format!("could not commit preferences: {first_error}"));
+        }
+    }
+    Ok(())
+}
+
+fn preferred_world_manifest(
+    project_root: &Path,
+    library: &WorldLibrary,
+    preferences: &UserPreferences,
+) -> Option<PathBuf> {
+    let relative = Path::new(preferences.last_world_manifest.as_deref()?);
+    if relative.as_os_str().is_empty()
+        || relative.is_absolute()
+        || !relative.components().all(|component| matches!(component, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    let candidate = project_root.join(relative);
+    library.entries.iter()
+        .find(|entry| entry.manifest_path == candidate)
+        .map(|entry| entry.manifest_path.clone())
+}
+
+fn apply_user_preferences(config: &mut RuntimeConfig, preferences: &UserPreferences) {
+    let streaming = &mut config.engine.streaming;
+    streaming.load_radius_chunks = preferences.render_distance_chunks;
+    streaming.unload_radius_chunks = preferences.render_distance_chunks.saturating_add(1);
+    let (near, mid, far) = match preferences.lod_detail {
+        0 => (0.75, 1.5, 2.25),
+        1 => (1.0, 1.75, 2.5),
+        _ => (1.25, 2.0, 2.75),
+    };
+    streaming.lod_near_distance_chunks = near;
+    streaming.lod_mid_distance_chunks = mid;
+    streaming.lod_far_distance_chunks = far.min(streaming.unload_radius_chunks as f32);
+}
+
+fn remember_world_manifest(
+    project_root: &Path,
+    manifest_path: &Path,
+    preferences: &mut UserPreferences,
+) -> Result<(), String> {
+    let relative = manifest_path.strip_prefix(project_root)
+        .map_err(|error| format!("world manifest is outside the project root: {error}"))?;
+    preferences.last_world_manifest = Some(relative.to_string_lossy().replace('\\', "/"));
+    save_user_preferences(project_root, preferences)
+}
+
+fn lod_detail_label(detail: u8) -> &'static str {
+    match detail {
+        0 => "PERFORMANCE",
+        1 => "BALANCED",
+        _ => "QUALITY",
+    }
 }
 
 impl MenuAsset {
@@ -498,6 +663,20 @@ impl MenuAsset {
                     .to_owned(),
             );
         }
+        if self.home_buttons.len() != 4 {
+            return Err("menu must define exactly four home buttons".to_owned());
+        }
+        let expected_home_actions = ["continue", "create_world", "worlds", "settings"];
+        let mut home_actions = BTreeSet::new();
+        for button in &self.home_buttons {
+            if button.label.trim().is_empty()
+                || !expected_home_actions.contains(&button.action.as_str())
+                || !home_actions.insert(button.action.as_str())
+            {
+                return Err("home buttons must uniquely define continue, create_world, worlds, and settings with non-empty labels".to_owned());
+            }
+        }
+
         if self.buttons.is_empty() {
             return Err("menu must define at least one button".to_owned());
         }
@@ -1853,6 +2032,7 @@ mod tests {
             schema_version: 1,
             title: "Title".to_owned(),
             subtitle: "Subtitle".to_owned(),
+            home_buttons: default_home_buttons(),
             empty_library_title: default_empty_library_title(),
             empty_library_hint: default_empty_library_hint(),
             quit_confirm_title: default_quit_confirm_title(),
