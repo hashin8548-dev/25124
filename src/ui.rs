@@ -2406,8 +2406,14 @@ fn handle_setting_action(
 fn sync_settings_labels(
     config: Res<RuntimeConfig>,
     state: Res<MenuState>,
-    mut render_distance_labels: Query<&mut Text, With<SettingsRenderDistanceValue>>,
-    mut lod_detail_labels: Query<&mut Text, With<SettingsLodDetailValue>>,
+    mut render_distance_labels: Query<
+        &mut Text,
+        (With<SettingsRenderDistanceValue>, Without<SettingsLodDetailValue>),
+    >,
+    mut lod_detail_labels: Query<
+        &mut Text,
+        (With<SettingsLodDetailValue>, Without<SettingsRenderDistanceValue>),
+    >,
 ) {
     if !config.is_changed() && !state.is_changed() {
         return;
@@ -3071,7 +3077,7 @@ mod tests {
             last_world_manifest: Some("worlds/alpha/world.json".to_owned()),
             render_distance_chunks: 8,
             lod_detail: 2,
-            ..default()
+            ..UserPreferences::default()
         };
         save_user_preferences(&root, &preferences).unwrap();
         assert_eq!(load_user_preferences(&root), preferences);
@@ -3097,7 +3103,7 @@ mod tests {
         let library = WorldLibrary::discover(&root).unwrap();
         let mut preferences = UserPreferences {
             last_world_manifest: Some("worlds/alpha/world.json".to_owned()),
-            ..default()
+            ..UserPreferences::default()
         };
         assert_eq!(
             preferred_world_manifest(&root, &library, &preferences),
