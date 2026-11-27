@@ -79,7 +79,9 @@ pub(super) fn update_chunk_streaming(
     }
 
     for source in &config.chunks {
-        state.known_sources.insert(source.id.clone(), source.clone());
+        state
+            .known_sources
+            .insert(source.id.clone(), source.clone());
     }
 
     state
@@ -231,7 +233,11 @@ pub(super) fn update_chunk_streaming(
             .voxel_bodies
             .retain(|_, body| body.chunk_id != chunk_id);
         state.loaded.remove(&chunk_id);
-        if state.known_sources.get(&chunk_id).is_some_and(|source| source.generated) {
+        if state
+            .known_sources
+            .get(&chunk_id)
+            .is_some_and(|source| source.generated)
+        {
             state.known_sources.remove(&chunk_id);
         }
         info!("Unloaded chunk '{chunk_id}' after preserving its dynamic state");
@@ -250,8 +256,12 @@ pub(super) fn update_chunk_streaming(
                 .object_chunks
                 .iter()
                 .find(|source| &source.id == id)?;
-            if distance_to_object_chunk_aabb(camera_position, source, object_chunk_size_m, world_origin.0)
-                <= object_unload_distance
+            if distance_to_object_chunk_aabb(
+                camera_position,
+                source,
+                object_chunk_size_m,
+                world_origin.0,
+            ) <= object_unload_distance
             {
                 return None;
             }
@@ -321,7 +331,8 @@ pub(super) fn update_chunk_streaming(
     // Discard completed reads that became irrelevant while waiting in the spawn queue.
     // This prevents stale ready items from consuming the per-frame spawn budget.
     state.ready.retain(|(source, _)| {
-        distance_to_chunk_aabb(camera_position, source, world_origin.0) <= chunk_radius_m(source, load_limit, world_origin.0)
+        distance_to_chunk_aabb(camera_position, source, world_origin.0)
+            <= chunk_radius_m(source, load_limit, world_origin.0)
     });
 
     // Prioritize nearest indexed chunks and keep the number of outstanding I/O tasks bounded.
@@ -334,7 +345,9 @@ pub(super) fn update_chunk_streaming(
         ));
     }
     for source in &available_sources {
-        state.known_sources.insert(source.id.clone(), source.clone());
+        state
+            .known_sources
+            .insert(source.id.clone(), source.clone());
     }
     let mut candidates: Vec<_> = available_sources
         .into_iter()
@@ -348,8 +361,9 @@ pub(super) fn update_chunk_streaming(
         })
         .collect();
     candidates.sort_by(|left, right| {
-        distance_to_chunk_aabb(camera_position, left, world_origin.0)
-            .total_cmp(&distance_to_chunk_aabb(camera_position, right, world_origin.0))
+        distance_to_chunk_aabb(camera_position, left, world_origin.0).total_cmp(
+            &distance_to_chunk_aabb(camera_position, right, world_origin.0),
+        )
     });
 
     let available = config
@@ -365,7 +379,8 @@ pub(super) fn update_chunk_streaming(
         let generation = config.world.generation.clone();
         let task = AsyncComputeTaskPool::get().spawn(async move {
             if generated {
-                let recipe = generation.ok_or_else(|| "generated chunk has no world-generation recipe".to_owned())?;
+                let recipe = generation
+                    .ok_or_else(|| "generated chunk has no world-generation recipe".to_owned())?;
                 generate_platform_chunk(&source_for_generation, &recipe)
                     .map_err(|error| format!("{}: {error:#}", source_for_generation.id))
             } else {
@@ -386,7 +401,9 @@ pub(super) fn update_chunk_streaming(
         let Some((source, chunk)) = state.ready.pop_front() else {
             break;
         };
-        if distance_to_chunk_aabb(camera_position, &source, world_origin.0) > chunk_radius_m(&source, load_limit, world_origin.0) {
+        if distance_to_chunk_aabb(camera_position, &source, world_origin.0)
+            > chunk_radius_m(&source, load_limit, world_origin.0)
+        {
             continue;
         }
         spawned_chunks_this_frame += 1;
@@ -431,14 +448,22 @@ pub(super) fn update_chunk_streaming(
         .iter()
         .filter(|source| {
             !state.loaded_object_chunks.contains(&source.id)
-                && distance_to_object_chunk_aabb(camera_position, source, object_chunk_size_m, world_origin.0)
-                    <= object_chunk_size_m * load_limit
+                && distance_to_object_chunk_aabb(
+                    camera_position,
+                    source,
+                    object_chunk_size_m,
+                    world_origin.0,
+                ) <= object_chunk_size_m * load_limit
         })
         .collect();
     object_candidates.sort_by(|left, right| {
-        distance_to_object_chunk_aabb(camera_position, left, object_chunk_size_m, world_origin.0).total_cmp(
-            &distance_to_object_chunk_aabb(camera_position, right, object_chunk_size_m, world_origin.0),
-        )
+        distance_to_object_chunk_aabb(camera_position, left, object_chunk_size_m, world_origin.0)
+            .total_cmp(&distance_to_object_chunk_aabb(
+                camera_position,
+                right,
+                object_chunk_size_m,
+                world_origin.0,
+            ))
     });
 
     let remaining_spawn_budget = config
@@ -466,8 +491,12 @@ fn object_chunk_bounds(
     chunk_size_m: f32,
     world_origin: DVec3,
 ) -> (Vec3, Vec3) {
-    let min = (DVec3::from_array(source.coordinate.map(|axis| axis as f64 * chunk_size_m as f64))
-        - world_origin).as_vec3();
+    let min = (DVec3::from_array(
+        source
+            .coordinate
+            .map(|axis| axis as f64 * chunk_size_m as f64),
+    ) - world_origin)
+        .as_vec3();
     (min, min + Vec3::splat(chunk_size_m))
 }
 
@@ -535,8 +564,14 @@ mod tests {
             distance_to_chunk_aabb(Vec3::new(20.0, -4.0, 8.0), &chunk, DVec3::ZERO),
             0.0
         );
-        assert!((distance_to_chunk_aabb(Vec3::new(35.0, -4.0, 8.0), &chunk, DVec3::ZERO) - 3.0).abs() < 1.0e-5);
-        assert!((distance_to_chunk_aabb(Vec3::new(20.0, -20.0, 8.0), &chunk, DVec3::ZERO) - 4.0).abs() < 1.0e-5);
+        assert!(
+            (distance_to_chunk_aabb(Vec3::new(35.0, -4.0, 8.0), &chunk, DVec3::ZERO) - 3.0).abs()
+                < 1.0e-5
+        );
+        assert!(
+            (distance_to_chunk_aabb(Vec3::new(20.0, -20.0, 8.0), &chunk, DVec3::ZERO) - 4.0).abs()
+                < 1.0e-5
+        );
     }
 
     #[test]
@@ -551,7 +586,9 @@ mod tests {
             0.0
         );
         assert!(
-            (distance_to_object_chunk_aabb(Vec3::new(1.0, 8.0, 8.0), &source, 16.0, DVec3::ZERO) - 1.0).abs()
+            (distance_to_object_chunk_aabb(Vec3::new(1.0, 8.0, 8.0), &source, 16.0, DVec3::ZERO)
+                - 1.0)
+                .abs()
                 < 1.0e-5
         );
     }
