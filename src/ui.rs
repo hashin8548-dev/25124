@@ -1090,6 +1090,13 @@ fn setup_menu(
                         TextColor(button_text_color),
                         Node { flex_grow: 1.0, ..default() },
                     ));
+                    row.spawn((
+                        SettingsRenderDistanceValue,
+                        Text::new(""),
+                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
+                        TextColor(button_text_color),
+                        Node { width: Val::Px(104.0), ..default() },
+                    ));
                     for (label, action, index) in [("−", "render_distance_down", 0), ("+", "render_distance_up", 1)] {
                         row.spawn((
                             Button, TabIndex(4 + index), Hovered::default(),
@@ -1102,13 +1109,7 @@ fn setup_menu(
                             button.spawn((Text::new(label), TextFont { font_size: FontSize::Px(menu.button_font_size_px + 4.0), ..default() }, TextColor(button_text_color)));
                         });
                     }
-                    row.spawn((
-                        SettingsRenderDistanceValue,
-                        Text::new(""),
-                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
-                        TextColor(button_text_color),
-                        Node { width: Val::Px(104.0), ..default() },
-                    ));
+
                 });
 
                 panel.spawn((
@@ -1480,7 +1481,7 @@ fn setup_menu(
 
                                 panel.spawn((
                     Button,
-                    TabIndex(library.entries.len() as i32 + 2),
+                    TabIndex(library.entries.len() as i32),
                     Hovered::default(),
                     Node {
                         width: Val::Percent(100.0),
@@ -1548,7 +1549,7 @@ fn setup_menu(
                     panel
                         .spawn((
                             Button,
-                            TabIndex(library.entries.len() as i32),
+                            TabIndex(library.entries.len() as i32 + 1),
                             Hovered::default(),
                             Node {
                                 width: Val::Percent(100.0),
@@ -1590,6 +1591,7 @@ fn setup_menu(
                             Button,
                             TabIndex(
                                 library.entries.len() as i32
+                                    + 1
                                     + if menu
                                         .buttons
                                         .iter()
