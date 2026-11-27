@@ -134,6 +134,10 @@ pub struct HumanBodyPart {
 #[derive(Component, Clone, Copy, Debug)]
 pub struct HumanPlayerRoot;
 
+/// Marker for standalone Avian joint entities so they are removed with the player assembly.
+#[derive(Component, Clone, Copy, Debug)]
+struct HumanJointConstraint;
+
 #[derive(Clone, Debug, Resource)]
 pub struct HumanPlayer {
     pub root: Entity,
@@ -526,6 +530,7 @@ pub fn spawn_human_player(
                     .with_limit_compliance(settings.joint_angular_compliance),
                 damping,
                 JointCollisionDisabled,
+                HumanJointConstraint,
             ));
         } else {
             let limits = &settings.limits;
@@ -553,6 +558,7 @@ pub fn spawn_human_player(
                     .with_twist_compliance(settings.joint_angular_compliance),
                 damping,
                 JointCollisionDisabled,
+                HumanJointConstraint,
             ));
         }
     }
@@ -585,6 +591,24 @@ pub fn spawn_human_player(
         bodies.len(),
         bodies.len().saturating_sub(1)
     );
+}
+
+
+/// Remove the player assembly when leaving Simulation so a newly selected world
+/// receives a fresh dynamic ragdoll and action state.
+pub fn despawn_human_player(
+    mut commands: Commands,
+    bodies: Query<Entity, With<HumanBodyPart>>,
+    joints: Query<Entity, With<HumanJointConstraint>>,
+) {
+    for entity in &joints {
+        commands.entity(entity).despawn();
+    }
+    for entity in &bodies {
+        commands.entity(entity).despawn();
+    }
+    commands.remove_resource::<HumanPlayer>();
+    commands.remove_resource::<HumanActionState>();
 }
 
 fn nearest_body_parent<'a>(rig: &'a HumanRig, mut parent: Option<&'a str>) -> Option<&'a str> {
