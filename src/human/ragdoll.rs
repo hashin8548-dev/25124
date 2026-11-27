@@ -29,7 +29,19 @@ pub struct HumanPhysicsSettings {
     pub climb_contact_push_force_n: f32,
     pub temporary_assists: HumanTemporaryAssists,
     pub controls: HumanControlSettings,
+    pub camera: HumanCameraSettings,
     pub limits: HumanJointLimits,
+}
+
+#[derive(Clone, Debug)]
+pub struct HumanCameraSettings {
+    pub trailing_distance_m: f32,
+    pub shoulder_offset_m: [f32; 3],
+    pub look_at_offset_m: [f32; 3],
+    pub vertical_fov_degrees: f32,
+    pub spring_stiffness: f32,
+    pub spring_damping: f32,
+    pub crosshair_diameter_px: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -93,6 +105,7 @@ struct HumanManifest {
     physics: HumanPhysicsSettingsFile,
     temporary_assists: HumanTemporaryAssists,
     controls: serde_json::Value,
+    camera: serde_json::Value,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -265,6 +278,66 @@ impl HumanPhysicsSettings {
             walk_backwards_reverse,
             crouch_backwards_reverse,
         };
+        let camera = &manifest.camera;
+        let camera_number = |name: &str| -> Result<f32> {
+            camera
+                .get(name)
+                .and_then(serde_json::Value::as_f64)
+                .map(|value| value as f32)
+                .filter(|value| value.is_finite())
+                .with_context(|| format!("human camera setting '{name}' must be finite"))
+        };
+        let camera_vec3 = |name: &str| -> Result<[f32; 3]> {
+            let values = camera
+                .get(name)
+                .and_then(serde_json::Value::as_array)
+                .with_context(|| format!("human camera setting '{name}' must be a 3D vector"))?;
+            ensure!(values.len() == 3, "human camera setting '{name}' must have three components");
+            let mut result = [0.0; 3];
+            for (index, value) in values.iter().enumerate() {
+                result[index] = value
+                    .as_f64()
+                    .map(|number| number as f32)
+                    .filter(|number| number.is_finite())
+                    .with_context(|| format!("human camera setting '{name}[{index}]' must be finite"))?;
+            }
+            Ok(result)
+        };
+        ensure!(
+            camera.get("mode").and_then(serde_json::Value::as_str)
+                == Some("third_person_over_shoulder"),
+            "unsupported human camera mode"
+        );
+        let crosshair = camera
+            .get("crosshair")
+            .context("human camera crosshair settings are missing")?;
+        ensure!(
+            crosshair.get("kind").and_then(serde_json::Value::as_str) == Some("single_dot"),
+            "human camera crosshair must be a single dot"
+        );
+        let camera_settings = HumanCameraSettings {
+            trailing_distance_m: camera_number("trailing_distance_m")?,
+            shoulder_offset_m: camera_vec3("shoulder_offset_m")?,
+            look_at_offset_m: camera_vec3("look_at_offset_m")?,
+            vertical_fov_degrees: camera_number("vertical_fov_degrees")?,
+            spring_stiffness: camera_number("spring_stiffness")?,
+            spring_damping: camera_number("spring_damping")?,
+            crosshair_diameter_px: crosshair
+                .get("diameter_px")
+                .and_then(serde_json::Value::as_f64)
+                .map(|value| value as f32)
+                .filter(|value| value.is_finite())
+                .context("human crosshair diameter must be finite")?,
+        };
+        ensure!(
+            camera_settings.trailing_distance_m > 0.0
+                && (30.0..=120.0).contains(&camera_settings.vertical_fov_degrees)
+                && camera_settings.spring_stiffness > 0.0
+                && camera_settings.spring_damping >= 0.0
+                && camera_settings.crosshair_diameter_px >= 1.0
+                && camera_settings.crosshair_diameter_px <= 12.0,
+            "human camera settings are outside supported ranges"
+        );
         let limits = &source.limits;
         for (name, value) in [
             ("hip swing", limits.hip_swing_rad),
@@ -306,6 +379,7 @@ impl HumanPhysicsSettings {
             climb_contact_push_force_n: source.climb_contact_push_force_n,
             temporary_assists: manifest.temporary_assists,
             controls: control_settings,
+            camera: camera_settings,
             limits: source.limits,
         })
     }
