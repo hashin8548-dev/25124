@@ -1423,6 +1423,43 @@ fn setup_menu(
                         }
                     });
 
+                                panel.spawn((
+                    Button,
+                    TabIndex(library.entries.len() as i32 + 2),
+                    Hovered::default(),
+                    Node {
+                        width: Val::Percent(100.0),
+                        max_width: Val::Px(menu.button_width_px),
+                        align_self: AlignSelf::Center,
+                        height: Val::Px(menu.button_height_px),
+                        border: UiRect::all(Val::Px(1.0)),
+                        border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        ..default()
+                    },
+                    BorderColor::all(button_border_color),
+                    BackgroundColor(button_color),
+                    MenuAction("home".to_owned()),
+                    MenuButtonColors {
+                        normal: button_color,
+                        hovered: button_hover_color,
+                        border_normal: button_border_color,
+                        border_active: button_active_border_color,
+                    },
+                    observe(handle_navigation_action),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("BACK TO MENU"),
+                        TextFont {
+                            font_size: FontSize::Px(menu.button_font_size_px),
+                            ..default()
+                        },
+                        TextColor(button_text_color),
+                    ));
+                });
+
                 panel.spawn((
                     Text::new(menu.library_navigation_hint.clone()),
                     TextFont {
@@ -2348,7 +2385,21 @@ type RootVisibilityQuery<'world, 'state> = Query<
     &'static mut Visibility,
     (
         With<MenuRoot>,
+        Without<HomeOnly>,
         Without<LibraryOnly>,
+        Without<SettingsOnly>,
+        Without<SimulationOnly>,
+    ),
+>;
+type HomeVisibilityQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    &'static mut Visibility,
+    (
+        With<HomeOnly>,
+        Without<MenuRoot>,
+        Without<LibraryOnly>,
+        Without<SettingsOnly>,
         Without<SimulationOnly>,
     ),
 >;
@@ -2358,8 +2409,22 @@ type LibraryVisibilityQuery<'world, 'state> = Query<
     &'static mut Visibility,
     (
         With<LibraryOnly>,
-        Without<SimulationOnly>,
         Without<MenuRoot>,
+        Without<HomeOnly>,
+        Without<SettingsOnly>,
+        Without<SimulationOnly>,
+    ),
+>;
+type SettingsVisibilityQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    &'static mut Visibility,
+    (
+        With<SettingsOnly>,
+        Without<MenuRoot>,
+        Without<HomeOnly>,
+        Without<LibraryOnly>,
+        Without<SimulationOnly>,
     ),
 >;
 type SimulationVisibilityQuery<'world, 'state> = Query<
@@ -2368,8 +2433,10 @@ type SimulationVisibilityQuery<'world, 'state> = Query<
     &'static mut Visibility,
     (
         With<SimulationOnly>,
-        Without<LibraryOnly>,
         Without<MenuRoot>,
+        Without<HomeOnly>,
+        Without<LibraryOnly>,
+        Without<SettingsOnly>,
     ),
 >;
 
@@ -2377,30 +2444,54 @@ fn sync_menu_visibility(
     state: Res<MenuState>,
     mode: Res<State<AppMode>>,
     mut roots: RootVisibilityQuery<'_, '_>,
+    mut home_panels: HomeVisibilityQuery<'_, '_>,
     mut library_panels: LibraryVisibilityQuery<'_, '_>,
+    mut settings_panels: SettingsVisibilityQuery<'_, '_>,
     mut simulation_panels: SimulationVisibilityQuery<'_, '_>,
 ) {
-    let (root_visibility, library_visibility, simulation_visibility) =
-        menu_visibility_targets(*mode.get() == AppMode::WorldLibrary, state.visible);
+    let in_library = *mode.get() == AppMode::WorldLibrary;
+    let (root_visibility, _, simulation_visibility) =
+        menu_visibility_targets(in_library, state.visible);
+    let home_visibility = if in_library && state.page == MenuPage::Home {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    let library_visibility = if in_library && state.page == MenuPage::Worlds {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    let settings_visibility = if in_library && state.page == MenuPage::Settings {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
     if state.is_changed() || mode.is_changed() {
         info!(
-            "Menu state changed: mode={:?}, menu_visible={}, root={:?}, library={:?}, pause={:?}",
+            "Menu state changed: mode={:?}, page={:?}, menu_visible={}, root={:?}, home={:?}, worlds={:?}, settings={:?}, pause={:?}",
             mode.get(),
+            state.page,
             state.visible,
             root_visibility,
+            home_visibility,
             library_visibility,
+            settings_visibility,
             simulation_visibility
         );
     }
 
-    // Evaluate the complete state every frame. This keeps the top-level overlay and its
-    // explicitly-visible children in sync even when a state transition and activation occur
-    // in the same frame.
     for mut visibility in &mut roots {
         visibility.set_if_neq(root_visibility);
     }
+    for mut visibility in &mut home_panels {
+        visibility.set_if_neq(home_visibility);
+    }
     for mut visibility in &mut library_panels {
         visibility.set_if_neq(library_visibility);
+    }
+    for mut visibility in &mut settings_panels {
+        visibility.set_if_neq(settings_visibility);
     }
     for mut visibility in &mut simulation_panels {
         visibility.set_if_neq(simulation_visibility);
