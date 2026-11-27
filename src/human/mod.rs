@@ -1,11 +1,12 @@
 mod actuation;
+mod input;
 mod motion;
 mod ragdoll;
 mod rig;
 
 pub use actuation::HumanActionState;
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
-pub use ragdoll::{HumanBodyPart, HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot};
+pub use ragdoll::{HumanBodyPart, HumanControlSettings, HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot};
 pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
 
 use crate::{config::RuntimeConfig, engine::AppMode};
@@ -20,7 +21,8 @@ impl Plugin for HumanPlugin {
             .add_systems(
                 FixedPostUpdate,
                 actuation::drive_human_action_pose.in_set(avian3d::schedule::PhysicsSystems::First),
-            );
+            )
+            .add_systems(Update, input::update_human_controls);
     }
 }
 
