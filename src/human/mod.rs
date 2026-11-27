@@ -6,7 +6,9 @@ mod rig;
 
 pub use actuation::HumanActionState;
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
-pub use ragdoll::{HumanBodyPart, HumanControlSettings, HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot};
+pub use ragdoll::{
+    HumanBodyPart, HumanControlSettings, HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot,
+};
 pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
 
 use crate::{config::RuntimeConfig, engine::AppMode};

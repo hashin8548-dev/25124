@@ -2,8 +2,8 @@ use avian3d::prelude::{Dir3, Forces, LinearVelocity, SpatialQuery, SpatialQueryF
 use bevy::prelude::*;
 
 use super::{
-    HumanActionState, HumanBodyPart, HumanMotionLibrary, HumanPhysicsSettings,
-    HumanPlayer, HumanPlayerRoot, HumanRig,
+    HumanActionState, HumanBodyPart, HumanMotionLibrary, HumanPhysicsSettings, HumanPlayer,
+    HumanPlayerRoot, HumanRig,
 };
 
 const WALL_PROBE_DISTANCE_M: f32 = 1.0;
@@ -119,15 +119,17 @@ pub fn update_human_controls(
     }
 
     if launch_jump {
-        if let Some(geometry) = rig.bone("Root").and_then(|bone| bone.collision_geometry.as_ref()) {
+        if let Some(geometry) = rig
+            .bone("Root")
+            .and_then(|bone| bone.collision_geometry.as_ref())
+        {
             let radius = geometry.radius_m;
             let segment = geometry.capsule_segment_length_m;
             let volume = std::f32::consts::PI * radius * radius * segment
                 + (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3);
             let estimated_mass = volume * settings.density_kg_m3;
-            let impulse = Vec3::Y
-                * estimated_mass
-                * settings.temporary_assists.jump_launch.launch_speed_m_s;
+            let impulse =
+                Vec3::Y * estimated_mass * settings.temporary_assists.jump_launch.launch_speed_m_s;
             root_forces.apply_linear_impulse(impulse);
         }
     }
