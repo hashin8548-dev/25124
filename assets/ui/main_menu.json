@@ -2,6 +2,12 @@
   "schema_version": 2,
   "title": "25124",
   "subtitle": "WORLD LIBRARY  /  PROCEDURAL WORLD CREATION",
+  "home_buttons": [
+    { "label": "CONTINUE", "action": "continue" },
+    { "label": "NEW WORLD", "action": "create_world" },
+    { "label": "WORLDS", "action": "worlds" },
+    { "label": "SETTINGS", "action": "settings" }
+  ],
   "background_srgba": [0, 0, 0, 1],
   "panel_srgba": [0, 0, 0, 1],
   "title_srgba": [1, 1, 1, 1],
