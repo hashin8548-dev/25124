@@ -130,6 +130,9 @@ struct SettingsRenderDistanceValue;
 #[derive(Component)]
 struct SettingsLodDetailValue;
 
+#[derive(Component, Default)]
+struct MenuGlowState(bool);
+
 #[derive(Component, Clone, Copy)]
 struct MenuButtonColors {
     normal: Color,
@@ -880,6 +883,14 @@ fn setup_menu(
                                     border_normal: button_border_color,
                                     border_active: button_active_border_color,
                                 },
+                                MenuGlowState::default(),
+                                BoxShadow::new(
+                                    Color::srgba(1.0, 1.0, 1.0, 0.0),
+                                    Val::Px(0.0),
+                                    Val::Px(0.0),
+                                    Val::Px(0.0),
+                                    Val::Px(16.0),
+                                ),
                                 observe($observer),
                             ))
                             .with_children(|button| {
@@ -923,6 +934,14 @@ fn setup_menu(
                                 border_normal: button_border_color,
                                 border_active: button_active_border_color,
                             },
+                            MenuGlowState::default(),
+                            BoxShadow::new(
+                                Color::srgba(1.0, 1.0, 1.0, 0.0),
+                                Val::Px(0.0),
+                                Val::Px(0.0),
+                                Val::Px(0.0),
+                                Val::Px(16.0),
+                            ),
                             observe(handle_world_selection),
                         ))
                         .with_children(|button| {
@@ -977,6 +996,22 @@ fn setup_menu(
                     .find(|definition| definition.action == "settings")
                     .expect("validated home menu contains Settings");
                 home_action_button!(settings, 3, "settings", handle_navigation_action);
+
+                panel.spawn((
+                    MenuNotice,
+                    Text::new(""),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_description_size_px),
+                        ..default()
+                    },
+                    TextColor(notice_color),
+                    notice_colors,
+                    Node {
+                        width: Val::Percent(100.0),
+                        min_height: Val::Px(18.0),
+                        ..default()
+                    },
+                ));
 
                 panel.spawn((
                     Text::new("TAB / SHIFT+TAB  ·  ENTER SELECT"),
@@ -1118,6 +1153,18 @@ fn setup_menu(
                     Text::new("Changes apply live and are saved automatically."),
                     TextFont { font_size: FontSize::Px(menu.world_metadata_size_px), ..default() },
                     TextColor(subtitle_color),
+                ));
+                panel.spawn((
+                    MenuNotice,
+                    Text::new(""),
+                    TextFont { font_size: FontSize::Px(menu.world_description_size_px), ..default() },
+                    TextColor(notice_color),
+                    notice_colors,
+                    Node {
+                        width: Val::Percent(100.0),
+                        min_height: Val::Px(18.0),
+                        ..default()
+                    },
                 ));
 
                 panel.spawn((
@@ -2369,11 +2416,23 @@ fn update_button_styles(
             &MenuButtonColors,
             &mut BackgroundColor,
             &mut BorderColor,
+            Option<&mut MenuGlowState>,
+            Option<&mut BoxShadow>,
         ),
         With<Button>,
     >,
 ) {
-    for (entity, hovered, pressed, colors, mut background, mut border) in &mut buttons {
+    for (
+        entity,
+        hovered,
+        pressed,
+        colors,
+        mut background,
+        mut border,
+        glow_state,
+        shadow,
+    ) in &mut buttons
+    {
         let active =
             pressed || hovered.get() || (focus_visible.0 && input_focus.get() == Some(entity));
         background.0 = if active {
@@ -2386,6 +2445,19 @@ fn update_button_styles(
         } else {
             colors.border_normal
         });
+
+        if let (Some(mut glow_state), Some(mut shadow)) = (glow_state, shadow) {
+            if glow_state.0 != active {
+                *shadow = BoxShadow::new(
+                    Color::srgba(1.0, 1.0, 1.0, if active { 0.20 } else { 0.0 }),
+                    Val::Px(0.0),
+                    Val::Px(0.0),
+                    Val::Px(0.0),
+                    Val::Px(16.0),
+                );
+                glow_state.0 = active;
+            }
+        }
     }
 }
 
