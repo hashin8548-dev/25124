@@ -1,4 +1,4 @@
-use avian3d::prelude::{AngularVelocity, Forces};
+use avian3d::prelude::{AngularVelocity, Forces, LinearVelocity};
 use bevy::prelude::*;
 
 use super::{HumanBodyPart, HumanMotionLibrary, HumanPhysicsSettings, HumanPlayer, HumanRig};
@@ -45,7 +45,13 @@ pub fn drive_human_action_pose(
     settings: Option<Res<HumanPhysicsSettings>>,
     player: Option<Res<HumanPlayer>>,
     root_transforms: Query<&Transform>,
-    mut bodies: Query<(&HumanBodyPart, &Transform, &AngularVelocity, Forces)>,
+    mut bodies: Query<(
+        &HumanBodyPart,
+        &Transform,
+        &LinearVelocity,
+        &AngularVelocity,
+        Forces,
+    )>,
 ) {
     let (Some(mut action_state), Some(motions), Some(rig), Some(settings), Some(player)) =
         (action_state, motions, rig, settings, player)
@@ -91,7 +97,7 @@ pub fn drive_human_action_pose(
     let desired_root_rotation = heading * root_target.rotation_engine;
     let rotational_assist = &settings.temporary_assists.rotational_assistance;
 
-    for (part, transform, angular_velocity, mut forces) in &mut bodies {
+    for (part, transform, linear_velocity, angular_velocity, mut forces) in &mut bodies {
         let desired_rotation = if part.bone_name == "Root" {
             if !rotational_assist.enabled {
                 continue;
@@ -127,6 +133,22 @@ pub fn drive_human_action_pose(
                 settings.max_pose_torque_nm,
             )
         };
+
+        // Translate only non-root segments toward the action's calibrated body targets.
+        // Root translation is never commanded: equal-and-opposite joint/contact reactions
+        // determine how the character moves over the ground.
+        if part.bone_name != "Root" {
+            if let Some(target) = sampled.get(&part.bone_name) {
+                let root_relative = root_target.rotation_engine.inverse()
+                    * (target.center_engine - root_target.center_engine);
+                let desired_center = root_transform.translation + heading * root_relative;
+                let force = ((desired_center - transform.translation)
+                    * settings.pose_position_stiffness_n_per_m
+                    - linear_velocity.0 * settings.pose_position_damping_n_s_per_m)
+                    .clamp_length_max(settings.max_pose_force_n);
+                forces.apply_force(force);
+            }
+        }
 
         let torque = (axis * (stiffness * angle) - angular_velocity.0 * damping)
             .clamp_length_max(max_torque);
