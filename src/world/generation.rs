@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use bevy::prelude::{DVec3, Resource};
+use bevy::prelude::*;
 use anyhow::{Result, ensure};
 
 use crate::config::{ChunkFile, ChunkLayer, ChunkSource, WorldGeneration};
@@ -187,8 +187,8 @@ mod tests {
     #[test]
     fn generator_creates_flat_interior_and_continuous_perimeter() {
         let recipe = generation(256);
-        let sources = platform_sources_near(DVec3::ZERO, &recipe, 0);
-        let center = sources.iter().find(|source| source.coordinate == [0, 0, 0]).unwrap();
+        let sources = platform_sources_near(DVec3::new(16.0, 0.0, -112.0), &recipe, 0);
+        let center = sources.iter().find(|source| source.coordinate == [0, 0, -4]).unwrap();
         let chunk = generate_platform_chunk(center, &recipe).unwrap();
 
         assert_eq!(chunk.dimensions, [32, 8, 32]);
