@@ -31,7 +31,15 @@ pub struct MotionTrack {
 #[derive(Debug, Deserialize)]
 struct HumanManifest {
     schema_version: u32,
-    actions: BTreeMap<String, ActionReference>,
+    actions: ActionCatalog,
+}
+
+#[derive(Debug, Deserialize)]
+struct ActionCatalog {
+    directory: String,
+    format: String,
+    #[serde(flatten)]
+    entries: BTreeMap<String, ActionReference>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,12 +69,22 @@ impl HumanMotionLibrary {
             manifest.schema_version
         );
         ensure!(
-            !manifest.actions.is_empty(),
+            manifest.actions.directory == "human/actions",
+            "unsupported human action directory '{}'",
+            manifest.actions.directory
+        );
+        ensure!(
+            manifest.actions.format == "external_body_motion_targets",
+            "unsupported human action format '{}'",
+            manifest.actions.format
+        );
+        ensure!(
+            !manifest.actions.entries.is_empty(),
             "human manifest has no actions"
         );
 
         let mut actions = BTreeMap::new();
-        for (action_name, reference) in manifest.actions {
+        for (action_name, reference) in manifest.actions.entries {
             let relative = PathBuf::from(&reference.file);
             ensure!(
                 !relative.is_absolute(),
@@ -265,6 +283,18 @@ mod tests {
             include_str!("../../data/human/actions/kneel.json"),
         ),
     ];
+
+    #[test]
+    fn actual_human_manifest_deserializes_with_action_metadata() {
+        let manifest: super::HumanManifest =
+            serde_json::from_str(include_str!("../../data/human/human.json")).unwrap();
+        assert_eq!(manifest.schema_version, 1);
+        assert_eq!(manifest.actions.directory, "human/actions");
+        assert_eq!(manifest.actions.format, "external_body_motion_targets");
+        assert_eq!(manifest.actions.entries.len(), 8);
+        assert!(manifest.actions.entries.contains_key("walk"));
+        assert!(manifest.actions.entries.contains_key("crouched_idle"));
+    }
 
     #[test]
     fn every_supplied_action_has_valid_body_tracks() {
