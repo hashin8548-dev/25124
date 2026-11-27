@@ -32,3 +32,8 @@ The initial values in `human.json` enable a configurable jump-launch impulse and
 ## Camera and controls
 
 The requested input map and trailing over-the-shoulder camera are data-described in `human.json`. The camera follows the dynamic root, sits slightly above and behind the character, uses a wide perspective field of view, and displays one small center dot rather than a reticle or multi-line crosshair.
+
+
+## Authored root motion measurement
+
+The supplied Root tracks do not encode meaningful horizontal displacement. The maximum horizontal Root variation across the eight supplied actions is approximately 2 mm (jump); walk, run, crouch and climb have zero horizontal Root displacement in the source data. Locomotion must emerge through physical limb actuation and contact with the ground or wall, not a fixed root velocity.
