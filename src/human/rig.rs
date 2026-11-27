@@ -234,6 +234,10 @@ impl HumanRig {
         self.marker_names.iter().map(String::as_str)
     }
 
+    pub fn bone_names(&self) -> impl Iterator<Item = &str> {
+        self.bones.keys().map(String::as_str)
+    }
+
     pub fn bone(&self, name: &str) -> Option<&RigBone> {
         self.bones.get(name)
     }
