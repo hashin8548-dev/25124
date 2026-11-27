@@ -589,7 +589,8 @@ pub fn spawn_human_player(
     // world zero while parenting it to the dynamic Root body at its physical center.
     let root_pose = &target_pose["Root"];
     let root_rotation_inverse = root_pose.rotation_engine.inverse();
-    let visual_local_translation = root_rotation_inverse * -root_pose.center_engine;
+    let root_center_relative = (root_pose.center_engine.as_dvec3() - origin.0).as_vec3();
+    let visual_local_translation = root_rotation_inverse * -root_center_relative;
     let scene = asset_server.load(GltfAssetLabel::Scene(0).from_asset("human/Character_Rig.glb"));
     commands.entity(bodies["Root"]).with_children(|children| {
         children.spawn((
