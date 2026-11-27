@@ -9,7 +9,7 @@ use avian3d::prelude::{
 use bevy::{gltf::prelude::GltfAssetLabel, prelude::*};
 use serde::Deserialize;
 
-use crate::{config::RuntimeConfig, world::WorldOrigin};
+use crate::world::WorldOrigin;
 
 use super::{HumanActionState, HumanMotionLibrary, HumanRig};
 
@@ -418,7 +418,6 @@ impl HumanPhysicsSettings {
 
 pub fn spawn_human_player(
     mut commands: Commands,
-    config: Res<RuntimeConfig>,
     origin: Res<WorldOrigin>,
     rig: Option<Res<HumanRig>>,
     motions: Option<Res<HumanMotionLibrary>>,
