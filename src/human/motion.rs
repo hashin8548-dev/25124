@@ -331,6 +331,30 @@ mod tests {
     }
 
     #[test]
+    fn locomotion_and_jump_root_tracks_contain_authored_vertical_motion() {
+        for (name, source, minimum, maximum) in [
+            ("walk", ACTIONS[0].1, 0.09_f32, 0.12_f32),
+            ("run", ACTIONS[1].1, 0.13_f32, 0.16_f32),
+            ("crouch", ACTIONS[2].1, 0.14_f32, 0.17_f32),
+            ("jump", ACTIONS[6].1, 0.25_f32, 0.31_f32),
+        ] {
+            let document: super::ActionDocument = serde_json::from_str(source).unwrap();
+            let action = HumanAction::from_document(name, document, true).unwrap();
+            let root = action.track("Root").unwrap();
+            let initial_z = root.transform[0][11];
+            let maximum_vertical_delta = root
+                .transform
+                .iter()
+                .map(|matrix| (matrix[11] - initial_z).abs())
+                .fold(0.0_f32, f32::max);
+            assert!(
+                (minimum..=maximum).contains(&maximum_vertical_delta),
+                "action '{name}' expected Root vertical motion in [{minimum}, {maximum}], got {maximum_vertical_delta}"
+            );
+        }
+    }
+
+    #[test]
     fn tracks_keep_independent_timestamps() {
         let document: super::ActionDocument = serde_json::from_str(ACTIONS[0].1).unwrap();
         let action = HumanAction::from_document("walk", document, true).unwrap();
