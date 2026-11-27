@@ -3,8 +3,8 @@ use std::{collections::BTreeMap, fs, path::Path};
 use anyhow::{Context, Result, ensure};
 use avian3d::prelude::{
     AngularVelocity, Collider, ColliderDensity, CollisionEventsEnabled, Friction,
-    JointCollisionDisabled, JointDamping, LinearVelocity, Restitution, RevoluteJoint,
-    RigidBody, SphericalJoint,
+    JointCollisionDisabled, JointDamping, LinearVelocity, Restitution, RevoluteJoint, RigidBody,
+    SphericalJoint,
 };
 use bevy::{gltf::prelude::GltfAssetLabel, prelude::*};
 use serde::Deserialize;
@@ -84,7 +84,10 @@ impl HumanPhysicsSettings {
             .with_context(|| format!("reading human physics settings {}", path.display()))?;
         let manifest: HumanManifest = serde_json::from_str(&text)
             .with_context(|| format!("parsing human physics settings {}", path.display()))?;
-        ensure!(manifest.schema_version == 1, "unsupported human manifest schema version");
+        ensure!(
+            manifest.schema_version == 1,
+            "unsupported human manifest schema version"
+        );
         let source = manifest.physics;
         ensure!(
             source.density_kg_m3.is_finite() && source.density_kg_m3 > 0.0,
@@ -126,7 +129,10 @@ impl HumanPhysicsSettings {
             ("neck swing", limits.neck_swing_rad),
             ("neck twist", limits.neck_twist_rad),
         ] {
-            ensure!(value.is_finite() && (0.0..=std::f32::consts::PI).contains(&value), "human {name} limit is invalid");
+            ensure!(
+                value.is_finite() && (0.0..=std::f32::consts::PI).contains(&value),
+                "human {name} limit is invalid"
+            );
         }
         ensure!(
             limits.knee_min_rad.is_finite()
@@ -195,36 +201,32 @@ pub fn spawn_human_player(
             error!("Human body track '{name}' has no target pose");
             return;
         };
-        let translation = (
-            Vec3::from_array(pose.center_engine.to_array())
-                .as_dvec3()
-                - origin.0
-        )
-        .as_vec3();
+        let translation =
+            (Vec3::from_array(pose.center_engine.to_array()).as_dvec3() - origin.0).as_vec3();
         let collider = Collider::capsule(
             pose.collision.radius_m,
             pose.collision.capsule_segment_length_m,
         );
         let mut body_commands = commands.spawn((
-                Name::new(format!("Human::{name}")),
-                HumanBodyPart {
-                    bone_name: name.to_owned(),
-                },
-                RigidBody::Dynamic,
-                collider,
-                ColliderDensity(settings.density_kg_m3),
-                Friction::new(settings.dynamic_friction)
-                    .with_static_coefficient(settings.static_friction),
-                Restitution::new(settings.restitution),
-                CollisionEventsEnabled,
-                LinearVelocity(Vec3::ZERO),
-                AngularVelocity(Vec3::ZERO),
-                Transform {
-                    translation,
-                    rotation: pose.rotation_engine,
-                    ..default()
-                },
-            ));
+            Name::new(format!("Human::{name}")),
+            HumanBodyPart {
+                bone_name: name.to_owned(),
+            },
+            RigidBody::Dynamic,
+            collider,
+            ColliderDensity(settings.density_kg_m3),
+            Friction::new(settings.dynamic_friction)
+                .with_static_coefficient(settings.static_friction),
+            Restitution::new(settings.restitution),
+            CollisionEventsEnabled,
+            LinearVelocity(Vec3::ZERO),
+            AngularVelocity(Vec3::ZERO),
+            Transform {
+                translation,
+                rotation: pose.rotation_engine,
+                ..default()
+            },
+        ));
         if name == "Root" {
             body_commands.insert(HumanPlayerRoot);
         }
@@ -304,8 +306,8 @@ pub fn spawn_human_player(
             } else {
                 (limits.spine_swing_rad, limits.spine_twist_rad)
             };
-            let local_twist_axis = parent_pose.rotation_engine.inverse()
-                * (parent_pose.rotation_engine * Vec3::Y);
+            let local_twist_axis =
+                parent_pose.rotation_engine.inverse() * (parent_pose.rotation_engine * Vec3::Y);
             commands.spawn((
                 Name::new(format!("HumanJoint::{parent_name}::{child_name}")),
                 SphericalJoint::new(parent_entity, child_entity)
