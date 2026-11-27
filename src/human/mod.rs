@@ -9,8 +9,7 @@ pub use actuation::HumanActionState;
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
 pub use ragdoll::{
     HumanBodyPart, HumanCameraSettings, HumanControlSettings, HumanPhysicsSettings, HumanPlayer,
-    HumanPlayerRoot,
-    HumanSkinnedSceneRoot,
+    HumanPlayerRoot, HumanSkinnedSceneRoot,
 };
 pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
 

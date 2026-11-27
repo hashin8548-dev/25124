@@ -4,9 +4,7 @@ use bevy::prelude::*;
 
 use crate::world::WorldOrigin;
 
-use super::{
-    HumanActionState, HumanBodyPart, HumanMotionLibrary, HumanRig, HumanSkinnedSceneRoot,
-};
+use super::{HumanActionState, HumanBodyPart, HumanMotionLibrary, HumanRig, HumanSkinnedSceneRoot};
 
 /// Mirrors solver-owned body transforms into the actual skinned GLB hierarchy.
 /// Physics segments are authoritative for body bones; helper/tool bones use calibrated
@@ -87,8 +85,7 @@ pub fn sync_human_skinned_mesh(
 
     // Convert action/rest matrices from source Z-up to engine Y-up and then into the
     // current floating-origin coordinate frame used by the physics world.
-    let source_to_engine =
-        Mat4::from_quat(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2));
+    let source_to_engine = Mat4::from_quat(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2));
     let engine_to_source = source_to_engine.inverse();
     let origin_offset = origin.0.as_vec3();
     let convert_source_world = |mut matrix: Mat4| {
@@ -113,8 +110,7 @@ pub fn sync_human_skinned_mesh(
                 continue;
             };
             let center_offset = Vec3::from_array(geometry.center_offset_bone_m);
-            let bone_head =
-                body_transform.translation - body_transform.rotation * center_offset;
+            let bone_head = body_transform.translation - body_transform.rotation * center_offset;
             desired_world.insert(
                 name.to_owned(),
                 Mat4::from_rotation_translation(body_transform.rotation, bone_head),

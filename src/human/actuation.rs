@@ -105,33 +105,28 @@ pub fn drive_human_action_pose(
     let heading = Quat::from_rotation_y(heading_yaw);
     let desired_root_rotation = heading * root_target.rotation_engine;
     let rotational_assist = &settings.temporary_assists.rotational_assistance;
-    let jump_impulse = if action_state.jump_launch_pending
-        && settings.temporary_assists.jump_launch.enabled
-    {
-        rig.bone("Root")
-            .and_then(|bone| bone.collision_geometry.as_ref())
-            .map(|geometry| {
-                let radius = geometry.radius_m;
-                let segment = geometry.capsule_segment_length_m;
-                let volume = std::f32::consts::PI * radius * radius * segment
-                    + (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3);
-                let estimated_root_mass = volume * settings.density_kg_m3;
-                Vec3::Y
-                    * estimated_root_mass
-                    * settings.temporary_assists.jump_launch.launch_speed_m_s
-            })
-    } else {
-        None
-    };
+    let jump_impulse =
+        if action_state.jump_launch_pending && settings.temporary_assists.jump_launch.enabled {
+            rig.bone("Root")
+                .and_then(|bone| bone.collision_geometry.as_ref())
+                .map(|geometry| {
+                    let radius = geometry.radius_m;
+                    let segment = geometry.capsule_segment_length_m;
+                    let volume = std::f32::consts::PI * radius * radius * segment
+                        + (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3);
+                    let estimated_root_mass = volume * settings.density_kg_m3;
+                    Vec3::Y
+                        * estimated_root_mass
+                        * settings.temporary_assists.jump_launch.launch_speed_m_s
+                })
+        } else {
+            None
+        };
     let wall_grip_force = if action_state.wall_grip_active
         && action_state.wall_grip_normal.is_finite()
         && action_state.wall_grip_normal.length_squared() > 0.9
     {
-        Some(
-            -action_state.wall_grip_normal.normalize()
-                * settings.climb_contact_push_force_n
-                * 0.5,
-        )
+        Some(-action_state.wall_grip_normal.normalize() * settings.climb_contact_push_force_n * 0.5)
     } else {
         None
     };

@@ -319,9 +319,8 @@ mod tests {
             let first_x = first[3];
             let first_y = first[7];
             for matrix in &root.transform {
-                let horizontal_delta = ((matrix[3] - first_x).powi(2)
-                    + (matrix[7] - first_y).powi(2))
-                    .sqrt();
+                let horizontal_delta =
+                    ((matrix[3] - first_x).powi(2) + (matrix[7] - first_y).powi(2)).sqrt();
                 assert!(
                     horizontal_delta <= 0.003,
                     "action '{name}' unexpectedly contains {:.6} m horizontal Root travel",

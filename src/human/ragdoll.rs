@@ -616,7 +616,6 @@ pub fn spawn_human_player(
     );
 }
 
-
 /// Remove the player assembly when leaving Simulation so a newly selected world
 /// receives a fresh dynamic ragdoll and action state.
 pub fn despawn_human_player(
