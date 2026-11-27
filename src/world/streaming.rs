@@ -348,8 +348,8 @@ pub(super) fn update_chunk_streaming(
         })
         .collect();
     candidates.sort_by(|left, right| {
-        distance_to_chunk_aabb(camera_position, left)
-            .total_cmp(&distance_to_chunk_aabb(camera_position, right))
+        distance_to_chunk_aabb(camera_position, left, world_origin.0)
+            .total_cmp(&distance_to_chunk_aabb(camera_position, right, world_origin.0))
     });
 
     let available = config
@@ -386,7 +386,7 @@ pub(super) fn update_chunk_streaming(
         let Some((source, chunk)) = state.ready.pop_front() else {
             break;
         };
-        if distance_to_chunk_aabb(camera_position, &source) > chunk_radius_m(&source, load_limit) {
+        if distance_to_chunk_aabb(camera_position, &source, world_origin.0) > chunk_radius_m(&source, load_limit) {
             continue;
         }
         spawned_chunks_this_frame += 1;
