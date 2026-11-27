@@ -292,14 +292,19 @@ impl HumanPhysicsSettings {
                 .get(name)
                 .and_then(serde_json::Value::as_array)
                 .with_context(|| format!("human camera setting '{name}' must be a 3D vector"))?;
-            ensure!(values.len() == 3, "human camera setting '{name}' must have three components");
+            ensure!(
+                values.len() == 3,
+                "human camera setting '{name}' must have three components"
+            );
             let mut result = [0.0; 3];
             for (index, value) in values.iter().enumerate() {
                 result[index] = value
                     .as_f64()
                     .map(|number| number as f32)
                     .filter(|number| number.is_finite())
-                    .with_context(|| format!("human camera setting '{name}[{index}]' must be finite"))?;
+                    .with_context(|| {
+                        format!("human camera setting '{name}[{index}]' must be finite")
+                    })?;
             }
             Ok(result)
         };

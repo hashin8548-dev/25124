@@ -20,14 +20,18 @@ pub(super) fn follow_player_camera(
     player: Option<Res<HumanPlayer>>,
     mut action_state: Option<ResMut<HumanActionState>>,
     root: Query<&Transform, With<HumanPlayerRoot>>,
-    mut cameras: Query<(&mut Transform, &mut Projection, &mut FreeFlyCamera, &mut CameraSpring)>,
+    mut cameras: Query<(
+        &mut Transform,
+        &mut Projection,
+        &mut FreeFlyCamera,
+        &mut CameraSpring,
+    )>,
     time: Res<Time>,
 ) {
     if *mode.get() != AppMode::Simulation || menu.visible {
         return;
     }
-    let (Some(settings), Some(player), Some(mut action_state)) =
-        (settings, player, action_state)
+    let (Some(settings), Some(player), Some(mut action_state)) = (settings, player, action_state)
     else {
         return;
     };

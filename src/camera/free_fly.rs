@@ -33,7 +33,9 @@ pub(super) fn spawn_camera(
             yaw_radians: yaw,
             pitch_radians: pitch,
         },
-        CameraSpring { velocity: Vec3::ZERO },
+        CameraSpring {
+            velocity: Vec3::ZERO,
+        },
         Transform {
             translation: (DVec3::from_array(camera.spawn_position_m.map(f64::from)) - origin.0)
                 .as_vec3(),
