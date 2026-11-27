@@ -67,8 +67,7 @@ pub fn sync_human_skinned_mesh(
     }
 
     // Convert parent-relative action targets into the Y-up basis used by the GLB export.
-    let source_to_engine =
-        Mat4::from_quat(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2));
+    let source_to_engine = Mat4::from_quat(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2));
     let engine_to_source = source_to_engine.inverse();
     let mut desired_world = BTreeMap::<String, Mat4>::new();
     let mut pending: BTreeSet<String> = rig.bone_names().map(str::to_owned).collect();
@@ -104,7 +103,8 @@ pub fn sync_human_skinned_mesh(
                     continue;
                 };
                 let center_offset = Vec3::from_array(geometry.center_offset_bone_m);
-                let bone_head = body_transform.translation - body_transform.rotation * center_offset;
+                let bone_head =
+                    body_transform.translation - body_transform.rotation * center_offset;
                 Mat4::from_rotation_translation(body_transform.rotation, bone_head)
             } else {
                 let Some(source_local) = source_local_pose.get(&name) else {
@@ -114,7 +114,11 @@ pub fn sync_human_skinned_mesh(
                 parent_world * engine_local
             };
 
-            if !desired.to_cols_array().iter().all(|value| value.is_finite()) {
+            if !desired
+                .to_cols_array()
+                .iter()
+                .all(|value| value.is_finite())
+            {
                 continue;
             }
             desired_world.insert(name.clone(), desired);

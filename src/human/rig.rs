@@ -259,11 +259,7 @@ impl HumanRig {
             ) {
                 (Some(track), Some(reference)) => {
                     let idle_reference = matrix_from_flat_row_major(reference);
-                    let sampled = track.sample_matrix(
-                        elapsed_seconds,
-                        action.looping,
-                        reverse,
-                    );
+                    let sampled = track.sample_matrix(elapsed_seconds, action.looping, reverse);
                     rest_local * idle_reference.inverse() * sampled
                 }
                 (Some(_), None) => {
@@ -291,8 +287,7 @@ impl HumanRig {
         elapsed_seconds: f32,
         reverse: bool,
     ) -> Result<BTreeMap<String, Mat4>> {
-        let local_poses =
-            self.sample_calibrated_local_pose(action, elapsed_seconds, reverse)?;
+        let local_poses = self.sample_calibrated_local_pose(action, elapsed_seconds, reverse)?;
         let mut world = BTreeMap::new();
         let mut pending: BTreeSet<String> = self.bones.keys().cloned().collect();
 
