@@ -242,6 +242,44 @@ impl HumanRig {
         self.bones.get(name)
     }
 
+    /// Samples calibrated transforms relative to each bone's actual parent.
+    /// Returned matrices remain in the source rig's Z-up coordinate basis.
+    pub fn sample_calibrated_local_pose(
+        &self,
+        action: &HumanAction,
+        elapsed_seconds: f32,
+        reverse: bool,
+    ) -> Result<BTreeMap<String, Mat4>> {
+        let mut local_poses = BTreeMap::new();
+        for (name, bone) in &self.bones {
+            let rest_local = matrix_from_rows(&bone.matrix_parent_local);
+            let local = match (
+                action.track(name),
+                bone.action_reference_parent_local.as_ref(),
+            ) {
+                (Some(track), Some(reference)) => {
+                    let idle_reference = matrix_from_flat_row_major(reference);
+                    let sampled = track.sample_matrix(
+                        elapsed_seconds,
+                        action.looping,
+                        reverse,
+                    );
+                    rest_local * idle_reference.inverse() * sampled
+                }
+                (Some(_), None) => {
+                    anyhow::bail!("human rig bone '{name}' has no idle calibration transform")
+                }
+                (None, _) => rest_local,
+            };
+            ensure!(
+                matrix_is_finite(local),
+                "calibrated local transform for bone '{name}' is not finite"
+            );
+            local_poses.insert(name.clone(), local);
+        }
+        Ok(local_poses)
+    }
+
     /// Calibrates each action track's idle matrix to its FBX rest-local matrix.
     ///
     /// The source files share bone names but differ slightly in local rest conventions.
@@ -253,6 +291,8 @@ impl HumanRig {
         elapsed_seconds: f32,
         reverse: bool,
     ) -> Result<BTreeMap<String, Mat4>> {
+        let local_poses =
+            self.sample_calibrated_local_pose(action, elapsed_seconds, reverse)?;
         let mut world = BTreeMap::new();
         let mut pending: BTreeSet<String> = self.bones.keys().cloned().collect();
 
@@ -270,26 +310,7 @@ impl HumanRig {
                     }
                     None => self.armature_world,
                 };
-                let rest_local = matrix_from_rows(&bone.matrix_parent_local);
-                let local = match (
-                    action.track(&name),
-                    bone.action_reference_parent_local.as_ref(),
-                ) {
-                    (Some(track), Some(reference)) => {
-                        let idle_reference = matrix_from_flat_row_major(reference);
-                        let sampled = track.sample_matrix(elapsed_seconds, action.looping, reverse);
-                        rest_local * idle_reference.inverse() * sampled
-                    }
-                    (Some(_), None) => {
-                        anyhow::bail!("human rig bone '{name}' has no idle calibration transform")
-                    }
-                    (None, _) => rest_local,
-                };
-                ensure!(
-                    matrix_is_finite(local),
-                    "calibrated target transform for bone '{name}' is not finite"
-                );
-                world.insert(name.clone(), parent_world * local);
+                world.insert(name.clone(), parent_world * local_poses[&name]);
                 pending.remove(&name);
                 progressed = true;
             }
