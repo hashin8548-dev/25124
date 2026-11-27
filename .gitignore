@@ -5,3 +5,5 @@
 worlds/**/state.json
 worlds/**/state.json.tmp
 worlds/**/state.json.bak
+.25124-preferences.json
+.25124-preferences.json.tmp
