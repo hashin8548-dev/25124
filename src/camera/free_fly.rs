@@ -28,7 +28,8 @@ pub(super) fn spawn_camera(
             pitch_radians: pitch,
         },
         Transform {
-            translation: (DVec3::from_array(camera.spawn_position_m.map(f64::from)) - origin.0).as_vec3(),
+            translation: (DVec3::from_array(camera.spawn_position_m.map(f64::from)) - origin.0)
+                .as_vec3(),
             rotation: Quat::from_euler(EulerRot::YXZ, yaw, pitch, 0.0),
             ..default()
         },
@@ -120,7 +121,8 @@ pub(super) fn sync_camera_settings(
     for (mut transform, mut controller) in &mut cameras {
         controller.yaw_radians = yaw;
         controller.pitch_radians = pitch;
-        transform.translation = (DVec3::from_array(camera.spawn_position_m.map(f64::from)) - origin.0).as_vec3();
+        transform.translation =
+            (DVec3::from_array(camera.spawn_position_m.map(f64::from)) - origin.0).as_vec3();
         transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw, pitch, 0.0);
     }
 }
