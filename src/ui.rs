@@ -7,12 +7,12 @@ use std::{
 
 use bevy::{
     app::AppExit,
-    math::DVec3,
     input::mouse::{MouseScrollUnit, MouseWheel},
     input_focus::{
         FocusCause, InputFocus, InputFocusVisible,
         tab_navigation::{TabGroup, TabIndex, TabNavigationPlugin},
     },
+    math::DVec3,
     picking::hover::{HoverMap, Hovered},
     prelude::*,
     text::{FontSize, TextFont},
@@ -393,10 +393,22 @@ fn default_world_metadata_max_fields() -> usize {
 
 fn default_home_buttons() -> Vec<MenuButtonDefinition> {
     vec![
-        MenuButtonDefinition { label: "CONTINUE".to_owned(), action: "continue".to_owned() },
-        MenuButtonDefinition { label: "NEW WORLD".to_owned(), action: "create_world".to_owned() },
-        MenuButtonDefinition { label: "WORLDS".to_owned(), action: "worlds".to_owned() },
-        MenuButtonDefinition { label: "SETTINGS".to_owned(), action: "settings".to_owned() },
+        MenuButtonDefinition {
+            label: "CONTINUE".to_owned(),
+            action: "continue".to_owned(),
+        },
+        MenuButtonDefinition {
+            label: "NEW WORLD".to_owned(),
+            action: "create_world".to_owned(),
+        },
+        MenuButtonDefinition {
+            label: "WORLDS".to_owned(),
+            action: "worlds".to_owned(),
+        },
+        MenuButtonDefinition {
+            label: "SETTINGS".to_owned(),
+            action: "settings".to_owned(),
+        },
     ]
 }
 
@@ -448,7 +460,10 @@ fn load_user_preferences(project_root: &Path) -> UserPreferences {
     let preferences: UserPreferences = match serde_json::from_str(&source) {
         Ok(preferences) => preferences,
         Err(error) => {
-            warn!("Preferences '{}' are invalid: {error}; using defaults", path.display());
+            warn!(
+                "Preferences '{}' are invalid: {error}; using defaults",
+                path.display()
+            );
             return UserPreferences::default();
         }
     };
@@ -456,7 +471,10 @@ fn load_user_preferences(project_root: &Path) -> UserPreferences {
         || !(2..=8).contains(&preferences.render_distance_chunks)
         || preferences.lod_detail > 2
     {
-        warn!("Preferences '{}' contain unsupported or out-of-range values; using defaults", path.display());
+        warn!(
+            "Preferences '{}' contain unsupported or out-of-range values; using defaults",
+            path.display()
+        );
         return UserPreferences::default();
     }
     preferences
@@ -473,8 +491,9 @@ fn save_user_preferences(project_root: &Path, preferences: &UserPreferences) -> 
         // Windows does not replace an existing destination with rename; preserve the
         // temporary file until the previous preferences file has been removed.
         if path.exists() {
-            fs::remove_file(&path)
-                .map_err(|error| format!("could not replace preferences after '{first_error}': {error}"))?;
+            fs::remove_file(&path).map_err(|error| {
+                format!("could not replace preferences after '{first_error}': {error}")
+            })?;
             fs::rename(&temporary_path, &path)
                 .map_err(|error| format!("could not commit preferences: {error}"))?;
         } else {
@@ -493,12 +512,16 @@ fn preferred_world_manifest(
     let relative = Path::new(preferences.last_world_manifest.as_deref()?);
     if relative.as_os_str().is_empty()
         || relative.is_absolute()
-        || !relative.components().all(|component| matches!(component, std::path::Component::Normal(_)))
+        || !relative
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
     {
         return None;
     }
     let candidate = project_root.join(relative);
-    library.entries.iter()
+    library
+        .entries
+        .iter()
         .find(|entry| entry.manifest_path == candidate)
         .map(|entry| entry.manifest_path.clone())
 }
@@ -522,7 +545,8 @@ fn remember_world_manifest(
     manifest_path: &Path,
     preferences: &mut UserPreferences,
 ) -> Result<(), String> {
-    let relative = manifest_path.strip_prefix(project_root)
+    let relative = manifest_path
+        .strip_prefix(project_root)
         .map_err(|error| format!("world manifest is outside the project root: {error}"))?;
     preferences.last_world_manifest = Some(relative.to_string_lossy().replace('\\', "/"));
     save_user_preferences(project_root, preferences)
@@ -754,14 +778,22 @@ fn setup_menu(
             .world_state
             .parent()
             .map(|directory| directory.join("world.json"))
-            .filter(|path| library.entries.iter().any(|entry| entry.manifest_path == *path))
+            .filter(|path| {
+                library
+                    .entries
+                    .iter()
+                    .any(|entry| entry.manifest_path == *path)
+            })
         {
             if let Err(error) = remember_world_manifest(
                 &config.paths.project_root,
                 &manifest_path,
                 &mut preferences,
             ) {
-                warn!("Could not remember command-line world '{}': {error}", manifest_path.display());
+                warn!(
+                    "Could not remember command-line world '{}': {error}",
+                    manifest_path.display()
+                );
             }
         }
     }
@@ -925,7 +957,9 @@ fn setup_menu(
                     }};
                 }
 
-                let continue_definition = menu.home_buttons.iter()
+                let continue_definition = menu
+                    .home_buttons
+                    .iter()
                     .find(|definition| definition.action == "continue")
                     .expect("validated home menu contains Continue");
                 if let Some(last_world_manifest) = last_world_manifest.clone() {
@@ -1001,17 +1035,23 @@ fn setup_menu(
                         });
                 }
 
-                let new_world = menu.home_buttons.iter()
+                let new_world = menu
+                    .home_buttons
+                    .iter()
                     .find(|definition| definition.action == "create_world")
                     .expect("validated home menu contains New World");
                 home_action_button!(new_world, 1, "create_world", handle_create_world);
 
-                let worlds = menu.home_buttons.iter()
+                let worlds = menu
+                    .home_buttons
+                    .iter()
                     .find(|definition| definition.action == "worlds")
                     .expect("validated home menu contains Worlds");
                 home_action_button!(worlds, 2, "worlds", handle_navigation_action);
 
-                let settings = menu.home_buttons.iter()
+                let settings = menu
+                    .home_buttons
+                    .iter()
                     .find(|definition| definition.action == "settings")
                     .expect("validated home menu contains Settings");
                 home_action_button!(settings, 3, "settings", handle_navigation_action);
@@ -1085,100 +1125,179 @@ fn setup_menu(
                     TextColor(subtitle_color),
                 ));
 
-                panel.spawn(Node {
-                    width: Val::Percent(100.0),
-                    height: Val::Px(1.0),
-                    margin: UiRect::vertical(Val::Px(12.0)),
-                    ..default()
-                }).insert(BackgroundColor(panel_border_color));
+                panel
+                    .spawn(Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(1.0),
+                        margin: UiRect::vertical(Val::Px(12.0)),
+                        ..default()
+                    })
+                    .insert(BackgroundColor(panel_border_color));
 
-                panel.spawn((
-                    Node {
+                panel
+                    .spawn(Node {
                         width: Val::Percent(100.0),
                         min_height: Val::Px(64.0),
                         flex_direction: FlexDirection::Row,
                         align_items: AlignItems::Center,
                         column_gap: Val::Px(12.0),
                         ..default()
-                    },
-                ))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("RENDER DISTANCE"),
-                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
-                        TextColor(button_text_color),
-                        Node { flex_grow: 1.0, ..default() },
-                    ));
-                    row.spawn((
-                        SettingsRenderDistanceValue,
-                        Text::new(""),
-                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
-                        TextColor(button_text_color),
-                        Node { width: Val::Px(104.0), ..default() },
-                    ));
-                    for (label, action, index) in [("−", "render_distance_down", 0), ("+", "render_distance_up", 1)] {
+                    })
+                    .with_children(|row| {
                         row.spawn((
-                            Button, TabIndex(4 + index), Hovered::default(),
-                            Node { width: Val::Px(42.0), height: Val::Px(42.0), border: UiRect::all(Val::Px(1.0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, ..default() },
-                            BorderColor::all(button_border_color), BackgroundColor(button_color),
-                            MenuButtonColors { normal: button_color, hovered: button_hover_color, border_normal: button_border_color, border_active: button_active_border_color },
-                            SettingAction(action.to_owned()), observe(handle_setting_action),
-                        ))
-                        .with_children(|button| {
-                            button.spawn((Text::new(label), TextFont { font_size: FontSize::Px(menu.button_font_size_px + 4.0), ..default() }, TextColor(button_text_color)));
-                        });
-                    }
+                            Text::new("RENDER DISTANCE"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                flex_grow: 1.0,
+                                ..default()
+                            },
+                        ));
+                        row.spawn((
+                            SettingsRenderDistanceValue,
+                            Text::new(""),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                width: Val::Px(104.0),
+                                ..default()
+                            },
+                        ));
+                        for (label, action, index) in [
+                            ("−", "render_distance_down", 0),
+                            ("+", "render_distance_up", 1),
+                        ] {
+                            row.spawn((
+                                Button,
+                                TabIndex(4 + index),
+                                Hovered::default(),
+                                Node {
+                                    width: Val::Px(42.0),
+                                    height: Val::Px(42.0),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::Center,
+                                    ..default()
+                                },
+                                BorderColor::all(button_border_color),
+                                BackgroundColor(button_color),
+                                MenuButtonColors {
+                                    normal: button_color,
+                                    hovered: button_hover_color,
+                                    border_normal: button_border_color,
+                                    border_active: button_active_border_color,
+                                },
+                                SettingAction(action.to_owned()),
+                                observe(handle_setting_action),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new(label),
+                                    TextFont {
+                                        font_size: FontSize::Px(menu.button_font_size_px + 4.0),
+                                        ..default()
+                                    },
+                                    TextColor(button_text_color),
+                                ));
+                            });
+                        }
+                    });
 
-                });
-
-                panel.spawn((
-                    Node {
+                panel
+                    .spawn(Node {
                         width: Val::Percent(100.0),
                         min_height: Val::Px(64.0),
                         flex_direction: FlexDirection::Row,
                         align_items: AlignItems::Center,
                         column_gap: Val::Px(12.0),
                         ..default()
-                    },
-                ))
-                .with_children(|row| {
-                    row.spawn((
-                        Text::new("LOD DETAIL"),
-                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
-                        TextColor(button_text_color),
-                        Node { flex_grow: 1.0, ..default() },
-                    ));
-                    row.spawn((
-                        SettingsLodDetailValue,
-                        Text::new(""),
-                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
-                        TextColor(button_text_color),
-                        Node { width: Val::Px(130.0), ..default() },
-                    ));
-                    for (label, action, index) in [("−", "lod_detail_down", 0), ("+", "lod_detail_up", 1)] {
+                    })
+                    .with_children(|row| {
                         row.spawn((
-                            Button, TabIndex(6 + index), Hovered::default(),
-                            Node { width: Val::Px(42.0), height: Val::Px(42.0), border: UiRect::all(Val::Px(1.0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, ..default() },
-                            BorderColor::all(button_border_color), BackgroundColor(button_color),
-                            MenuButtonColors { normal: button_color, hovered: button_hover_color, border_normal: button_border_color, border_active: button_active_border_color },
-                            SettingAction(action.to_owned()), observe(handle_setting_action),
-                        ))
-                        .with_children(|button| {
-                            button.spawn((Text::new(label), TextFont { font_size: FontSize::Px(menu.button_font_size_px + 4.0), ..default() }, TextColor(button_text_color)));
-                        });
-                    }
-
-                });
+                            Text::new("LOD DETAIL"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                flex_grow: 1.0,
+                                ..default()
+                            },
+                        ));
+                        row.spawn((
+                            SettingsLodDetailValue,
+                            Text::new(""),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                width: Val::Px(130.0),
+                                ..default()
+                            },
+                        ));
+                        for (label, action, index) in
+                            [("−", "lod_detail_down", 0), ("+", "lod_detail_up", 1)]
+                        {
+                            row.spawn((
+                                Button,
+                                TabIndex(6 + index),
+                                Hovered::default(),
+                                Node {
+                                    width: Val::Px(42.0),
+                                    height: Val::Px(42.0),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::Center,
+                                    ..default()
+                                },
+                                BorderColor::all(button_border_color),
+                                BackgroundColor(button_color),
+                                MenuButtonColors {
+                                    normal: button_color,
+                                    hovered: button_hover_color,
+                                    border_normal: button_border_color,
+                                    border_active: button_active_border_color,
+                                },
+                                SettingAction(action.to_owned()),
+                                observe(handle_setting_action),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new(label),
+                                    TextFont {
+                                        font_size: FontSize::Px(menu.button_font_size_px + 4.0),
+                                        ..default()
+                                    },
+                                    TextColor(button_text_color),
+                                ));
+                            });
+                        }
+                    });
 
                 panel.spawn((
                     Text::new("Changes apply live and are saved automatically."),
-                    TextFont { font_size: FontSize::Px(menu.world_metadata_size_px), ..default() },
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_metadata_size_px),
+                        ..default()
+                    },
                     TextColor(subtitle_color),
                 ));
                 panel.spawn((
                     MenuNotice,
                     Text::new(""),
-                    TextFont { font_size: FontSize::Px(menu.world_description_size_px), ..default() },
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_description_size_px),
+                        ..default()
+                    },
                     TextColor(notice_color),
                     notice_colors,
                     Node {
@@ -1188,17 +1307,41 @@ fn setup_menu(
                     },
                 ));
 
-                panel.spawn((
-                    Button, TabIndex(8), Hovered::default(),
-                    Node { width: Val::Percent(100.0), height: Val::Px(menu.button_height_px), margin: UiRect::top(Val::Px(10.0)), border: UiRect::all(Val::Px(1.0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, ..default() },
-                    BorderColor::all(button_border_color), BackgroundColor(button_color),
-                    MenuAction("home".to_owned()),
-                    MenuButtonColors { normal: button_color, hovered: button_hover_color, border_normal: button_border_color, border_active: button_active_border_color },
-                    observe(handle_navigation_action),
-                ))
-                .with_children(|button| {
-                    button.spawn((Text::new("BACK"), TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() }, TextColor(button_text_color)));
-                });
+                panel
+                    .spawn((
+                        Button,
+                        TabIndex(8),
+                        Hovered::default(),
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Px(menu.button_height_px),
+                            margin: UiRect::top(Val::Px(10.0)),
+                            border: UiRect::all(Val::Px(1.0)),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        BorderColor::all(button_border_color),
+                        BackgroundColor(button_color),
+                        MenuAction("home".to_owned()),
+                        MenuButtonColors {
+                            normal: button_color,
+                            hovered: button_hover_color,
+                            border_normal: button_border_color,
+                            border_active: button_active_border_color,
+                        },
+                        observe(handle_navigation_action),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("BACK"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                        ));
+                    });
             });
 
             root.spawn((
@@ -1490,7 +1633,9 @@ fn setup_menu(
                                     button.spawn((
                                         Text::new("JOIN  ▸"),
                                         TextFont {
-                                            font_size: FontSize::Px(menu.world_metadata_size_px + 1.0),
+                                            font_size: FontSize::Px(
+                                                menu.world_metadata_size_px + 1.0,
+                                            ),
                                             ..default()
                                         },
                                         TextColor(title_color),
@@ -1499,42 +1644,43 @@ fn setup_menu(
                         }
                     });
 
-                                panel.spawn((
-                    Button,
-                    TabIndex(library.entries.len() as i32),
-                    Hovered::default(),
-                    Node {
-                        width: Val::Percent(100.0),
-                        max_width: Val::Px(menu.button_width_px),
-                        align_self: AlignSelf::Center,
-                        height: Val::Px(menu.button_height_px),
-                        border: UiRect::all(Val::Px(1.0)),
-                        border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
-                        align_items: AlignItems::Center,
-                        justify_content: JustifyContent::Center,
-                        ..default()
-                    },
-                    BorderColor::all(button_border_color),
-                    BackgroundColor(button_color),
-                    MenuAction("home".to_owned()),
-                    MenuButtonColors {
-                        normal: button_color,
-                        hovered: button_hover_color,
-                        border_normal: button_border_color,
-                        border_active: button_active_border_color,
-                    },
-                    observe(handle_navigation_action),
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("BACK TO MENU"),
-                        TextFont {
-                            font_size: FontSize::Px(menu.button_font_size_px),
+                panel
+                    .spawn((
+                        Button,
+                        TabIndex(library.entries.len() as i32),
+                        Hovered::default(),
+                        Node {
+                            width: Val::Percent(100.0),
+                            max_width: Val::Px(menu.button_width_px),
+                            align_self: AlignSelf::Center,
+                            height: Val::Px(menu.button_height_px),
+                            border: UiRect::all(Val::Px(1.0)),
+                            border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
                             ..default()
                         },
-                        TextColor(button_text_color),
-                    ));
-                });
+                        BorderColor::all(button_border_color),
+                        BackgroundColor(button_color),
+                        MenuAction("home".to_owned()),
+                        MenuButtonColors {
+                            normal: button_color,
+                            hovered: button_hover_color,
+                            border_normal: button_border_color,
+                            border_active: button_active_border_color,
+                        },
+                        observe(handle_navigation_action),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("BACK TO MENU"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                        ));
+                    });
 
                 panel.spawn((
                     Text::new(menu.library_navigation_hint.clone()),
@@ -1967,12 +2113,13 @@ fn handle_world_selection(
             }
         };
 
-    if let Err(error) = remember_world_manifest(
-        &project_root,
-        &selection.0,
-        &mut menu_state.preferences,
-    ) {
-        warn!("Could not remember selected world '{}': {error}", selection.0.display());
+    if let Err(error) =
+        remember_world_manifest(&project_root, &selection.0, &mut menu_state.preferences)
+    {
+        warn!(
+            "Could not remember selected world '{}': {error}",
+            selection.0.display()
+        );
     }
 
     gravity.0 = Vec3::from_array(
@@ -2128,12 +2275,13 @@ fn handle_create_world(
             }
         };
 
-    if let Err(error) = remember_world_manifest(
-        &project_root,
-        &manifest_path,
-        &mut menu_state.preferences,
-    ) {
-        warn!("Could not remember new world '{}': {error}", manifest_path.display());
+    if let Err(error) =
+        remember_world_manifest(&project_root, &manifest_path, &mut menu_state.preferences)
+    {
+        warn!(
+            "Could not remember new world '{}': {error}",
+            manifest_path.display()
+        );
     }
 
     gravity.0 = Vec3::from_array(
@@ -2217,8 +2365,11 @@ fn handle_setting_action(
 
     match action.0.as_str() {
         "render_distance_down" => {
-            state.preferences.render_distance_chunks =
-                state.preferences.render_distance_chunks.saturating_sub(1).max(2);
+            state.preferences.render_distance_chunks = state
+                .preferences
+                .render_distance_chunks
+                .saturating_sub(1)
+                .max(2);
         }
         "render_distance_up" => {
             state.preferences.render_distance_chunks =
@@ -2245,7 +2396,8 @@ fn handle_setting_action(
         }
         Err(error) => {
             warn!("Could not save settings: {error}");
-            feedback.message = format!("Settings applied for this session, but could not be saved: {error}");
+            feedback.message =
+                format!("Settings applied for this session, but could not be saved: {error}");
             feedback.tone = MenuFeedbackTone::Notice;
         }
     }
@@ -2444,16 +2596,8 @@ fn update_button_styles(
         With<Button>,
     >,
 ) {
-    for (
-        entity,
-        hovered,
-        pressed,
-        colors,
-        mut background,
-        mut border,
-        glow_state,
-        shadow,
-    ) in &mut buttons
+    for (entity, hovered, pressed, colors, mut background, mut border, glow_state, shadow) in
+        &mut buttons
     {
         let active =
             pressed || hovered.get() || (focus_visible.0 && input_focus.get() == Some(entity));
