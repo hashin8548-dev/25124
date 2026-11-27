@@ -927,10 +927,7 @@ fn setup_menu(
                     panel
                         .spawn((
                             Button,
-                            TabIndex(
-                                library.entries.len() as i32
-                                    + if menu.buttons.iter().any(|button| button.action == "create_world") { 1 } else { 0 },
-                            ),
+                            TabIndex(library.entries.len() as i32),
                             Hovered::default(),
                             Node {
                                 width: Val::Percent(100.0),
@@ -970,7 +967,10 @@ fn setup_menu(
                     panel
                         .spawn((
                             Button,
-                            TabIndex(library.entries.len() as i32),
+                            TabIndex(
+                                library.entries.len() as i32
+                                    + if menu.buttons.iter().any(|button| button.action == "create_world") { 1 } else { 0 },
+                            ),
                             Hovered::default(),
                             Node {
                                 width: Val::Percent(100.0),
