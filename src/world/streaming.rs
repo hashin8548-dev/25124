@@ -136,7 +136,7 @@ pub(super) fn update_chunk_streaming(
         .iter()
         .filter(|(_, pending)| {
             distance_to_chunk_aabb(camera_position, &pending.source, world_origin.0)
-                > chunk_radius_m(&pending.source, load_limit)
+                > chunk_radius_m(&pending.source, load_limit, world_origin.0)
         })
         .map(|(id, _)| id.clone())
         .collect();
@@ -151,7 +151,7 @@ pub(super) fn update_chunk_streaming(
         .iter()
         .filter_map(|id| {
             let source = state.known_sources.get(id)?;
-            let unload_distance = chunk_radius_m(source, unload_limit);
+            let unload_distance = chunk_radius_m(source, unload_limit, world_origin.0);
             let chunk_is_distant =
                 distance_to_chunk_aabb(camera_position, source, world_origin.0) > unload_distance;
             if !chunk_is_distant {
@@ -321,7 +321,7 @@ pub(super) fn update_chunk_streaming(
     // Discard completed reads that became irrelevant while waiting in the spawn queue.
     // This prevents stale ready items from consuming the per-frame spawn budget.
     state.ready.retain(|(source, _)| {
-        distance_to_chunk_aabb(camera_position, source, world_origin.0) <= chunk_radius_m(source, load_limit)
+        distance_to_chunk_aabb(camera_position, source, world_origin.0) <= chunk_radius_m(source, load_limit, world_origin.0)
     });
 
     // Prioritize nearest indexed chunks and keep the number of outstanding I/O tasks bounded.
@@ -344,7 +344,7 @@ pub(super) fn update_chunk_streaming(
                 && !state.pending.contains_key(&source.id)
                 && !state.ready.iter().any(|(queued, _)| queued.id == source.id)
                 && distance_to_chunk_aabb(camera_position, source, world_origin.0)
-                    <= chunk_radius_m(source, load_limit)
+                    <= chunk_radius_m(source, load_limit, world_origin.0)
         })
         .collect();
     candidates.sort_by(|left, right| {
@@ -386,7 +386,7 @@ pub(super) fn update_chunk_streaming(
         let Some((source, chunk)) = state.ready.pop_front() else {
             break;
         };
-        if distance_to_chunk_aabb(camera_position, &source, world_origin.0) > chunk_radius_m(&source, load_limit) {
+        if distance_to_chunk_aabb(camera_position, &source, world_origin.0) > chunk_radius_m(&source, load_limit, world_origin.0) {
             continue;
         }
         spawned_chunks_this_frame += 1;
@@ -502,8 +502,8 @@ fn distance_to_chunk_aabb(point: Vec3, source: &ChunkSource, world_origin: DVec3
     point.distance(closest)
 }
 
-fn chunk_radius_m(source: &ChunkSource, radius_chunks: f32) -> f32 {
-    let (min, max) = chunk_bounds(source);
+fn chunk_radius_m(source: &ChunkSource, radius_chunks: f32, world_origin: DVec3) -> f32 {
+    let (min, max) = chunk_bounds(source, world_origin);
     (max - min).max_element() * radius_chunks
 }
 
