@@ -301,7 +301,6 @@ mod tests {
         assert!(manifest.actions.entries.contains_key("crouched_idle"));
     }
 
-
     #[test]
     fn loads_all_manifest_referenced_actions_from_data_directory() {
         let library = super::HumanMotionLibrary::load(std::path::Path::new("data")).unwrap();
