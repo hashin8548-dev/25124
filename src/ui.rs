@@ -2408,11 +2408,17 @@ fn sync_settings_labels(
     state: Res<MenuState>,
     mut render_distance_labels: Query<
         &mut Text,
-        (With<SettingsRenderDistanceValue>, Without<SettingsLodDetailValue>),
+        (
+            With<SettingsRenderDistanceValue>,
+            Without<SettingsLodDetailValue>,
+        ),
     >,
     mut lod_detail_labels: Query<
         &mut Text,
-        (With<SettingsLodDetailValue>, Without<SettingsRenderDistanceValue>),
+        (
+            With<SettingsLodDetailValue>,
+            Without<SettingsRenderDistanceValue>,
+        ),
     >,
 ) {
     if !config.is_changed() && !state.is_changed() {
@@ -3110,11 +3116,7 @@ mod tests {
             Some(world_directory.join("world.json"))
         );
 
-        for unsafe_or_stale in [
-            "../outside/world.json",
-            "worlds/missing/world.json",
-            "",
-        ] {
+        for unsafe_or_stale in ["../outside/world.json", "worlds/missing/world.json", ""] {
             preferences.last_world_manifest = Some(unsafe_or_stale.to_owned());
             assert_eq!(
                 preferred_world_manifest(&root, &library, &preferences),
