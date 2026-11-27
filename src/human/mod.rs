@@ -5,6 +5,7 @@ pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
 use bevy::prelude::*;
 use crate::config::RuntimeConfig;
 
+/// Registers the external human action data source for the simulation runtime.
 pub struct HumanPlugin;
 
 impl Plugin for HumanPlugin {
