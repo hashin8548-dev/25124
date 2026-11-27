@@ -559,7 +559,7 @@ mod tests {
     #[test]
     fn streaming_radius_scales_with_the_authored_chunk_bounds() {
         let chunk = source();
-        assert_eq!(chunk_radius_m(&chunk, 2.0), 32.0);
-        assert_eq!(chunk_radius_m(&chunk, 3.0), 48.0);
+        assert_eq!(chunk_radius_m(&chunk, 2.0, DVec3::ZERO), 32.0);
+        assert_eq!(chunk_radius_m(&chunk, 3.0, DVec3::ZERO), 48.0);
     }
 }
