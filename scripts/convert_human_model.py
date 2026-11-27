@@ -82,9 +82,33 @@ def extract_weighted_collision_geometry(
                 position_bone = bone.matrix_local.inverted_safe() @ position_armature
                 weighted_vertices[name].append(position_bone.copy())
 
+    # The FBX root is a non-deforming pelvis control bone, so it has no direct
+    # vertex-group weights. Derive its envelope from the real weighted torso and
+    # thigh vertices in root-bone local coordinates instead of inventing dimensions.
+    root_points = weighted_vertices.get("Root", [])
+    if len(root_points) < 4:
+        root_bone = armature.data.bones.get("Root")
+        if root_bone is None:
+            raise RuntimeError("The human rig has no Root bone for pelvis collision geometry")
+        root_inverse = root_bone.matrix_local.inverted_safe()
+        source_groups = {"Torso", "Thigh_L", "Thigh_R"}
+        for mesh in meshes:
+            mesh_to_armature = armature_inverse @ mesh.matrix_world
+            group_names = {group.index: group.name for group in mesh.vertex_groups}
+            for vertex in mesh.data.vertices:
+                position_armature = mesh_to_armature @ vertex.co
+                for membership in vertex.groups:
+                    if (
+                        membership.weight >= 0.35
+                        and group_names.get(membership.group) in source_groups
+                    ):
+                        root_points.append(root_inverse @ position_armature)
+
     collision = {}
     missing = []
     for name, points in weighted_vertices.items():
+        if name == "Root":
+            points = root_points
         if len(points) < 4:
             missing.append(name)
             continue
@@ -296,4 +320,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        raise SystemExit(1)
