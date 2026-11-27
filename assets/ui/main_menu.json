@@ -3,10 +3,10 @@
   "title": "25124",
   "subtitle": "WORLD LIBRARY  /  PROCEDURAL WORLD CREATION",
   "home_buttons": [
-    { "label": "CONTINUE", "action": "continue" },
-    { "label": "NEW WORLD", "action": "create_world" },
-    { "label": "WORLDS", "action": "worlds" },
-    { "label": "SETTINGS", "action": "settings" }
+    { "label": "Continue", "action": "continue" },
+    { "label": "New World", "action": "create_world" },
+    { "label": "Worlds", "action": "worlds" },
+    { "label": "Settings", "action": "settings" }
   ],
   "background_srgba": [0, 0, 0, 1],
   "panel_srgba": [0, 0, 0, 1],
