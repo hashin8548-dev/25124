@@ -16,6 +16,10 @@ pub struct HumanActionState {
     pub wall_grip_active: bool,
     /// Outward normal returned by the most recent wall probe.
     pub wall_grip_normal: Vec3,
+    /// Physical root position captured at the start of the selected action.
+    pub root_motion_origin_world: Option<Vec3>,
+    /// Root body centre in the action's first (or reverse-playback last) sample.
+    pub root_motion_reference_center_engine: Option<Vec3>,
 }
 
 impl Default for HumanActionState {
@@ -28,6 +32,8 @@ impl Default for HumanActionState {
             jump_launch_pending: false,
             wall_grip_active: false,
             wall_grip_normal: Vec3::ZERO,
+            root_motion_origin_world: None,
+            root_motion_reference_center_engine: None,
         }
     }
 }
@@ -39,6 +45,8 @@ impl HumanActionState {
             self.action_name = action_name.to_owned();
             self.elapsed_seconds = 0.0;
             self.reverse = reverse;
+            self.root_motion_origin_world = None;
+            self.root_motion_reference_center_engine = None;
         }
     }
 }
@@ -80,6 +88,25 @@ pub fn drive_human_action_pose(
         return;
     };
 
+    if action_state.root_motion_origin_world.is_none()
+        || action_state.root_motion_reference_center_engine.is_none()
+    {
+        let reference_pose =
+            match rig.sample_engine_body_pose(action, 0.0, action_state.reverse) {
+                Ok(pose) => pose,
+                Err(error) => {
+                    warn!("Human Root reference sampling failed: {error:#}");
+                    return;
+                }
+            };
+        let Some(reference_root) = reference_pose.get("Root") else {
+            return;
+        };
+        action_state.root_motion_origin_world = Some(root_transform.translation);
+        action_state.root_motion_reference_center_engine =
+            Some(reference_root.center_engine);
+    }
+
     action_state.elapsed_seconds += time.delta_secs();
     let sampled = match rig.sample_engine_body_pose(
         action,
@@ -105,6 +132,21 @@ pub fn drive_human_action_pose(
     let heading = Quat::from_rotation_y(heading_yaw);
     let desired_root_rotation = heading * root_target.rotation_engine;
     let rotational_assist = &settings.temporary_assists.rotational_assistance;
+    let jump_launch_assist = &settings.temporary_assists.jump_launch;
+    let suppress_authored_jump_root =
+        action_state.action_name == "jump" && jump_launch_assist.enabled;
+    let authored_root_target = match (
+        action_state.root_motion_origin_world,
+        action_state.root_motion_reference_center_engine,
+    ) {
+        (Some(origin_world), Some(reference_center)) if !suppress_authored_jump_root => {
+            Some(
+                origin_world
+                    + heading * (root_target.center_engine - reference_center),
+            )
+        }
+        _ => None,
+    };
     let jump_impulse =
         if action_state.jump_launch_pending && settings.temporary_assists.jump_launch.enabled {
             rig.bone("Root")
@@ -134,6 +176,13 @@ pub fn drive_human_action_pose(
     for (part, transform, linear_velocity, angular_velocity, mut forces) in &mut bodies {
         // Apply one-shot and continuous assistance at the same fixed rate as Avian's solver.
         if part.bone_name == "Root" {
+            if let Some(desired_root_center) = authored_root_target {
+                let root_force = ((desired_root_center - transform.translation)
+                    * settings.pose_position_stiffness_n_per_m
+                    - linear_velocity.0 * settings.pose_position_damping_n_s_per_m)
+                    .clamp_length_max(settings.max_pose_force_n);
+                forces.apply_force(root_force);
+            }
             if let Some(impulse) = jump_impulse {
                 forces.apply_linear_impulse(impulse);
             }
