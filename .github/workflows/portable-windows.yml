@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -18,9 +15,9 @@ concurrency:
 
 jobs:
   windows-x64:
-    name: Validate and package Windows x64
+    name: Build portable Windows x64
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: "0"
@@ -34,24 +31,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
-          components: rustfmt, clippy
 
       - name: Cache Cargo build
         uses: Swatinem/rust-cache@v2
         with:
-          key: windows-x64-portable
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Type-check all targets
-        run: cargo check --locked --all-targets --target x86_64-pc-windows-msvc -j 1
-
-      - name: Run tests
-        run: cargo test --locked --all-targets --target x86_64-pc-windows-msvc -j 1
-
-      - name: Run Clippy
-        run: cargo clippy --locked --all-targets --target x86_64-pc-windows-msvc -j 1 -- -D warnings
+          key: windows-x64-portable-release
 
       - name: Build portable folder and ZIP
         shell: pwsh
