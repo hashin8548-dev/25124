@@ -13,6 +13,50 @@ const PLATFORM_COMPONENT: &str = "block.bedrock";
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub(crate) struct WorldOrigin(pub DVec3);
 
+/// Recenters the f32 simulation around the camera while preserving absolute world position.
+/// Rebase steps are exact multiples of the procedural chunk edge, so voxel boundaries remain stable.
+pub(super) fn rebase_world_origin(
+    mut origin: ResMut<WorldOrigin>,
+    mut world_state: ResMut<crate::persistence::WorldStateFile>,
+    mut queries: ParamSet<(
+        Query<&Transform, With<crate::camera::FreeFlyCamera>>,
+        Query<(&mut Transform, Option<&mut crate::world::lod::ChunkLodVisual>)>,
+    )>,
+) {
+    let Some(camera_position) = queries.p0().iter().next().map(|transform| transform.translation) else {
+        return;
+    };
+    if camera_position.abs().max_element() <= 4096.0 {
+        return;
+    }
+
+    let shift = (camera_position / CHUNK_EDGE as f32 / 32.0).round() * (CHUNK_EDGE as f32 * 32.0);
+    if shift == bevy::prelude::Vec3::ZERO {
+        return;
+    }
+
+    {
+        let mut all_transforms = queries.p1();
+        for (mut transform, lod_visual) in &mut all_transforms {
+            transform.translation -= shift;
+            if let Some(mut visual) = lod_visual {
+                visual.center -= shift;
+            }
+        }
+    }
+
+    for state in world_state.bodies.values_mut() {
+        state.translation_m = (bevy::prelude::Vec3::from_array(state.translation_m) - shift).to_array();
+    }
+    for state in world_state.fragments.values_mut() {
+        state.translation_m = (bevy::prelude::Vec3::from_array(state.translation_m) - shift).to_array();
+    }
+
+    origin.0 += shift.as_dvec3();
+    world_state.origin_m = origin.0.to_array();
+    info!("Rebased world origin by {:?}; absolute origin is {:?}", shift, origin.0);
+}
+
 /// Produces the bounded set of platform chunks near the absolute camera position.
 /// Coordinates are integer chunk addresses; no world-sized allocation or manifest is created.
 pub(crate) fn platform_sources_near(
