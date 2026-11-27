@@ -3,11 +3,13 @@ mod input;
 mod motion;
 mod ragdoll;
 mod rig;
+mod skinning;
 
 pub use actuation::HumanActionState;
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
 pub use ragdoll::{
     HumanBodyPart, HumanControlSettings, HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot,
+    HumanSkinnedSceneRoot,
 };
 pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
 
@@ -30,6 +32,12 @@ impl Plugin for HumanPlugin {
             .add_systems(
                 Update,
                 input::update_human_controls.run_if(in_state(AppMode::Simulation)),
+            )
+            .add_systems(
+                PostUpdate,
+                skinning::sync_human_skinned_mesh
+                    .after(TransformSystems::Propagate)
+                    .run_if(in_state(AppMode::Simulation)),
             );
     }
 }
