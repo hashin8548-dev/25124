@@ -34,6 +34,8 @@ pub struct ChunkSource {
     pub dimensions: [u32; 3],
     pub voxel_size_m: f32,
     pub path: PathBuf,
+    /// Generated payloads are synthesized on worker threads instead of read from disk.
+    pub generated: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -146,6 +148,7 @@ impl RuntimeConfig {
             preview_asset: None,
             metadata: BTreeMap::new(),
             gravity_m_s2: None,
+            generation: None,
             regions: Vec::new(),
             objects: Vec::new(),
         };
@@ -366,6 +369,7 @@ fn load_regions(world_path: &Path, world: &WorldManifest) -> Result<Vec<ChunkSou
                 dimensions: reference.dimensions,
                 voxel_size_m: reference.voxel_size_m,
                 path: region_directory.join(&reference.path),
+                generated: false,
             });
         }
     }
