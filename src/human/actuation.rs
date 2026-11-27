@@ -51,9 +51,9 @@ impl HumanActionState {
     }
 }
 
-/// Applies bounded PD torques to physical body segments using the sampled action poses.
-/// It does not animate a skeleton or inject root velocity; contacts and joints determine
-/// the resulting translation.
+/// Applies bounded physical forces and torques to pursue sampled action poses.
+/// There is no fixed-speed root translation: the root follows only measured source-track
+/// offsets through a bounded force, and meaningful horizontal displacement remains contact-driven.
 pub fn drive_human_action_pose(
     time: Res<Time<Fixed>>,
     mut action_state: Option<ResMut<HumanActionState>>,
