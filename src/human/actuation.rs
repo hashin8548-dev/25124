@@ -37,14 +37,20 @@ impl HumanActionState {
 /// the resulting translation.
 pub fn drive_human_action_pose(
     time: Res<Time<Fixed>>,
-    mut action_state: ResMut<HumanActionState>,
-    motions: Res<HumanMotionLibrary>,
-    rig: Res<HumanRig>,
-    settings: Res<HumanPhysicsSettings>,
-    player: Res<HumanPlayer>,
-    root_transform: Query<&Transform>,
+    mut action_state: Option<ResMut<HumanActionState>>,
+    motions: Option<Res<HumanMotionLibrary>>,
+    rig: Option<Res<HumanRig>>,
+    settings: Option<Res<HumanPhysicsSettings>>,
+    player: Option<Res<HumanPlayer>>,
+    root_transforms: Query<&Transform>,
     mut bodies: Query<(&HumanBodyPart, &Transform, &AngularVelocity, Forces)>,
 ) {
+    let (Some(mut action_state), Some(motions), Some(rig), Some(settings), Some(player)) =
+        (action_state, motions, rig, settings, player)
+    else {
+        return;
+    };
+
     let Some(action) = motions.action(&action_state.action_name) else {
         warn!(
             "Human action '{}' is missing; selecting idle",
@@ -53,7 +59,7 @@ pub fn drive_human_action_pose(
         action_state.select("idle", false);
         return;
     };
-    let Ok(root_transform) = root_transform.get(player.root) else {
+    let Ok(root_transform) = root_transforms.get(player.root) else {
         return;
     };
 
