@@ -45,6 +45,7 @@ pub(super) fn spawn_camera(
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn move_camera(
     keys: Res<ButtonInput<KeyCode>>,
     mouse_motion: Res<AccumulatedMouseMotion>,
