@@ -4,7 +4,7 @@ use bevy::{
     window::{CursorGrabMode, CursorOptions, PrimaryWindow},
 };
 
-use crate::config::RuntimeConfig;
+use crate::{config::RuntimeConfig, world::WorldOrigin};
 
 #[derive(Component, Debug)]
 pub struct FreeFlyCamera {
@@ -12,7 +12,11 @@ pub struct FreeFlyCamera {
     pitch_radians: f32,
 }
 
-pub(super) fn spawn_camera(mut commands: Commands, config: Res<RuntimeConfig>) {
+pub(super) fn spawn_camera(
+    mut commands: Commands,
+    config: Res<RuntimeConfig>,
+    origin: Res<WorldOrigin>,
+) {
     let camera = &config.engine.camera;
     let yaw = camera.yaw_degrees.to_radians();
     let pitch = camera.pitch_degrees.to_radians();
@@ -24,7 +28,7 @@ pub(super) fn spawn_camera(mut commands: Commands, config: Res<RuntimeConfig>) {
             pitch_radians: pitch,
         },
         Transform {
-            translation: Vec3::from_array(camera.spawn_position_m),
+            translation: (DVec3::from_array(camera.spawn_position_m.map(f64::from)) - origin.0).as_vec3(),
             rotation: Quat::from_euler(EulerRot::YXZ, yaw, pitch, 0.0),
             ..default()
         },
@@ -100,6 +104,7 @@ pub(super) fn move_camera(
 /// Reposition the already-created camera when the selected world's settings change.
 pub(super) fn sync_camera_settings(
     config: Res<RuntimeConfig>,
+    origin: Res<WorldOrigin>,
     mut cameras: Query<(&mut Transform, &mut FreeFlyCamera)>,
 ) {
     if !config.is_changed() {
@@ -115,7 +120,7 @@ pub(super) fn sync_camera_settings(
     for (mut transform, mut controller) in &mut cameras {
         controller.yaw_radians = yaw;
         controller.pitch_radians = pitch;
-        transform.translation = Vec3::from_array(camera.spawn_position_m);
+        transform.translation = (DVec3::from_array(camera.spawn_position_m.map(f64::from)) - origin.0).as_vec3();
         transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw, pitch, 0.0);
     }
 }
