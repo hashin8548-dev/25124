@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Result, ensure};
-use bevy::prelude::*;
+use bevy::{math::DVec3, prelude::*};
 
 use crate::config::{ChunkFile, ChunkLayer, ChunkSource, WorldGeneration};
 
@@ -200,7 +200,7 @@ pub(crate) fn generate_platform_chunk(
 mod tests {
     use super::{generate_platform_chunk, platform_sources_near};
     use crate::config::WorldGeneration;
-    use bevy::prelude::DVec3;
+    use bevy::math::DVec3;
 
     fn generation(size_units: u64) -> WorldGeneration {
         WorldGeneration::FlatPlatform {
