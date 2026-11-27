@@ -452,7 +452,6 @@ fn joint_marker_for(child: &str) -> Option<&'static str> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::HumanPhysicsSettings;
