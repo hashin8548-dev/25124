@@ -555,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn version_one_save_migrates_to_version_two_without_losing_legacy_state() {
+    fn version_one_save_migrates_to_current_format_without_losing_legacy_state() {
         let path = unique_save_path("version-one-migration");
         let mut legacy = serde_json::to_value(sample_state()).unwrap();
         legacy["format_version"] = serde_json::json!(1);
@@ -564,7 +564,7 @@ mod tests {
 
         let loaded = WorldStateFile::load_or_default(&path, "test-world")
             .expect("version-one save should migrate");
-        assert_eq!(loaded.format_version, 2);
+        assert_eq!(loaded.format_version, 3);
         assert!(loaded.damaged_bonds.is_empty());
         assert_eq!(loaded.bodies["body-a"].translation_m, [1.0, 2.0, 3.0]);
 
