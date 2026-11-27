@@ -4,7 +4,7 @@ use avian3d::prelude::{
     AngularVelocity, CcdFilter, Collider, ColliderDensity, CollisionEventsEnabled, Friction,
     LinearVelocity, Restitution, RigidBody, SleepThreshold, SweepMode, SweptCcd,
 };
-use bevy::{gltf::prelude::GltfAssetLabel, prelude::*};
+use bevy::{gltf::prelude::GltfAssetLabel, math::DVec3, prelude::*};
 
 use crate::{
     config::{
