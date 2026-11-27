@@ -822,6 +822,7 @@ impl MenuAsset {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn setup_menu(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
