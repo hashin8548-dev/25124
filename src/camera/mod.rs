@@ -1,3 +1,4 @@
+mod follow;
 mod free_fly;
 
 pub use free_fly::FreeFlyCamera;
@@ -18,9 +19,19 @@ impl Plugin for CameraPlugin {
                     free_fly::sync_camera_settings,
                     free_fly::update_cursor_grab,
                     free_fly::move_camera,
+                    follow::follow_player_camera,
+                    follow::sync_player_crosshair,
                 )
                     .chain()
                     .in_set(CameraUpdateSet),
+            )
+            .add_systems(
+                OnEnter(crate::engine::AppMode::Simulation),
+                follow::spawn_player_crosshair,
+            )
+            .add_systems(
+                OnExit(crate::engine::AppMode::Simulation),
+                follow::despawn_player_crosshair,
             );
     }
 }
