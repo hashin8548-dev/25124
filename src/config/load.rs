@@ -530,7 +530,7 @@ mod tests {
         assert!(config.object_chunks.is_empty());
         assert!(matches!(
             config.world.generation,
-            Some(crate::config::schema::WorldGeneration::FlatPlatform {
+            Some(crate::config::WorldGeneration::FlatPlatform {
                 size_units: 255000000,
                 border_height_units: 4,
                 border_thickness_units: 2
