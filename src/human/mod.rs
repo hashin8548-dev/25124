@@ -20,6 +20,7 @@ impl Plugin for HumanPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load_human_data)
             .add_systems(OnEnter(AppMode::Simulation), ragdoll::spawn_human_player)
+            .add_systems(OnExit(AppMode::Simulation), ragdoll::despawn_human_player)
             .add_systems(
                 FixedPostUpdate,
                 actuation::drive_human_action_pose
