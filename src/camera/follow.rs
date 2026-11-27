@@ -11,6 +11,7 @@ use super::free_fly::{CameraSpring, FreeFlyCamera};
 #[derive(Component)]
 struct PlayerCrosshair;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn follow_player_camera(
     mode: Res<State<AppMode>>,
     menu: Res<MenuState>,
