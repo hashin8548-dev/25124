@@ -86,10 +86,18 @@ pub fn update_human_controls(
                 false,
             )
         } else {
-            (Some((settings.controls.crouched_idle.as_str(), false)), false, false)
+            (
+                Some((settings.controls.crouched_idle.as_str(), false)),
+                false,
+                false,
+            )
         }
     } else if was_climbing && wall_ahead && (jump_held || horizontal_input) {
-        (Some((settings.controls.climb.as_str(), backwards)), false, true)
+        (
+            Some((settings.controls.climb.as_str(), backwards)),
+            false,
+            true,
+        )
     } else if jump_pressed && wall_ahead {
         (Some((settings.controls.climb.as_str(), false)), false, true)
     } else if !grounded && descending {
