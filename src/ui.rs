@@ -7,6 +7,7 @@ use std::{
 
 use bevy::{
     app::AppExit,
+    math::DVec3,
     input::mouse::{MouseScrollUnit, MouseWheel},
     input_focus::{
         FocusCause, InputFocus, InputFocusVisible,
