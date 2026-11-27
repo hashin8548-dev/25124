@@ -44,7 +44,6 @@ pub struct HumanJointLimits {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct HumanManifest {
     schema_version: u32,
     physics: HumanPhysicsSettingsFile,
@@ -206,16 +205,10 @@ pub fn spawn_human_player(
             pose.collision.radius_m,
             pose.collision.capsule_segment_length_m,
         );
-        let entity = commands
-            .spawn((
+        let mut body_commands = commands.spawn((
                 Name::new(format!("Human::{name}")),
                 HumanBodyPart {
                     bone_name: name.to_owned(),
-                },
-                if name == "Root" {
-                    Some(HumanPlayerRoot)
-                } else {
-                    None
                 },
                 RigidBody::Dynamic,
                 collider,
@@ -231,8 +224,11 @@ pub fn spawn_human_player(
                     rotation: pose.rotation_engine,
                     ..default()
                 },
-            ))
-            .id();
+            ));
+        if name == "Root" {
+            body_commands.insert(HumanPlayerRoot);
+        }
+        let entity = body_commands.id();
         bodies.insert(name.to_owned(), entity);
     }
 
