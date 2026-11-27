@@ -16,6 +16,8 @@ pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
 use crate::{config::RuntimeConfig, engine::AppMode};
 use bevy::prelude::*;
 
+/// Integrates a physics-authoritative human ragdoll into the simulation.
+/// Motion JSON supplies pose targets; dynamic bodies, contacts and joints determine motion.
 pub struct HumanPlugin;
 
 impl Plugin for HumanPlugin {
