@@ -42,3 +42,8 @@ The supplied Root tracks do not encode meaningful horizontal displacement. The m
 ## Physics scheduling
 
 Input sampling selects the action and publishes contact intent. Jump launch impulses are consumed once, and wall-grip forces are reapplied, by the fixed-step Avian controller. Per-body position and orientation targets are bounded force/torque controllers; the controller never writes horizontal root translation or velocity. The skinned GLB is updated from the resulting rigid-body transforms, while helper bones follow calibrated action targets relative to the physical root.
+
+
+## Measured Root trajectory
+
+The supplied Root tracks contain authored vertical movement: approximately 10 cm for walk, 14 cm for run, 15 cm for sneak/crouch, and 29 cm for jump. The controller follows these offsets as bounded physical forces on the dynamic Root body. The supplied Root tracks contain effectively no horizontal movement (maximum horizontal variation is approximately 2 mm in jump), so horizontal translation must emerge through limb actuation and ground/wall contacts rather than a fabricated constant-speed root curve.
