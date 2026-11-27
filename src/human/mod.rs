@@ -2,8 +2,8 @@ mod motion;
 
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
 
-use bevy::prelude::*;
 use crate::config::RuntimeConfig;
+use bevy::prelude::*;
 
 /// Registers the external human action data source for the simulation runtime.
 pub struct HumanPlugin;
@@ -24,7 +24,9 @@ fn load_motion_library(mut commands: Commands, config: Res<RuntimeConfig>) {
             commands.insert_resource(library);
         }
         Err(error) => {
-            warn!("Human motion data is unavailable; human gameplay systems remain inactive: {error:#}");
+            warn!(
+                "Human motion data is unavailable; human gameplay systems remain inactive: {error:#}"
+            );
         }
     }
 }

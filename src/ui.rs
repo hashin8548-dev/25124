@@ -7,12 +7,12 @@ use std::{
 
 use bevy::{
     app::AppExit,
-    math::DVec3,
     input::mouse::{MouseScrollUnit, MouseWheel},
     input_focus::{
         FocusCause, InputFocus, InputFocusVisible,
         tab_navigation::{TabGroup, TabIndex, TabNavigationPlugin},
     },
+    math::DVec3,
     picking::hover::{HoverMap, Hovered},
     prelude::*,
     text::{FontSize, TextFont},
