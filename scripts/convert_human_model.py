@@ -51,7 +51,80 @@ def load_manifest() -> dict:
     return manifest
 
 
-def extract_rig(armature: bpy.types.Object, manifest: dict) -> dict:
+
+def extract_weighted_collision_geometry(
+    armature: bpy.types.Object,
+    meshes: list[bpy.types.Object],
+    body_track_names: set[str],
+) -> dict[str, dict]:
+    """Measure each body's collision envelope from weighted source mesh vertices."""
+    weighted_vertices: dict[str, list] = {name: [] for name in body_track_names}
+    armature_inverse = armature.matrix_world.inverted_safe()
+
+    for mesh in meshes:
+        mesh_to_armature = armature_inverse @ mesh.matrix_world
+        group_names = {group.index: group.name for group in mesh.vertex_groups}
+        for vertex in mesh.data.vertices:
+            memberships = [
+                membership
+                for membership in vertex.groups
+                if membership.weight >= 0.5
+                and group_names.get(membership.group) in body_track_names
+            ]
+            if not memberships:
+                continue
+            position_armature = mesh_to_armature @ vertex.co
+            for membership in memberships:
+                name = group_names[membership.group]
+                bone = armature.data.bones.get(name)
+                if bone is None:
+                    continue
+                position_bone = bone.matrix_local.inverted_safe() @ position_armature
+                weighted_vertices[name].append(position_bone.copy())
+
+    collision = {}
+    missing = []
+    for name, points in weighted_vertices.items():
+        if len(points) < 4:
+            missing.append(name)
+            continue
+        radial = [((point.x ** 2) + (point.z ** 2)) ** 0.5 for point in points]
+        axial = [float(point.y) for point in points]
+        radius = max(radial)
+        axial_min = min(axial)
+        axial_max = max(axial)
+        axial_length = axial_max - axial_min
+        if not all(map(lambda value: value == value and abs(value) != float("inf"),
+                       [radius, axial_min, axial_max, axial_length])):
+            raise RuntimeError(f"Non-finite weighted collision geometry for bone {name}")
+        if radius <= 1.0e-4 or axial_length <= 1.0e-4:
+            missing.append(name)
+            continue
+        collision[name] = {
+            "shape": "capsule",
+            "radius_m": float(radius),
+            "axial_min_m": float(axial_min),
+            "axial_max_m": float(axial_max),
+            "axial_length_m": float(axial_length),
+            "capsule_segment_length_m": float(max(0.0, axial_length - 2.0 * radius)),
+            "center_offset_bone_m": [0.0, float((axial_min + axial_max) * 0.5), 0.0],
+            "weighted_vertex_count": len(points),
+            "weight_threshold": 0.5,
+        }
+
+    if missing:
+        raise RuntimeError(
+            "Could not derive collision envelopes from weighted mesh vertices for body tracks: "
+            + ", ".join(sorted(set(missing)))
+        )
+    return collision
+
+
+def extract_rig(
+    armature: bpy.types.Object,
+    manifest: dict,
+    meshes: list[bpy.types.Object],
+) -> dict:
     body_tracks = set(manifest["rig"]["body_tracks"])
     marker_tracks = set(manifest["rig"]["joint_marker_tracks"])
     bones = armature.data.bones
@@ -72,6 +145,12 @@ def extract_rig(armature: bpy.types.Object, manifest: dict) -> dict:
         )
 
     armature_world = armature.matrix_world.copy()
+    collision_geometry = extract_weighted_collision_geometry(armature, meshes, body_tracks)
+    if not IDLE_ACTION.is_file():
+        raise FileNotFoundError(f"Missing neutral reference action: {IDLE_ACTION}")
+    with IDLE_ACTION.open("r", encoding="utf-8") as stream:
+        idle = json.load(stream)
+    idle_tracks = {track["name"]: track for track in idle.get("animation", [])}
     records = []
     for bone in sorted(bones, key=lambda item: item.name):
         records.append(
@@ -89,15 +168,16 @@ def extract_rig(armature: bpy.types.Object, manifest: dict) -> dict:
                     else bone.matrix_local
                 ),
                 "matrix_world": matrix_rows(armature_world @ bone.matrix_local),
+                "action_reference_parent_local": (
+                    idle_tracks[bone.name]["transform"][0]
+                    if bone.name in idle_tracks
+                    else None
+                ),
+                "collision_geometry": collision_geometry.get(bone.name),
                 "body_track": bone.name if bone.name in body_tracks else None,
                 "joint_marker_track": bone.name if bone.name in marker_tracks else None,
             }
         )
-
-    if not IDLE_ACTION.is_file():
-        raise FileNotFoundError(f"Missing neutral reference action: {IDLE_ACTION}")
-    with IDLE_ACTION.open("r", encoding="utf-8") as stream:
-        idle = json.load(stream)
 
     pose_bones = armature.pose.bones
     errors = {
@@ -183,7 +263,7 @@ def main() -> None:
             f"Expected exactly one deformation armature, found {len(deform_armatures)}"
         )
     armature = deform_armatures[0]
-    rig_metadata = extract_rig(armature, manifest)
+    rig_metadata = extract_rig(armature, manifest, meshes)
 
     bpy.ops.object.select_all(action="DESELECT")
     for obj in meshes + armatures:
