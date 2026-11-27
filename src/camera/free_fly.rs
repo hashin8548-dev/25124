@@ -8,9 +8,14 @@ use bevy::{
 use crate::{config::RuntimeConfig, world::WorldOrigin};
 
 #[derive(Component, Debug)]
+pub struct CameraSpring {
+    pub(crate) velocity: Vec3,
+}
+
+#[derive(Component, Debug)]
 pub struct FreeFlyCamera {
-    yaw_radians: f32,
-    pitch_radians: f32,
+    pub(super) yaw_radians: f32,
+    pub(super) pitch_radians: f32,
 }
 
 pub(super) fn spawn_camera(
@@ -28,6 +33,7 @@ pub(super) fn spawn_camera(
             yaw_radians: yaw,
             pitch_radians: pitch,
         },
+        CameraSpring { velocity: Vec3::ZERO },
         Transform {
             translation: (DVec3::from_array(camera.spawn_position_m.map(f64::from)) - origin.0)
                 .as_vec3(),
@@ -44,9 +50,10 @@ pub(super) fn move_camera(
     time: Res<Time>,
     config: Res<RuntimeConfig>,
     menu: Res<crate::ui::MenuState>,
+    mode: Res<State<crate::engine::AppMode>>,
     mut cameras: Query<(&mut Transform, &mut FreeFlyCamera)>,
 ) {
-    if menu.visible {
+    if menu.visible || *mode.get() == crate::engine::AppMode::Simulation {
         return;
     }
 
@@ -132,13 +139,16 @@ pub(super) fn sync_camera_settings(
 pub(super) fn update_cursor_grab(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     menu: Res<crate::ui::MenuState>,
+    mode: Res<State<crate::engine::AppMode>>,
     mut cursors: Query<&mut CursorOptions, With<PrimaryWindow>>,
 ) {
     let Ok(mut cursor) = cursors.single_mut() else {
         return;
     };
 
-    let captured = !menu.visible && mouse_buttons.pressed(MouseButton::Right);
+    let captured = !menu.visible
+        && (*mode.get() == crate::engine::AppMode::Simulation
+            || mouse_buttons.pressed(MouseButton::Right));
     let (visible, grab_mode) = if captured {
         (false, CursorGrabMode::Locked)
     } else {
