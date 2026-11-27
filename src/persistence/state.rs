@@ -1,7 +1,7 @@
 use std::{
-    collections::BTreeMap,
-    fs::{self, File},
-    io::Write,
+    collections::{BTreeMap, BTreeSet},
+    fs::{self, File, OpenOptions},
+    io::{self, Write},
     path::{Path, PathBuf},
 };
 
@@ -15,6 +15,14 @@ pub struct WorldStateFile {
     pub format_version: u32,
     pub world_id: String,
     pub bodies: BTreeMap<String, PersistedBodyState>,
+    #[serde(default)]
+    pub fractured: BTreeSet<String>,
+    #[serde(default)]
+    pub broken_bonds: BTreeSet<String>,
+    #[serde(default)]
+    pub damaged_bonds: BTreeMap<String, f32>,
+    #[serde(default)]
+    pub fragments: BTreeMap<String, PersistedFragmentState>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -26,12 +34,29 @@ pub struct PersistedBodyState {
     pub angular_velocity_rad_s: [f32; 3],
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PersistedFragmentState {
+    #[serde(default)]
+    pub chunk_id: Option<String>,
+    pub definition_id: String,
+    pub half_extents_m: [f32; 3],
+    pub translation_m: [f32; 3],
+    pub rotation_xyzw: [f32; 4],
+    pub linear_velocity_m_s: [f32; 3],
+    pub angular_velocity_rad_s: [f32; 3],
+}
+
 impl WorldStateFile {
     pub fn new(world_id: String) -> Self {
         Self {
-            format_version: 1,
+            format_version: 2,
             world_id,
             bodies: BTreeMap::new(),
+            fractured: BTreeSet::new(),
+            broken_bonds: BTreeSet::new(),
+            damaged_bonds: BTreeMap::new(),
+            fragments: BTreeMap::new(),
         }
     }
 
@@ -90,7 +115,7 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
         .with_context(|| format!("invalid save file '{}'", path.display()))?;
 
     ensure!(
-        state.format_version == 1,
+        (1..=2).contains(&state.format_version),
         "unsupported save format version {} in '{}'",
         state.format_version,
         path.display()
@@ -128,6 +153,76 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
         );
         let inverse_norm = norm_squared.sqrt().recip();
         for component in &mut body.rotation_xyzw {
+            *component *= inverse_norm;
+        }
+    }
+
+    for id in &state.fractured {
+        ensure!(
+            !id.trim().is_empty(),
+            "save contains an empty fractured object id"
+        );
+    }
+
+    for id in &state.broken_bonds {
+        ensure!(
+            !id.trim().is_empty(),
+            "save contains an empty broken bond id"
+        );
+    }
+
+    for (id, damage) in &state.damaged_bonds {
+        ensure!(
+            !id.trim().is_empty(),
+            "save contains an empty damaged bond id"
+        );
+        ensure!(
+            damage.is_finite() && (0.0..1.0).contains(damage),
+            "save contains invalid progressive damage for bond '{id}'"
+        );
+    }
+    state.format_version = 2;
+    for (id, fragment) in &mut state.fragments {
+        ensure!(!id.trim().is_empty(), "save contains an empty fragment id");
+        ensure!(
+            !fragment.definition_id.trim().is_empty(),
+            "fragment '{id}' has an empty component definition id"
+        );
+        if let Some(chunk_id) = &fragment.chunk_id {
+            ensure!(
+                !chunk_id.trim().is_empty(),
+                "fragment '{id}' has an empty owning chunk id"
+            );
+        }
+        ensure!(
+            fragment
+                .half_extents_m
+                .iter()
+                .all(|value| value.is_finite() && *value > 0.0),
+            "fragment '{id}' has invalid half extents"
+        );
+        ensure!(
+            fragment
+                .translation_m
+                .iter()
+                .chain(fragment.rotation_xyzw.iter())
+                .chain(fragment.linear_velocity_m_s.iter())
+                .chain(fragment.angular_velocity_rad_s.iter())
+                .all(|value| value.is_finite()),
+            "save contains non-finite fragment state for '{id}'"
+        );
+
+        let norm_squared = fragment
+            .rotation_xyzw
+            .iter()
+            .map(|component| component * component)
+            .sum::<f32>();
+        ensure!(
+            norm_squared.is_finite() && norm_squared > 1.0e-12,
+            "save contains a zero-length or invalid fragment quaternion for '{id}'"
+        );
+        let inverse_norm = norm_squared.sqrt().recip();
+        for component in &mut fragment.rotation_xyzw {
             *component *= inverse_norm;
         }
     }
@@ -223,27 +318,42 @@ where
             })?;
         }
 
-        fs::copy(path, &previous_temp_path).with_context(|| {
+        // Copy through a newly created handle rather than fs::copy followed by
+        // reopening the destination. This preserves our write handle through flush/sync
+        // and avoids inheriting restrictive file attributes on Windows.
+        let mut source_file = File::open(path)
+            .with_context(|| format!("could not open current save '{}'", path.display()))?;
+        let mut staged_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&previous_temp_path)
+            .with_context(|| {
+                format!(
+                    "could not create staged previous save '{}'",
+                    previous_temp_path.display()
+                )
+            })?;
+        io::copy(&mut source_file, &mut staged_file).with_context(|| {
             format!(
-                "could not stage current save '{}' as '{}'",
+                "could not copy current save '{}' into '{}'",
                 path.display(),
                 previous_temp_path.display()
             )
         })?;
-        File::open(&previous_temp_path)
-            .with_context(|| {
-                format!(
-                    "could not open staged previous save '{}'",
-                    previous_temp_path.display()
-                )
-            })?
-            .sync_all()
-            .with_context(|| {
-                format!(
-                    "could not flush staged previous save '{}'",
-                    previous_temp_path.display()
-                )
-            })?;
+        staged_file.flush().with_context(|| {
+            format!(
+                "could not flush staged previous save '{}'",
+                previous_temp_path.display()
+            )
+        })?;
+        staged_file.sync_all().with_context(|| {
+            format!(
+                "could not sync staged previous save '{}'",
+                previous_temp_path.display()
+            )
+        })?;
+        drop(staged_file);
+        drop(source_file);
         ensure!(
             load_valid_state(&previous_temp_path, expected_world_id)?.is_some(),
             "staged previous save '{}' could not be validated",
@@ -386,6 +496,7 @@ mod tests {
 
     fn sample_state() -> WorldStateFile {
         let mut state = WorldStateFile::new("test-world".to_owned());
+        state.damaged_bonds.insert("bond-a".to_owned(), 0.75);
         state.bodies.insert(
             "body-a".to_owned(),
             PersistedBodyState {
@@ -429,10 +540,27 @@ mod tests {
 
         assert_eq!(loaded.bodies.len(), 1);
         assert_eq!(loaded.bodies["body-a"].translation_m, [1.0, 2.0, 3.0]);
+        assert_eq!(loaded.damaged_bonds["bond-a"], 0.75);
 
         cleanup_save_files(&path);
     }
 
+    #[test]
+    fn version_one_save_migrates_to_version_two_without_losing_legacy_state() {
+        let path = unique_save_path("version-one-migration");
+        let mut legacy = serde_json::to_value(sample_state()).unwrap();
+        legacy["format_version"] = serde_json::json!(1);
+        legacy.as_object_mut().unwrap().remove("damaged_bonds");
+        std::fs::write(&path, serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
+
+        let loaded = WorldStateFile::load_or_default(&path, "test-world")
+            .expect("version-one save should migrate");
+        assert_eq!(loaded.format_version, 2);
+        assert!(loaded.damaged_bonds.is_empty());
+        assert_eq!(loaded.bodies["body-a"].translation_m, [1.0, 2.0, 3.0]);
+
+        cleanup_save_files(&path);
+    }
     #[test]
     fn non_unit_quaternion_is_normalized_during_load() {
         let path = unique_save_path("normalize");

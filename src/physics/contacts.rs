@@ -52,6 +52,7 @@ pub(super) fn collect_contact_transitions(
         .iter()
         .map(|pair| ContactPair::new(pair.collider1, pair.collider2))
         .collect();
+    trace!("Active rigid-body contact pairs: {}", ledger.active_count());
 }
 
 #[cfg(test)]

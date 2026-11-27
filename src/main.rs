@@ -4,15 +4,17 @@ mod engine;
 mod persistence;
 mod physics;
 mod rendering;
+mod ui;
 mod world;
 
 use anyhow::Result;
 use bevy::{asset::AssetPlugin, prelude::*};
 
 use crate::{
-    config::{BodyType, RuntimeConfig},
-    engine::EnginePlugin,
+    config::{BodyType, RuntimeConfig, WorldLibrary},
+    engine::{AppMode, EnginePlugin},
     persistence::WorldStateFile,
+    world::parse_voxel_instance_id,
 };
 
 fn main() {
@@ -26,25 +28,53 @@ fn run() -> Result<()> {
     let Some(config) = RuntimeConfig::from_environment()? else {
         return Ok(());
     };
-    let world_state = WorldStateFile::load_or_default(&config.paths.world_state, &config.world.id)?;
-    report_saved_state_compatibility(&config, &world_state);
+    let start_in_library = config.start_in_library;
+    let world_state = if start_in_library {
+        // The first valid world only bootstraps shared engine/content settings. Do not read its
+        // save file until the user explicitly selects it in the library.
+        WorldStateFile::new(config.world.id.clone())
+    } else {
+        let state = WorldStateFile::load_or_default(&config.paths.world_state, &config.world.id)?;
+        report_saved_state_compatibility(&config, &state);
+        state
+    };
+    let library = WorldLibrary::discover(&config.paths.project_root)?;
+    for warning in &library.warnings {
+        warn!("World library entry was skipped: {warning}");
+    }
     let asset_root = config.paths.assets_dir.to_string_lossy().into_owned();
 
-    App::new()
-        .insert_resource(config)
+    let mut app = App::new();
+    app.insert_resource(config)
+        .insert_resource(library)
         .insert_resource(world_state)
         .add_plugins(DefaultPlugins.set(AssetPlugin {
             file_path: asset_root,
             ..default()
         }))
-        .add_plugins(EnginePlugin)
-        .run();
+        .add_plugins(EnginePlugin);
+
+    if !start_in_library {
+        app.insert_resource(NextState::Pending(AppMode::Simulation));
+    }
+    app.run();
 
     Ok(())
 }
 
 fn report_saved_state_compatibility(config: &RuntimeConfig, world_state: &WorldStateFile) {
     for id in world_state.bodies.keys() {
+        if let Some((chunk_id, coordinate)) = parse_voxel_instance_id(id)
+            && config.chunks.iter().any(|chunk| {
+                chunk.id == chunk_id
+                    && coordinate[0] < chunk.dimensions[0]
+                    && coordinate[1] < chunk.dimensions[1]
+                    && coordinate[2] < chunk.dimensions[2]
+            })
+        {
+            continue;
+        }
+
         let Some(instance) = config
             .world
             .objects

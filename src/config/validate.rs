@@ -2,12 +2,14 @@ use std::collections::HashSet;
 
 use anyhow::{Result, ensure};
 
+use super::load::ChunkSource;
 use super::schema::{
-    AlphaMode, BodyType, ColliderShape, ComponentCatalog, EngineSettings, MaterialCatalog,
-    WorldManifest,
+    AlphaMode, BodyType, ChunkFile, ColliderShape, ComponentCatalog, EngineSettings,
+    MAX_CHUNK_DIMENSION, MaterialCatalog, WorldManifest,
 };
 
 const SCHEMA_VERSION: u32 = 1;
+const ENGINE_SCHEMA_VERSION: u32 = 3;
 const CAMERA_PITCH_LIMIT_DEGREES: f32 = 89.0;
 
 pub fn validate_all(
@@ -15,9 +17,10 @@ pub fn validate_all(
     materials: &MaterialCatalog,
     components: &ComponentCatalog,
     world: &WorldManifest,
+    chunks: &[ChunkSource],
 ) -> Result<()> {
     ensure!(
-        engine.schema_version == SCHEMA_VERSION,
+        engine.schema_version == ENGINE_SCHEMA_VERSION,
         "unsupported engine schema version {}",
         engine.schema_version
     );
@@ -54,6 +57,47 @@ pub fn validate_all(
     ensure!(
         (1..=64).contains(&physics.substeps),
         "physics.substeps must be between 1 and 64"
+    );
+    ensure!(
+        physics.restitution_threshold_m_s.is_finite() && physics.restitution_threshold_m_s >= 0.0,
+        "physics.restitution_threshold_m_s must be finite and non-negative"
+    );
+    ensure!(
+        (1..=16).contains(&physics.restitution_iterations),
+        "physics.restitution_iterations must be between 1 and 16"
+    );
+    ensure!(
+        physics.contact_damping_ratio.is_finite()
+            && (0.1..=20.0).contains(&physics.contact_damping_ratio),
+        "physics.contact_damping_ratio must be between 0.1 and 20"
+    );
+    ensure!(
+        physics.contact_frequency_factor.is_finite()
+            && (0.1..=10.0).contains(&physics.contact_frequency_factor),
+        "physics.contact_frequency_factor must be between 0.1 and 10"
+    );
+    ensure!(
+        physics.max_overlap_solve_speed_m_s.is_finite()
+            && physics.max_overlap_solve_speed_m_s > 0.0,
+        "physics.max_overlap_solve_speed_m_s must be positive and finite"
+    );
+    ensure!(
+        physics.warm_start_coefficient.is_finite()
+            && (0.0..=1.0).contains(&physics.warm_start_coefficient),
+        "physics.warm_start_coefficient must be in [0, 1]"
+    );
+    ensure!(
+        physics.sleep_linear_threshold_m_s.is_finite() && physics.sleep_linear_threshold_m_s > 0.0,
+        "physics.sleep_linear_threshold_m_s must be positive and finite"
+    );
+    ensure!(
+        physics.sleep_angular_threshold_rad_s.is_finite()
+            && physics.sleep_angular_threshold_rad_s > 0.0,
+        "physics.sleep_angular_threshold_rad_s must be positive and finite"
+    );
+    ensure!(
+        physics.sleep_after_seconds.is_finite() && physics.sleep_after_seconds > 0.0,
+        "physics.sleep_after_seconds must be positive and finite"
     );
 
     let camera = &engine.camera;
@@ -97,6 +141,50 @@ pub fn validate_all(
         "key light rotation must contain only finite values"
     );
 
+    let streaming = &engine.streaming;
+    ensure!(
+        streaming.unload_radius_chunks > streaming.load_radius_chunks,
+        "streaming.unload_radius_chunks must exceed load_radius_chunks to provide hysteresis"
+    );
+    ensure!(
+        streaming.object_chunk_size_m.is_finite() && streaming.object_chunk_size_m > 0.0,
+        "streaming.object_chunk_size_m must be positive and finite"
+    );
+    ensure!(
+        streaming.lod_near_distance_chunks.is_finite() && streaming.lod_near_distance_chunks > 0.0,
+        "streaming.lod_near_distance_chunks must be positive and finite"
+    );
+    ensure!(
+        streaming.lod_mid_distance_chunks.is_finite()
+            && streaming.lod_mid_distance_chunks > streaming.lod_near_distance_chunks,
+        "streaming.lod_mid_distance_chunks must exceed the near distance"
+    );
+    ensure!(
+        streaming.lod_far_distance_chunks.is_finite()
+            && streaming.lod_far_distance_chunks > streaming.lod_mid_distance_chunks
+            && streaming.lod_far_distance_chunks <= streaming.unload_radius_chunks as f32,
+        "streaming.lod_far_distance_chunks must exceed the mid distance and not exceed the unload radius"
+    );
+    ensure!(
+        (1..=16).contains(&streaming.max_parallel_chunk_loads),
+        "streaming.max_parallel_chunk_loads must be between 1 and 16"
+    );
+    ensure!(
+        (1..=256).contains(&streaming.max_chunk_spawns_per_frame),
+        "streaming.max_chunk_spawns_per_frame must be between 1 and 256"
+    );
+    let maximum_chunk_extent_m = chunks
+        .iter()
+        .map(|chunk| {
+            chunk.dimensions.iter().copied().max().unwrap_or(0) as f32 * chunk.voxel_size_m
+        })
+        .fold(0.0_f32, f32::max);
+    ensure!(
+        (maximum_chunk_extent_m * streaming.load_radius_chunks as f32).is_finite()
+            && (maximum_chunk_extent_m * streaming.unload_radius_chunks as f32).is_finite(),
+        "streaming radii produce non-finite world-space distances"
+    );
+
     ensure!(
         !materials.materials.is_empty(),
         "material catalogue is empty"
@@ -118,6 +206,11 @@ pub fn validate_all(
         ensure!(
             material.restitution.is_finite() && (0.0..=1.0).contains(&material.restitution),
             "material '{id}' restitution must be in [0, 1]"
+        );
+        ensure!(
+            material.rolling_resistance_coefficient.is_finite()
+                && (0.0..=1.0).contains(&material.rolling_resistance_coefficient),
+            "material '{id}' rolling resistance coefficient must be in [0, 1]"
         );
     }
 
@@ -145,6 +238,49 @@ pub fn validate_all(
             ensure!(
                 ccd.threshold.is_finite() && (0.0..=1.0).contains(&ccd.threshold),
                 "component definition '{id}' swept CCD threshold must be finite and in [0, 1]"
+            );
+        }
+        if let Some(bond_strength) = &definition.bond_strength {
+            ensure!(
+                matches!(&definition.collider, ColliderShape::Cuboid { .. }),
+                "bonded component definition '{id}' must use a cuboid collider"
+            );
+            ensure!(
+                [
+                    bond_strength.elastic_modulus_pa,
+                    bond_strength.tensile_strength_pa,
+                    bond_strength.compressive_strength_pa,
+                    bond_strength.shear_strength_pa,
+                    bond_strength.bending_strength_pa,
+                    bond_strength.torsional_strength_pa,
+                    bond_strength.damage_rate_per_s,
+                ]
+                .iter()
+                .all(|value| value.is_finite() && *value > 0.0),
+                "component '{id}' bond strength values must be positive and finite"
+            );
+        }
+        if let Some(destructibility) = &definition.destructibility {
+            ensure!(
+                matches!(&definition.collider, ColliderShape::Cuboid { .. }),
+                "destructible component definition '{id}' must use a cuboid collider"
+            );
+            ensure!(
+                destructibility.impact_speed_threshold_m_s.is_finite()
+                    && destructibility.impact_speed_threshold_m_s > 0.0,
+                "component definition '{id}' destruction threshold must be positive and finite"
+            );
+            ensure!(
+                destructibility
+                    .fragments_per_axis
+                    .iter()
+                    .all(|count| (2..=4).contains(count))
+                    && destructibility.fragments_per_axis.iter().product::<u32>() <= 64,
+                "component definition '{id}' fragments_per_axis must be in [2, 4] with at most 64 fragments"
+            );
+            ensure!(
+                definition.visual.model.is_none(),
+                "destructible component definition '{id}' must use a procedural primitive visual"
             );
         }
     }
@@ -190,6 +326,156 @@ pub fn validate_all(
         );
     }
 
+    let mut chunk_ids = HashSet::new();
+    let mut chunk_coordinates = HashSet::new();
+    for chunk in chunks {
+        ensure!(!chunk.id.trim().is_empty(), "chunk id cannot be empty");
+        ensure!(
+            chunk_ids.insert(chunk.id.as_str()),
+            "duplicate chunk id '{}'",
+            chunk.id
+        );
+        ensure!(
+            chunk_coordinates.insert(chunk.coordinate),
+            "duplicate chunk coordinate {:?}",
+            chunk.coordinate
+        );
+        ensure!(
+            chunk
+                .dimensions
+                .iter()
+                .all(|dimension| (1..=32).contains(dimension)),
+            "chunk '{}' dimensions must each be in [1, 32]",
+            chunk.id
+        );
+        ensure!(
+            chunk.voxel_size_m.is_finite() && chunk.voxel_size_m > 0.0,
+            "chunk '{}' voxel_size_m must be positive and finite",
+            chunk.id
+        );
+    }
+
+    Ok(())
+}
+
+/// Validates a chunk payload after its asynchronous read completes.
+pub fn validate_chunk_file(
+    chunk: &ChunkFile,
+    source: &ChunkSource,
+    components: &ComponentCatalog,
+) -> Result<()> {
+    ensure!(
+        chunk.schema_version == SCHEMA_VERSION,
+        "unsupported schema version {} in chunk '{}'",
+        chunk.schema_version,
+        chunk.id
+    );
+    ensure!(
+        chunk.id == source.id,
+        "chunk id '{}' does not match region index id '{}'",
+        chunk.id,
+        source.id
+    );
+    ensure!(
+        chunk.coordinate == source.coordinate,
+        "chunk '{}' coordinates do not match its region index",
+        chunk.id
+    );
+    ensure!(
+        chunk.dimensions == source.dimensions,
+        "chunk '{}' dimensions do not match its region index",
+        chunk.id
+    );
+    ensure!(
+        (chunk.voxel_size_m - source.voxel_size_m).abs()
+            <= f32::EPSILON * source.voxel_size_m.max(1.0),
+        "chunk '{}' voxel size does not match its region index",
+        chunk.id
+    );
+    ensure!(
+        chunk
+            .dimensions
+            .iter()
+            .all(|dimension| (1..=MAX_CHUNK_DIMENSION).contains(dimension)),
+        "chunk '{}' dimensions must each be in [1, 32]",
+        chunk.id
+    );
+    ensure!(
+        chunk.voxel_size_m.is_finite() && chunk.voxel_size_m > 0.0,
+        "chunk '{}' voxel_size_m must be positive and finite",
+        chunk.id
+    );
+    ensure!(
+        !chunk.palette.is_empty() && chunk.palette.len() <= 16 && chunk.palette[0] == "air",
+        "chunk '{}' palette must contain 1-16 entries and reserve index zero for 'air'",
+        chunk.id
+    );
+
+    for (index, definition_id) in chunk.palette.iter().enumerate().skip(1) {
+        let Some(definition) = components.definitions.get(definition_id) else {
+            anyhow::bail!(
+                "chunk '{}' palette entry {index} references unknown definition '{definition_id}'",
+                chunk.id
+            );
+        };
+        ensure!(
+            matches!(&definition.collider, ColliderShape::Cuboid { .. }),
+            "chunk '{}' palette entry '{definition_id}' must use a cuboid collider",
+            chunk.id
+        );
+    }
+
+    let mut layer_ids = HashSet::new();
+    for layer in &chunk.layers {
+        ensure!(
+            layer.y < chunk.dimensions[1],
+            "chunk '{}' layer y={} is outside its height",
+            chunk.id,
+            layer.y
+        );
+        ensure!(
+            layer_ids.insert(layer.y),
+            "chunk '{}' has duplicate layer y={}",
+            chunk.id,
+            layer.y
+        );
+        ensure!(
+            layer.rows.len() == chunk.dimensions[2] as usize,
+            "chunk '{}' layer {} must contain exactly {} rows",
+            chunk.id,
+            layer.y,
+            chunk.dimensions[2]
+        );
+        for (z, row) in layer.rows.iter().enumerate() {
+            ensure!(
+                row.len() == chunk.dimensions[0] as usize && row.is_ascii(),
+                "chunk '{}' layer {} row {} must contain exactly {} ASCII palette characters",
+                chunk.id,
+                layer.y,
+                z,
+                chunk.dimensions[0]
+            );
+            for (x, character) in row.chars().enumerate() {
+                let Some(palette_index) = character.to_digit(16) else {
+                    anyhow::bail!(
+                        "chunk '{}' layer {} row {} column {} has invalid palette character '{}'",
+                        chunk.id,
+                        layer.y,
+                        z,
+                        x,
+                        character
+                    );
+                };
+                ensure!(
+                    palette_index < chunk.palette.len() as u32,
+                    "chunk '{}' references palette index {} outside its palette",
+                    chunk.id,
+                    palette_index
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -216,7 +502,6 @@ fn validate_collider(collider: &ColliderShape, owner: &str) -> Result<()> {
             "component '{owner}' capsule dimensions are invalid"
         ),
     }
-
     Ok(())
 }
 
@@ -249,7 +534,6 @@ fn validate_visual(visual: &super::schema::VisualDefinition, owner: &str) -> Res
             anyhow::anyhow!("component '{owner}' has invalid model path: {error}")
         })?;
     }
-
     Ok(())
 }
 
@@ -257,7 +541,6 @@ fn validate_asset_path(asset: &str) -> Result<()> {
     let mut parts = asset.split('#');
     let asset_path = parts.next().unwrap_or_default();
     let scene_selector = parts.next();
-
     ensure!(
         parts.next().is_none(),
         "model reference may contain only one scene selector"
@@ -280,7 +563,6 @@ fn validate_asset_path(asset: &str) -> Result<()> {
             "model scene selector index is outside the supported range"
         );
     }
-
     for component in asset_path.split('/') {
         ensure!(
             !component.is_empty() && component != "." && component != "..",
@@ -291,7 +573,6 @@ fn validate_asset_path(asset: &str) -> Result<()> {
             "model paths cannot contain platform drive or URI prefixes"
         );
     }
-
     Ok(())
 }
 
@@ -332,6 +613,29 @@ mod tests {
     }
 
     #[test]
+    fn every_indexed_chunk_payload_matches_its_region_metadata() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let config = RuntimeConfig::load(
+            root.join("data"),
+            root.join("assets"),
+            root.join("worlds/sandbox/world.json"),
+        )
+        .expect("sample region metadata should validate");
+
+        for source in &config.chunks {
+            let contents = std::fs::read_to_string(&source.path)
+                .unwrap_or_else(|error| panic!("could not read chunk '{}': {error}", source.id));
+            let chunk: super::super::schema::ChunkFile = serde_json::from_str(&contents)
+                .unwrap_or_else(|error| {
+                    panic!("chunk '{}' contains invalid JSON: {error}", source.id)
+                });
+            super::validate_chunk_file(&chunk, source, &config.components).unwrap_or_else(
+                |error| panic!("chunk '{}' failed payload validation: {error:#}", source.id),
+            );
+        }
+    }
+
+    #[test]
     fn model_scene_selectors_are_explicit_and_numeric() {
         use super::validate_asset_path;
 
@@ -347,7 +651,6 @@ mod tests {
     fn checked_in_data_and_world_are_valid_without_reading_user_save_data() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let config = RuntimeConfig::load(
-            root.to_path_buf(),
             root.join("data"),
             root.join("assets"),
             root.join("worlds/sandbox/world.json"),
@@ -355,10 +658,9 @@ mod tests {
         .expect("sample configuration should validate");
 
         assert_eq!(config.world.id, "sandbox");
-        assert_eq!(config.world.objects.len(), 5);
-        assert_eq!(
-            config.world.objects[1].definition,
-            config.world.objects[2].definition
-        );
+        assert_eq!(config.world.objects.len(), 4);
+        assert_eq!(config.chunks.len(), 4);
+        assert_eq!(config.world.objects[1].definition, "primitive.steel_block");
+        assert_eq!(config.world.objects[2].definition, "primitive.timber_crate");
     }
 }

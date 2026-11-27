@@ -2,6 +2,9 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+/// Maximum edge length supported by the bounded in-memory voxel mesher.
+pub(crate) const MAX_CHUNK_DIMENSION: u32 = 32;
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EngineSettings {
@@ -9,6 +12,7 @@ pub struct EngineSettings {
     pub physics: PhysicsSettings,
     pub camera: CameraSettings,
     pub rendering: RenderingSettings,
+    pub streaming: StreamingSettings,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -18,6 +22,15 @@ pub struct PhysicsSettings {
     pub gravity_m_s2: [f32; 3],
     pub fixed_hz: f64,
     pub substeps: u32,
+    pub restitution_threshold_m_s: f32,
+    pub restitution_iterations: u32,
+    pub contact_damping_ratio: f32,
+    pub contact_frequency_factor: f32,
+    pub max_overlap_solve_speed_m_s: f32,
+    pub warm_start_coefficient: f32,
+    pub sleep_linear_threshold_m_s: f32,
+    pub sleep_angular_threshold_rad_s: f32,
+    pub sleep_after_seconds: f32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -39,6 +52,31 @@ pub struct RenderingSettings {
     pub shadows_enabled: bool,
 }
 
+fn default_object_chunk_size_m() -> f32 {
+    16.0
+}
+
+fn default_lod_mid_distance_chunks() -> f32 {
+    1.75
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StreamingSettings {
+    pub load_radius_chunks: u32,
+    pub unload_radius_chunks: u32,
+    #[serde(default = "default_object_chunk_size_m")]
+    pub object_chunk_size_m: f32,
+    pub max_parallel_chunk_loads: u32,
+    pub max_chunk_spawns_per_frame: u32,
+    pub greedy_meshing_enabled: bool,
+    pub lod_enabled: bool,
+    pub lod_near_distance_chunks: f32,
+    #[serde(default = "default_lod_mid_distance_chunks")]
+    pub lod_mid_distance_chunks: f32,
+    pub lod_far_distance_chunks: f32,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MaterialCatalog {
@@ -53,6 +91,8 @@ pub struct MaterialDefinition {
     pub static_friction: f32,
     pub dynamic_friction: f32,
     pub restitution: f32,
+    #[serde(default)]
+    pub rolling_resistance_coefficient: f32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -69,7 +109,44 @@ pub struct ComponentDefinition {
     pub collider: ColliderShape,
     pub material: String,
     pub swept_ccd: Option<SweptCcdDefinition>,
+    #[serde(default)]
+    pub destructibility: Option<DestructibilityDefinition>,
+    #[serde(default)]
+    pub bond_strength: Option<BondStrengthDefinition>,
     pub visual: VisualDefinition,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DestructibilityDefinition {
+    pub impact_speed_threshold_m_s: f32,
+    pub fragments_per_axis: [u32; 3],
+}
+
+/// Material-level stiffness, progressive damage and section failure limits for structural bonds.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BondStrengthDefinition {
+    #[serde(default = "default_elastic_modulus_pa")]
+    pub elastic_modulus_pa: f32,
+    pub tensile_strength_pa: f32,
+    #[serde(default = "default_compressive_strength_pa")]
+    pub compressive_strength_pa: f32,
+    pub shear_strength_pa: f32,
+    pub bending_strength_pa: f32,
+    pub torsional_strength_pa: f32,
+    #[serde(default = "default_damage_rate_per_s")]
+    pub damage_rate_per_s: f32,
+}
+
+fn default_elastic_modulus_pa() -> f32 {
+    1.0e9
+}
+fn default_compressive_strength_pa() -> f32 {
+    1.0e7
+}
+fn default_damage_rate_per_s() -> f32 {
+    1.0
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Hash)]
@@ -134,8 +211,56 @@ pub struct WorldManifest {
     pub schema_version: u32,
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub preview_asset: Option<String>,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, serde_json::Value>,
     pub gravity_m_s2: Option<[f32; 3]>,
+    #[serde(default)]
+    pub regions: Vec<String>,
     pub objects: Vec<WorldObjectInstance>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegionManifest {
+    pub schema_version: u32,
+    pub id: String,
+    pub coordinate: [i32; 2],
+    pub chunks: Vec<ChunkReference>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChunkReference {
+    pub id: String,
+    pub coordinate: [i32; 3],
+    pub dimensions: [u32; 3],
+    pub voxel_size_m: f32,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChunkFile {
+    pub schema_version: u32,
+    pub id: String,
+    pub coordinate: [i32; 3],
+    pub dimensions: [u32; 3],
+    pub voxel_size_m: f32,
+    /// Palette index zero is reserved for air. Remaining entries reference component definitions.
+    pub palette: Vec<String>,
+    /// Each row contains one hexadecimal palette index per X cell; rows are ordered by Z.
+    pub layers: Vec<ChunkLayer>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChunkLayer {
+    pub y: u32,
+    pub rows: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -145,4 +270,29 @@ pub struct WorldObjectInstance {
     pub definition: String,
     pub position_m: [f32; 3],
     pub rotation_degrees_xyz: [f32; 3],
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StreamingSettings;
+
+    #[test]
+    fn legacy_streaming_settings_default_new_spatial_and_lod_fields() {
+        let settings: StreamingSettings = serde_json::from_str(
+            r#"{
+                "load_radius_chunks": 2,
+                "unload_radius_chunks": 3,
+                "max_parallel_chunk_loads": 2,
+                "max_chunk_spawns_per_frame": 2,
+                "greedy_meshing_enabled": true,
+                "lod_enabled": true,
+                "lod_near_distance_chunks": 1.0,
+                "lod_far_distance_chunks": 2.5
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(settings.object_chunk_size_m, 16.0);
+        assert_eq!(settings.lod_mid_distance_chunks, 1.75);
+    }
 }

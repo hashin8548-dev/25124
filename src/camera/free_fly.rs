@@ -32,8 +32,13 @@ pub(super) fn move_camera(
     mouse_motion: Res<AccumulatedMouseMotion>,
     time: Res<Time>,
     config: Res<RuntimeConfig>,
+    menu: Res<crate::ui::MenuState>,
     mut cameras: Query<(&mut Transform, &mut FreeFlyCamera)>,
 ) {
+    if menu.visible {
+        return;
+    }
+
     let settings = &config.engine.camera;
     let delta = mouse_motion.delta * settings.mouse_radians_per_pixel;
 
