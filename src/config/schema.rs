@@ -205,6 +205,18 @@ pub struct VisualDefinition {
     pub alpha_mode: AlphaMode,
 }
 
+/// Declarative world-generation parameters. Generated terrain is materialized only for
+/// chunks requested by the streaming scheduler.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorldGeneration {
+    FlatPlatform {
+        size_units: u64,
+        border_height_units: u32,
+        border_thickness_units: u32,
+    },
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorldManifest {
@@ -218,6 +230,9 @@ pub struct WorldManifest {
     #[serde(default)]
     pub metadata: BTreeMap<String, serde_json::Value>,
     pub gravity_m_s2: Option<[f32; 3]>,
+    /// Optional deterministic terrain recipe; region files remain supported for authored worlds.
+    #[serde(default)]
+    pub generation: Option<WorldGeneration>,
     #[serde(default)]
     pub regions: Vec<String>,
     pub objects: Vec<WorldObjectInstance>,

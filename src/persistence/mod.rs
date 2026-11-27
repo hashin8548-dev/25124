@@ -12,6 +12,7 @@ use crate::{
     engine::AppMode,
     physics::DestructionJournal,
     ui::{MenuFeedback, MenuFeedbackTone},
+    world::WorldOrigin,
 };
 
 #[derive(Component, Clone, Debug)]
@@ -75,6 +76,7 @@ fn save_world_on_f5(
     mut menu_feedback: ResMut<MenuFeedback>,
     config: Res<RuntimeConfig>,
     previous_state: Res<WorldStateFile>,
+    origin: Res<WorldOrigin>,
     destruction_journal: Res<DestructionJournal>,
     bodies: Query<
         (
@@ -101,6 +103,7 @@ fn save_world_on_f5(
     // Keep state for streamed-out chunks and unavailable mod content. Live bodies and fragments
     // overwrite their records below, while static authored cells remain manifest-owned.
     let mut snapshot = WorldStateFile::new(target.world_id.clone());
+    snapshot.origin_m = origin.0.to_array();
     // Keep body records for chunks that are currently streamed out. Live entities below
     // overwrite their own IDs with current runtime state.
     let static_ids = known_static_world_object_ids(&config);

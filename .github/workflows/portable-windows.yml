@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -37,6 +40,10 @@ jobs:
         with:
           key: windows-x64-portable-release
 
+      - name: Validate Rust sources
+        shell: pwsh
+        run: ./scripts/validate.ps1
+
       - name: Build portable folder and ZIP
         shell: pwsh
         run: ./scripts/package.ps1
@@ -60,7 +67,7 @@ jobs:
                   "data/materials.json",
                   "data/components.json",
                   "assets/ui/main_menu.json",
-                  "worlds/sandbox/world.json"
+                  "worlds/.gitkeep"
               )) {
                   if ($Names -notcontains $Required) {
                       throw "Portable archive is missing '$Required'."
