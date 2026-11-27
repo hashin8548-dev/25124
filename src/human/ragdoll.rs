@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::{config::RuntimeConfig, world::WorldOrigin};
 
-use super::{HumanMotionLibrary, HumanRig};
+use super::{HumanActionState, HumanMotionLibrary, HumanRig};
 
 #[derive(Clone, Debug, Resource)]
 pub struct HumanPhysicsSettings {
@@ -23,7 +23,33 @@ pub struct HumanPhysicsSettings {
     pub joint_damping_angular: f32,
     pub joint_point_compliance: f32,
     pub joint_angular_compliance: f32,
+    pub pose_stiffness_nm_per_rad: f32,
+    pub pose_damping_nm_s_per_rad: f32,
+    pub max_pose_torque_nm: f32,
+    pub temporary_assists: HumanTemporaryAssists,
     pub limits: HumanJointLimits,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HumanTemporaryAssists {
+    pub jump_launch: JumpLaunchAssist,
+    pub rotational_assistance: RotationalAssist,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JumpLaunchAssist {
+    pub enabled: bool,
+    pub launch_speed_m_s: f32,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RotationalAssist {
+    pub enabled: bool,
+    pub strength: f32,
+    pub max_torque_nm: f32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -47,6 +73,7 @@ pub struct HumanJointLimits {
 struct HumanManifest {
     schema_version: u32,
     physics: HumanPhysicsSettingsFile,
+    temporary_assists: HumanTemporaryAssists,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -60,6 +87,9 @@ struct HumanPhysicsSettingsFile {
     joint_damping_angular: f32,
     joint_point_compliance: f32,
     joint_angular_compliance: f32,
+    pose_stiffness_nm_per_rad: f32,
+    pose_damping_nm_s_per_rad: f32,
+    max_pose_torque_nm: f32,
     limits: HumanJointLimits,
 }
 
@@ -118,6 +148,24 @@ impl HumanPhysicsSettings {
                 && source.joint_angular_compliance >= 0.0,
             "human joint compliance values must be non-negative and finite"
         );
+        ensure!(
+            source.pose_stiffness_nm_per_rad.is_finite()
+                && source.pose_stiffness_nm_per_rad > 0.0
+                && source.pose_damping_nm_s_per_rad.is_finite()
+                && source.pose_damping_nm_s_per_rad >= 0.0
+                && source.max_pose_torque_nm.is_finite()
+                && source.max_pose_torque_nm > 0.0,
+            "human pose-actuation settings are invalid"
+        );
+        ensure!(
+            manifest.temporary_assists.jump_launch.launch_speed_m_s.is_finite()
+                && manifest.temporary_assists.jump_launch.launch_speed_m_s >= 0.0
+                && manifest.temporary_assists.rotational_assistance.strength.is_finite()
+                && manifest.temporary_assists.rotational_assistance.strength >= 0.0
+                && manifest.temporary_assists.rotational_assistance.max_torque_nm.is_finite()
+                && manifest.temporary_assists.rotational_assistance.max_torque_nm >= 0.0,
+            "human temporary-assist settings are invalid"
+        );
         let limits = &source.limits;
         for (name, value) in [
             ("hip swing", limits.hip_swing_rad),
@@ -153,6 +201,10 @@ impl HumanPhysicsSettings {
             joint_damping_angular: source.joint_damping_angular,
             joint_point_compliance: source.joint_point_compliance,
             joint_angular_compliance: source.joint_angular_compliance,
+            pose_stiffness_nm_per_rad: source.pose_stiffness_nm_per_rad,
+            pose_damping_nm_s_per_rad: source.pose_damping_nm_s_per_rad,
+            max_pose_torque_nm: source.max_pose_torque_nm,
+            temporary_assists: manifest.temporary_assists,
             limits: source.limits,
         })
     }
@@ -343,6 +395,7 @@ pub fn spawn_human_player(
         ));
     });
 
+    commands.insert_resource(HumanActionState::default());
     commands.insert_resource(HumanPlayer {
         root: bodies["Root"],
         bodies: bodies.clone(),
