@@ -765,18 +765,27 @@ impl MenuAsset {
             self.home_layout.action_font_size_px,
             self.home_layout.cursor_font_size_px,
         ];
-        if !home_dimensions.iter().all(|value| value.is_finite() && *value > 0.0)
+        if !home_dimensions
+            .iter()
+            .all(|value| value.is_finite() && *value > 0.0)
             || !self.home_layout.left_percent.is_finite()
             || !(0.0..100.0).contains(&self.home_layout.left_percent)
             || !self.home_layout.top_percent.is_finite()
             || !(0.0..100.0).contains(&self.home_layout.top_percent)
+            || self.home_layout.top_percent + self.home_layout.panel_height_percent > 100.0
             || self.home_layout.panel_height_percent > 100.0
             || self.home_layout.title_frame_width_px > self.home_layout.panel_width_px
+            || self.home_layout.action_row_width_px > self.home_layout.panel_width_px
             || self.home_layout.action_button_left_px + self.home_layout.action_button_width_px
                 > self.home_layout.action_row_width_px
+            || self.home_layout.action_button_padding_left_px
+                >= self.home_layout.action_button_width_px
             || self.home_layout.action_button_height_px > self.home_layout.action_row_height_px
         {
-            return Err("home layout dimensions must be finite, positive, and internally consistent".to_owned());
+            return Err(
+                "home layout dimensions must be finite, positive, and internally consistent"
+                    .to_owned(),
+            );
         }
 
         if self.home_buttons.len() != 4 {
@@ -3334,6 +3343,17 @@ mod tests {
                 .iter()
                 .any(|button| button.action == "quit")
         );
+    }
+
+    #[test]
+    fn menu_asset_rejects_invalid_home_layout_geometry() {
+        let mut menu = valid_menu();
+        menu.home_layout.left_percent = f32::NAN;
+        assert!(menu.validate().is_err());
+
+        let mut menu = valid_menu();
+        menu.home_layout.action_button_width_px = menu.home_layout.action_row_width_px;
+        assert!(menu.validate().is_err());
     }
 
     #[test]
