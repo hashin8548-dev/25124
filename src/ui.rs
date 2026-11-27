@@ -5,11 +5,11 @@ use std::{
 
 use bevy::{
     app::AppExit,
+    input::mouse::{MouseScrollUnit, MouseWheel},
     input_focus::{
         FocusCause, InputFocus, InputFocusVisible,
         tab_navigation::{TabGroup, TabIndex, TabNavigationPlugin},
     },
-    input::mouse::{MouseScrollUnit, MouseWheel},
     picking::hover::{HoverMap, Hovered},
     prelude::*,
     text::{FontSize, TextFont},
@@ -365,8 +365,7 @@ struct MenuButtonDefinition {
 
 impl MenuAsset {
     fn fallback() -> Self {
-        let mut fallback: Self =
-            serde_json::from_str(include_str!("../assets/ui/main_menu.json"))
+        let mut fallback: Self = serde_json::from_str(include_str!("../assets/ui/main_menu.json"))
             .expect("the embedded menu theme must be valid JSON");
         fallback.ensure_required_actions();
         fallback
@@ -428,7 +427,9 @@ impl MenuAsset {
         if !self.world_count_template.contains("{count}")
             || !self.library_warning_template.contains("{count}")
         {
-            return Err("world-count and library-warning templates must contain {count}".to_owned());
+            return Err(
+                "world-count and library-warning templates must contain {count}".to_owned(),
+            );
         }
 
         let colors = [
@@ -692,191 +693,206 @@ fn setup_menu(
                         ScrollPosition::default(),
                     ))
                     .with_children(|world_list| {
-                if library.entries.is_empty() {
-                    world_list
-                        .spawn((
-                            Node {
-                                width: Val::Percent(100.0),
-                                padding: UiRect::all(Val::Px(24.0)),
-                                flex_direction: FlexDirection::Column,
-                                align_items: AlignItems::FlexStart,
-                                row_gap: Val::Px(10.0),
-                                border: UiRect::all(Val::Px(1.0)),
-                                border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
-                                ..default()
-                            },
-                            BorderColor::all(panel_border_color),
-                            BackgroundColor(button_color),
-                        ))
-                        .with_children(|empty| {
-                            empty.spawn((
-                                Text::new(menu.empty_library_title.clone()),
-                                TextFont {
-                                    font_size: FontSize::Px(menu.button_font_size_px),
-                                    ..default()
-                                },
-                                TextColor(button_text_color),
-                            ));
-                            empty.spawn((
-                                Text::new(menu.empty_library_hint.clone()),
-                                TextFont {
-                                    font_size: FontSize::Px(menu.world_description_size_px),
-                                    ..default()
-                                },
-                                TextColor(subtitle_color),
-                            ));
-                        });
-                }
-
-                for (world_index, world) in library.entries.iter().enumerate() {
-                    let preview = world
-                        .preview_asset
-                        .as_ref()
-                        .map(|path| asset_server.load(path.clone()));
-                    let schema_version = world.schema_version;
-                    let preview_fallback_label = menu.world_preview_fallback_label.clone();
-                    let preview_version_prefix = menu.world_preview_version_prefix.clone();
-                    let description = if world.description.trim().is_empty() {
-                        menu.world_empty_description_text.clone()
-                    } else {
-                        world.description.clone()
-                    };
-                    let metadata_lines =
-                        world_metadata_lines(&world.metadata, menu.world_metadata_max_fields);
-                    let format_summary = format!(
-                        "{} v{}  |  {} {}  |  {} {}",
-                        menu.world_format_label,
-                        world.schema_version,
-                        world.region_count,
-                        menu.world_regions_label,
-                        world.object_count,
-                        menu.world_objects_label
-                    );
-
-                    world_list
-                        .spawn((
-                            Button,
-                            TabIndex(world_index as i32),
-                            Hovered::default(),
-                            Node {
-                                width: Val::Percent(100.0),
-                                min_height: Val::Px(menu.world_card_height_px),
-                                border: UiRect::all(Val::Px(1.0)),
-                                border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
-                                padding: UiRect::all(Val::Px(12.0)),
-                                flex_direction: FlexDirection::Row,
-                                column_gap: Val::Px(menu.world_card_gap_px),
-                                align_items: AlignItems::Center,
-                                justify_content: JustifyContent::FlexStart,
-                                ..default()
-                            },
-                            BorderColor::all(button_border_color),
-                            BackgroundColor(button_color),
-                            WorldSelection(world.manifest_path.clone()),
-                            MenuButtonColors {
-                                normal: button_color,
-                                hovered: button_hover_color,
-                                border_normal: button_border_color,
-                                border_active: button_active_border_color,
-                            },
-                            observe(handle_world_selection),
-                        ))
-                        .with_children(move |button| {
-                            if let Some(preview) = preview.clone() {
-                                button.spawn((
-                                    ImageNode::new(preview),
+                        if library.entries.is_empty() {
+                            world_list
+                                .spawn((
                                     Node {
-                                        width: Val::Px(menu.world_preview_size_px),
-                                        height: Val::Px(menu.world_preview_size_px),
-                                        border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
-                                        flex_shrink: 0.0,
+                                        width: Val::Percent(100.0),
+                                        padding: UiRect::all(Val::Px(24.0)),
+                                        flex_direction: FlexDirection::Column,
+                                        align_items: AlignItems::FlexStart,
+                                        row_gap: Val::Px(10.0),
+                                        border: UiRect::all(Val::Px(1.0)),
+                                        border_radius: BorderRadius::all(Val::Px(
+                                            menu.card_radius_px,
+                                        )),
                                         ..default()
                                     },
-                                ));
-                            } else {
-                                button
-                                    .spawn((
-                                        Node {
-                                            width: Val::Px(menu.world_preview_size_px),
-                                            height: Val::Px(menu.world_preview_size_px),
-                                            border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
-                                            flex_shrink: 0.0,
-                                            align_items: AlignItems::Center,
-                                            justify_content: JustifyContent::Center,
-                                            ..default()
-                                        },
-                                        BackgroundColor(panel_color),
-                                    ))
-                                    .with_children(|tile| {
-                                        tile.spawn((
-                                            Text::new(format!(
-                                                "{}\n{}{}",
-                                                preview_fallback_label,
-                                                preview_version_prefix,
-                                                schema_version
-                                            )),
-                                            TextFont {
-                                                font_size: FontSize::Px(
-                                                    menu.world_metadata_size_px,
-                                                ),
-                                                ..default()
-                                            },
-                                            TextColor(subtitle_color),
-                                        ));
-                                    });
-                            }
-
-                            button
-                                .spawn(Node {
-                                    width: Val::Px(0.0),
-                                    min_width: Val::Px(0.0),
-                                    flex_grow: 1.0,
-                                    flex_direction: FlexDirection::Column,
-                                    justify_content: JustifyContent::Center,
-                                    row_gap: Val::Px(4.0),
-                                    ..default()
-                                })
-                                .with_children(move |details| {
-                                    details.spawn((
-                                        Text::new(format!("{} / {}", world.name, world.id)),
+                                    BorderColor::all(panel_border_color),
+                                    BackgroundColor(button_color),
+                                ))
+                                .with_children(|empty| {
+                                    empty.spawn((
+                                        Text::new(menu.empty_library_title.clone()),
                                         TextFont {
                                             font_size: FontSize::Px(menu.button_font_size_px),
                                             ..default()
                                         },
                                         TextColor(button_text_color),
                                     ));
-                                    details.spawn((
-                                        Text::new(description.clone()),
+                                    empty.spawn((
+                                        Text::new(menu.empty_library_hint.clone()),
                                         TextFont {
                                             font_size: FontSize::Px(menu.world_description_size_px),
                                             ..default()
                                         },
                                         TextColor(subtitle_color),
                                     ));
-                                    details.spawn((
-                                        Text::new(format_summary.clone()),
-                                        TextFont {
-                                            font_size: FontSize::Px(menu.world_metadata_size_px),
-                                            ..default()
-                                        },
-                                        TextColor(subtitle_color),
-                                    ));
-                                    for metadata_line in &metadata_lines {
-                                        details.spawn((
-                                            Text::new(metadata_line.clone()),
-                                            TextFont {
-                                                font_size: FontSize::Px(
-                                                    menu.world_metadata_size_px,
-                                                ),
+                                });
+                        }
+
+                        for (world_index, world) in library.entries.iter().enumerate() {
+                            let preview = world
+                                .preview_asset
+                                .as_ref()
+                                .map(|path| asset_server.load(path.clone()));
+                            let schema_version = world.schema_version;
+                            let preview_fallback_label = menu.world_preview_fallback_label.clone();
+                            let preview_version_prefix = menu.world_preview_version_prefix.clone();
+                            let description = if world.description.trim().is_empty() {
+                                menu.world_empty_description_text.clone()
+                            } else {
+                                world.description.clone()
+                            };
+                            let metadata_lines = world_metadata_lines(
+                                &world.metadata,
+                                menu.world_metadata_max_fields,
+                            );
+                            let format_summary = format!(
+                                "{} v{}  |  {} {}  |  {} {}",
+                                menu.world_format_label,
+                                world.schema_version,
+                                world.region_count,
+                                menu.world_regions_label,
+                                world.object_count,
+                                menu.world_objects_label
+                            );
+
+                            world_list
+                                .spawn((
+                                    Button,
+                                    TabIndex(world_index as i32),
+                                    Hovered::default(),
+                                    Node {
+                                        width: Val::Percent(100.0),
+                                        min_height: Val::Px(menu.world_card_height_px),
+                                        border: UiRect::all(Val::Px(1.0)),
+                                        border_radius: BorderRadius::all(Val::Px(
+                                            menu.card_radius_px,
+                                        )),
+                                        padding: UiRect::all(Val::Px(12.0)),
+                                        flex_direction: FlexDirection::Row,
+                                        column_gap: Val::Px(menu.world_card_gap_px),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::FlexStart,
+                                        ..default()
+                                    },
+                                    BorderColor::all(button_border_color),
+                                    BackgroundColor(button_color),
+                                    WorldSelection(world.manifest_path.clone()),
+                                    MenuButtonColors {
+                                        normal: button_color,
+                                        hovered: button_hover_color,
+                                        border_normal: button_border_color,
+                                        border_active: button_active_border_color,
+                                    },
+                                    observe(handle_world_selection),
+                                ))
+                                .with_children(move |button| {
+                                    if let Some(preview) = preview.clone() {
+                                        button.spawn((
+                                            ImageNode::new(preview),
+                                            Node {
+                                                width: Val::Px(menu.world_preview_size_px),
+                                                height: Val::Px(menu.world_preview_size_px),
+                                                border_radius: BorderRadius::all(Val::Px(
+                                                    menu.card_radius_px,
+                                                )),
+                                                flex_shrink: 0.0,
                                                 ..default()
                                             },
-                                            TextColor(subtitle_color),
                                         ));
+                                    } else {
+                                        button
+                                            .spawn((
+                                                Node {
+                                                    width: Val::Px(menu.world_preview_size_px),
+                                                    height: Val::Px(menu.world_preview_size_px),
+                                                    border_radius: BorderRadius::all(Val::Px(
+                                                        menu.card_radius_px,
+                                                    )),
+                                                    flex_shrink: 0.0,
+                                                    align_items: AlignItems::Center,
+                                                    justify_content: JustifyContent::Center,
+                                                    ..default()
+                                                },
+                                                BackgroundColor(panel_color),
+                                            ))
+                                            .with_children(|tile| {
+                                                tile.spawn((
+                                                    Text::new(format!(
+                                                        "{}\n{}{}",
+                                                        preview_fallback_label,
+                                                        preview_version_prefix,
+                                                        schema_version
+                                                    )),
+                                                    TextFont {
+                                                        font_size: FontSize::Px(
+                                                            menu.world_metadata_size_px,
+                                                        ),
+                                                        ..default()
+                                                    },
+                                                    TextColor(subtitle_color),
+                                                ));
+                                            });
                                     }
-                                });
-                        });
-                }
 
+                                    button
+                                        .spawn(Node {
+                                            width: Val::Px(0.0),
+                                            min_width: Val::Px(0.0),
+                                            flex_grow: 1.0,
+                                            flex_direction: FlexDirection::Column,
+                                            justify_content: JustifyContent::Center,
+                                            row_gap: Val::Px(4.0),
+                                            ..default()
+                                        })
+                                        .with_children(move |details| {
+                                            details.spawn((
+                                                Text::new(format!("{} / {}", world.name, world.id)),
+                                                TextFont {
+                                                    font_size: FontSize::Px(
+                                                        menu.button_font_size_px,
+                                                    ),
+                                                    ..default()
+                                                },
+                                                TextColor(button_text_color),
+                                            ));
+                                            details.spawn((
+                                                Text::new(description.clone()),
+                                                TextFont {
+                                                    font_size: FontSize::Px(
+                                                        menu.world_description_size_px,
+                                                    ),
+                                                    ..default()
+                                                },
+                                                TextColor(subtitle_color),
+                                            ));
+                                            details.spawn((
+                                                Text::new(format_summary.clone()),
+                                                TextFont {
+                                                    font_size: FontSize::Px(
+                                                        menu.world_metadata_size_px,
+                                                    ),
+                                                    ..default()
+                                                },
+                                                TextColor(subtitle_color),
+                                            ));
+                                            for metadata_line in &metadata_lines {
+                                                details.spawn((
+                                                    Text::new(metadata_line.clone()),
+                                                    TextFont {
+                                                        font_size: FontSize::Px(
+                                                            menu.world_metadata_size_px,
+                                                        ),
+                                                        ..default()
+                                                    },
+                                                    TextColor(subtitle_color),
+                                                ));
+                                            }
+                                        });
+                                });
+                        }
                     });
 
                 panel.spawn((
@@ -1070,116 +1086,119 @@ fn setup_menu(
                 TabGroup::modal(),
             ))
             .with_children(|overlay| {
-                overlay.spawn((
-                    Node {
-                        width: Val::Percent(92.0),
-                        max_width: Val::Px(560.0),
-                        padding: UiRect::all(Val::Px(menu.panel_padding_px)),
-                        flex_direction: FlexDirection::Column,
-                        align_items: AlignItems::Stretch,
-                        row_gap: Val::Px(menu.vertical_gap_px),
-                        border: UiRect::all(Val::Px(1.0)),
-                        border_radius: BorderRadius::all(Val::Px(menu.panel_radius_px)),
-                        ..default()
-                    },
-                    BorderColor::all(panel_border_color),
-                    BackgroundColor(panel_color),
-                    BoxShadow::new(
-                        panel_shadow_color,
-                        Val::Px(0.0),
-                        Val::Px(menu.panel_shadow_offset_y_px),
-                        Val::Px(0.0),
-                        Val::Px(menu.panel_shadow_blur_px),
-                    ),
-                ))
-                .with_children(|dialog| {
-                    dialog.spawn((
-                        Text::new(menu.quit_confirm_title.clone()),
-                        TextFont {
-                            font_size: FontSize::Px(menu.title_size_px),
-                            ..default()
-                        },
-                        TextColor(title_color),
-                    ));
-                    dialog.spawn((
-                        Text::new(menu.quit_confirm_message.clone()),
-                        TextFont {
-                            font_size: FontSize::Px(menu.subtitle_size_px),
-                            ..default()
-                        },
-                        TextColor(subtitle_color),
-                    ));
-
-                    dialog.spawn((
-                        MenuNotice,
-                        Text::new(""),
-                        TextFont {
-                            font_size: FontSize::Px(menu.world_description_size_px),
-                            ..default()
-                        },
-                        TextColor(notice_color),
-                        notice_colors,
+                overlay
+                    .spawn((
                         Node {
-                            width: Val::Percent(100.0),
-                            min_height: Val::Px(18.0),
+                            width: Val::Percent(92.0),
+                            max_width: Val::Px(560.0),
+                            padding: UiRect::all(Val::Px(menu.panel_padding_px)),
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Stretch,
+                            row_gap: Val::Px(menu.vertical_gap_px),
+                            border: UiRect::all(Val::Px(1.0)),
+                            border_radius: BorderRadius::all(Val::Px(menu.panel_radius_px)),
                             ..default()
                         },
-                    ));
+                        BorderColor::all(panel_border_color),
+                        BackgroundColor(panel_color),
+                        BoxShadow::new(
+                            panel_shadow_color,
+                            Val::Px(0.0),
+                            Val::Px(menu.panel_shadow_offset_y_px),
+                            Val::Px(0.0),
+                            Val::Px(menu.panel_shadow_blur_px),
+                        ),
+                    ))
+                    .with_children(|dialog| {
+                        dialog.spawn((
+                            Text::new(menu.quit_confirm_title.clone()),
+                            TextFont {
+                                font_size: FontSize::Px(menu.title_size_px),
+                                ..default()
+                            },
+                            TextColor(title_color),
+                        ));
+                        dialog.spawn((
+                            Text::new(menu.quit_confirm_message.clone()),
+                            TextFont {
+                                font_size: FontSize::Px(menu.subtitle_size_px),
+                                ..default()
+                            },
+                            TextColor(subtitle_color),
+                        ));
 
-                    let danger_button_color = color_from_srgba(menu.danger_button_srgba);
-                    let danger_button_hover_color =
-                        color_from_srgba(menu.danger_button_hover_srgba);
+                        dialog.spawn((
+                            MenuNotice,
+                            Text::new(""),
+                            TextFont {
+                                font_size: FontSize::Px(menu.world_description_size_px),
+                                ..default()
+                            },
+                            TextColor(notice_color),
+                            notice_colors,
+                            Node {
+                                width: Val::Percent(100.0),
+                                min_height: Val::Px(18.0),
+                                ..default()
+                            },
+                        ));
 
-                    for (index, (label, action)) in [
-                        (menu.quit_cancel_label.clone(), "quit_cancel"),
-                        (menu.quit_confirm_label.clone(), "quit_confirm"),
-                    ]
-                    .into_iter()
-                    .enumerate()
-                    {
-                        let (normal_color, hovered_color) = if action == "quit_confirm" {
-                            (danger_button_color, danger_button_hover_color)
-                        } else {
-                            (button_color, button_hover_color)
-                        };
+                        let danger_button_color = color_from_srgba(menu.danger_button_srgba);
+                        let danger_button_hover_color =
+                            color_from_srgba(menu.danger_button_hover_srgba);
 
-                        dialog
-                            .spawn((
-                                Button,
-                                TabIndex(index as i32),
-                                Hovered::default(),
-                                Node {
-                                    width: Val::Percent(100.0),
-                                    min_height: Val::Px(menu.button_height_px),
-                                    border: UiRect::all(Val::Px(1.0)),
-                                    border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
-                                    align_items: AlignItems::Center,
-                                    justify_content: JustifyContent::Center,
-                                    ..default()
-                                },
-                                BorderColor::all(button_border_color),
-                                BackgroundColor(normal_color),
-                                MenuAction(action.to_owned()),
-                                MenuButtonColors {
-                                    normal: normal_color,
-                                    hovered: hovered_color,
-                                    border_normal: button_border_color,
-                                    border_active: button_active_border_color,
-                                },
-                                observe(handle_menu_action),
-                            ))
-                            .with_children(|button| {
-                                button.spawn((
-                                    Text::new(label),
-                                    TextFont {
-                                        font_size: FontSize::Px(menu.button_font_size_px),
+                        for (index, (label, action)) in [
+                            (menu.quit_cancel_label.clone(), "quit_cancel"),
+                            (menu.quit_confirm_label.clone(), "quit_confirm"),
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        {
+                            let (normal_color, hovered_color) = if action == "quit_confirm" {
+                                (danger_button_color, danger_button_hover_color)
+                            } else {
+                                (button_color, button_hover_color)
+                            };
+
+                            dialog
+                                .spawn((
+                                    Button,
+                                    TabIndex(index as i32),
+                                    Hovered::default(),
+                                    Node {
+                                        width: Val::Percent(100.0),
+                                        min_height: Val::Px(menu.button_height_px),
+                                        border: UiRect::all(Val::Px(1.0)),
+                                        border_radius: BorderRadius::all(Val::Px(
+                                            menu.card_radius_px,
+                                        )),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
                                         ..default()
                                     },
-                                    TextColor(button_text_color),
-                                ));
-                            });
-                    }
-                });
+                                    BorderColor::all(button_border_color),
+                                    BackgroundColor(normal_color),
+                                    MenuAction(action.to_owned()),
+                                    MenuButtonColors {
+                                        normal: normal_color,
+                                        hovered: hovered_color,
+                                        border_normal: button_border_color,
+                                        border_active: button_active_border_color,
+                                    },
+                                    observe(handle_menu_action),
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new(label),
+                                        TextFont {
+                                            font_size: FontSize::Px(menu.button_font_size_px),
+                                            ..default()
+                                        },
+                                        TextColor(button_text_color),
+                                    ));
+                                });
+                        }
+                    });
             });
         });
 }
@@ -1313,7 +1332,8 @@ fn handle_menu_action(
         "quit" if *mode.get() == AppMode::Simulation => {
             confirmation.visible = true;
             confirmation.return_focus = Some(activate.entity);
-            if let Some((cancel, _)) = actions.iter().find(|(_, action)| action.0 == "quit_cancel") {
+            if let Some((cancel, _)) = actions.iter().find(|(_, action)| action.0 == "quit_cancel")
+            {
                 input_focus.set(cancel, FocusCause::Navigated);
             }
         }
@@ -1350,10 +1370,7 @@ fn sync_quit_confirmation_visibility(
 
 fn sync_menu_feedback(
     feedback: Res<MenuFeedback>,
-    mut notices: Query<
-        (&mut Text, &mut TextColor, &MenuNoticeColors),
-        With<MenuNotice>,
-    >,
+    mut notices: Query<(&mut Text, &mut TextColor, &MenuNoticeColors), With<MenuNotice>>,
 ) {
     if !feedback.is_changed() {
         return;
@@ -1462,8 +1479,13 @@ fn update_button_styles(
     >,
 ) {
     for (entity, hovered, pressed, colors, mut background, mut border) in &mut buttons {
-        let active = pressed || hovered.get() || (focus_visible.0 && input_focus.get() == Some(entity));
-        background.0 = if active { colors.hovered } else { colors.normal };
+        let active =
+            pressed || hovered.get() || (focus_visible.0 && input_focus.get() == Some(entity));
+        background.0 = if active {
+            colors.hovered
+        } else {
+            colors.normal
+        };
         *border = BorderColor::all(if active {
             colors.border_active
         } else {
@@ -1749,7 +1771,10 @@ mod tests {
         assert_eq!(menu.quit_confirm_label, "QUIT ANYWAY");
         assert_eq!(menu.quit_cancel_label, "KEEP PLAYING");
         assert_eq!(menu.danger_button_srgba, [0.31, 0.075, 0.095, 1.0]);
-        assert_eq!(menu.library_navigation_hint, default_library_navigation_hint());
+        assert_eq!(
+            menu.library_navigation_hint,
+            default_library_navigation_hint()
+        );
         assert_eq!(menu.pause_title, "SIMULATION PAUSED");
         assert_eq!(menu.world_count_template, "{count} WORLDS AVAILABLE");
         assert_eq!(menu.modal_backdrop_srgba, default_modal_backdrop_srgba());
@@ -1795,8 +1820,18 @@ mod tests {
     fn fallback_theme_is_valid_and_retains_essential_actions() {
         let fallback = MenuAsset::fallback();
         assert!(fallback.validate().is_ok());
-        assert!(fallback.buttons.iter().any(|button| button.action == "resume"));
-        assert!(fallback.buttons.iter().any(|button| button.action == "quit"));
+        assert!(
+            fallback
+                .buttons
+                .iter()
+                .any(|button| button.action == "resume")
+        );
+        assert!(
+            fallback
+                .buttons
+                .iter()
+                .any(|button| button.action == "quit")
+        );
     }
 
     #[test]
