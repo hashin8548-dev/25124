@@ -14,7 +14,7 @@ use crate::{
     config::{BodyType, RuntimeConfig, WorldLibrary},
     engine::{AppMode, EnginePlugin},
     persistence::WorldStateFile,
-    world::parse_voxel_instance_id,
+    world::{WorldOrigin, parse_voxel_instance_id},
 };
 
 fn main() {
@@ -38,6 +38,7 @@ fn run() -> Result<()> {
         report_saved_state_compatibility(&config, &state);
         state
     };
+    let world_origin = WorldOrigin(DVec3::from_array(world_state.origin_m));
     let library = WorldLibrary::discover(&config.paths.project_root)?;
     for warning in &library.warnings {
         warn!("World library entry was skipped: {warning}");
@@ -48,6 +49,7 @@ fn run() -> Result<()> {
     app.insert_resource(config)
         .insert_resource(library)
         .insert_resource(world_state)
+        .insert_resource(world_origin)
         .add_plugins(DefaultPlugins.set(AssetPlugin {
             file_path: asset_root,
             ..default()
