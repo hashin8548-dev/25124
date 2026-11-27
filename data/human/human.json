@@ -186,5 +186,29 @@
       "kind": "single_dot",
       "diameter_px": 3
     }
+  },
+  "physics": {
+    "density_kg_m3": 985,
+    "static_friction": 0.9,
+    "dynamic_friction": 0.72,
+    "restitution": 0,
+    "joint_damping_linear": 1.2,
+    "joint_damping_angular": 0.85,
+    "joint_point_compliance": 1e-7,
+    "joint_angular_compliance": 0.00001,
+    "limits": {
+      "hip_swing_rad": 0.9,
+      "hip_twist_rad": 0.5,
+      "shoulder_swing_rad": 1.45,
+      "shoulder_twist_rad": 1,
+      "spine_swing_rad": 0.42,
+      "spine_twist_rad": 0.32,
+      "neck_swing_rad": 0.62,
+      "neck_twist_rad": 0.45,
+      "knee_min_rad": -2.45,
+      "knee_max_rad": 0.12,
+      "elbow_min_rad": 0,
+      "elbow_max_rad": 2.45
+    }
   }
 }
