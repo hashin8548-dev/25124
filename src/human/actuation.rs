@@ -54,6 +54,7 @@ impl HumanActionState {
 /// Applies bounded physical forces and torques to pursue sampled action poses.
 /// There is no fixed-speed root translation: the root follows only measured source-track
 /// offsets through a bounded force, and meaningful horizontal displacement remains contact-driven.
+#[allow(clippy::too_many_arguments)]
 pub fn drive_human_action_pose(
     time: Res<Time<Fixed>>,
     mut action_state: Option<ResMut<HumanActionState>>,
