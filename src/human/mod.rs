@@ -7,6 +7,7 @@ use bevy::prelude::*;
 
 /// Registers the external human action data source for the simulation runtime.
 /// All motion tracks remain data-driven and are sampled independently by time.
+/// This plugin only loads and validates the source actions; physics actuation is a separate runtime stage.
 pub struct HumanPlugin;
 
 impl Plugin for HumanPlugin {
