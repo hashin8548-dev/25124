@@ -5,6 +5,7 @@ use std::{
 
 use avian3d::prelude::{AngularVelocity, LinearVelocity};
 use bevy::{
+    math::DVec3,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future::poll_once},
 };
@@ -542,7 +543,7 @@ mod tests {
 
     use super::{chunk_radius_m, distance_to_chunk_aabb, distance_to_object_chunk_aabb};
     use crate::config::{ChunkSource, ObjectChunkSource};
-    use bevy::prelude::{DVec3, Vec3};
+    use bevy::{math::DVec3, prelude::Vec3};
 
     fn source() -> ChunkSource {
         ChunkSource {
