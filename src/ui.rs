@@ -1,6 +1,8 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fs,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use bevy::{
@@ -23,6 +25,7 @@ use crate::{
     engine::AppMode,
     persistence::{WorldSaveTarget, WorldStateFile},
     physics::DestructionJournal,
+    world::WorldOrigin,
 };
 use avian3d::prelude::Gravity;
 
@@ -503,9 +506,9 @@ impl MenuAsset {
             if button.label.trim().is_empty() {
                 return Err("menu button labels cannot be empty".to_owned());
             }
-            if !matches!(button.action.as_str(), "start" | "resume" | "quit") {
+            if !matches!(button.action.as_str(), "start" | "resume" | "quit" | "create_world") {
                 return Err(format!(
-                    "unsupported menu action '{}' (expected start, resume, or quit)",
+                    "unsupported menu action '{}' (expected start, resume, quit, or create_world)",
                     button.action
                 ));
             }
@@ -920,6 +923,49 @@ fn setup_menu(
                     },
                 ));
 
+                if let Some(create_world) = menu.buttons.iter().find(|button| button.action == "create_world") {
+                    panel
+                        .spawn((
+                            Button,
+                            TabIndex(
+                                library.entries.len() as i32
+                                    + if menu.buttons.iter().any(|button| button.action == "create_world") { 1 } else { 0 },
+                            ),
+                            Hovered::default(),
+                            Node {
+                                width: Val::Percent(100.0),
+                                max_width: Val::Px(menu.button_width_px),
+                                align_self: AlignSelf::Center,
+                                height: Val::Px(menu.button_height_px),
+                                border: UiRect::all(Val::Px(1.0)),
+                                border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BorderColor::all(button_border_color),
+                            BackgroundColor(button_color),
+                            MenuAction(create_world.action.clone()),
+                            MenuButtonColors {
+                                normal: button_color,
+                                hovered: button_hover_color,
+                                border_normal: button_border_color,
+                                border_active: button_active_border_color,
+                            },
+                            observe(handle_create_world),
+                        ))
+                        .with_children(|button| {
+                            button.spawn((
+                                Text::new(create_world.label.clone()),
+                                TextFont {
+                                    font_size: FontSize::Px(menu.button_font_size_px),
+                                    ..default()
+                                },
+                                TextColor(button_text_color),
+                            ));
+                        });
+                }
+
                 if let Some(quit) = menu.buttons.iter().find(|button| button.action == "quit") {
                     panel
                         .spawn((
@@ -1217,6 +1263,7 @@ fn handle_world_selection(
     mut save_target: ResMut<WorldSaveTarget>,
     mut journal: ResMut<DestructionJournal>,
     mut gravity: ResMut<Gravity>,
+    mut world_origin: ResMut<WorldOrigin>,
     mut next_state: ResMut<NextState<AppMode>>,
     mut menu_state: ResMut<MenuState>,
     mut feedback: ResMut<MenuFeedback>,
@@ -1285,6 +1332,7 @@ fn handle_world_selection(
     journal
         .damaged_bonds
         .clone_from(&selected_state.damaged_bonds);
+    world_origin.0 = DVec3::from_array(selected_state.origin_m);
     *world_state = selected_state;
     *config = selected;
     feedback.message.clear();
@@ -1297,6 +1345,138 @@ fn handle_world_selection(
         "Selected world '{}'. Starting simulation.",
         config.world.name
     );
+}
+
+fn write_flat_platform_world(project_root: &Path) -> Result<PathBuf, String> {
+    let worlds_directory = project_root.join("worlds");
+    fs::create_dir_all(&worlds_directory)
+        .map_err(|error| format!("could not create world library directory: {error}"))?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let world_id = format!("flat-platform-{timestamp}");
+    let world_directory = worlds_directory.join(&world_id);
+    fs::create_dir(&world_directory)
+        .map_err(|error| format!("could not reserve a unique world directory: {error}"))?;
+
+    let manifest = serde_json::json!({
+        "schema_version": 1,
+        "id": world_id,
+        "name": "Flat Platform (255,000,000 units)",
+        "description": "Procedurally streamed flat bedrock platform with a raised perimeter.",
+        "preview_asset": null,
+        "metadata": {
+            "generation": "flat_platform",
+            "platform_size_units": 255000000_u64,
+            "border_height_units": 4,
+            "border_thickness_units": 2,
+            "chunk_edge_units": 32
+        },
+        "gravity_m_s2": null,
+        "generation": {
+            "kind": "flat_platform",
+            "size_units": 255000000_u64,
+            "border_height_units": 4,
+            "border_thickness_units": 2
+        },
+        "regions": [],
+        "objects": []
+    });
+    let contents = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| format!("could not serialize generated world manifest: {error}"))?;
+    let manifest_path = world_directory.join("world.json");
+    let temporary_path = world_directory.join(".world.json.tmp");
+    fs::write(&temporary_path, contents)
+        .map_err(|error| format!("could not write generated world manifest: {error}"))?;
+    if let Err(error) = fs::rename(&temporary_path, &manifest_path) {
+        let _ = fs::remove_file(&temporary_path);
+        let _ = fs::remove_dir(&world_directory);
+        return Err(format!("could not commit generated world manifest: {error}"));
+    }
+    Ok(manifest_path)
+}
+
+/// Creates a data-only world recipe and starts it without materializing the full platform.
+#[allow(clippy::too_many_arguments)]
+fn handle_create_world(
+    activate: On<Activate>,
+    actions: Query<&MenuAction>,
+    mode: Res<State<AppMode>>,
+    mut config: ResMut<RuntimeConfig>,
+    mut world_state: ResMut<WorldStateFile>,
+    mut save_target: ResMut<WorldSaveTarget>,
+    mut journal: ResMut<DestructionJournal>,
+    mut gravity: ResMut<Gravity>,
+    mut world_origin: ResMut<WorldOrigin>,
+    mut next_state: ResMut<NextState<AppMode>>,
+    mut menu_state: ResMut<MenuState>,
+    mut feedback: ResMut<MenuFeedback>,
+    mut input_focus: ResMut<InputFocus>,
+    mut virtual_time: ResMut<Time<Virtual>>,
+) {
+    if *mode.get() != AppMode::WorldLibrary
+        || !actions.get(activate.entity).is_ok_and(|action| action.0 == "create_world")
+    {
+        return;
+    }
+
+    let project_root = config.paths.project_root.clone();
+    let manifest_path = match write_flat_platform_world(&project_root) {
+        Ok(path) => path,
+        Err(error) => {
+            error!("Could not create flat platform world: {error}");
+            feedback.message = format!("World creation failed: {error}");
+            feedback.tone = MenuFeedbackTone::Notice;
+            return;
+        }
+    };
+
+    let mut selected = match RuntimeConfig::load(
+        config.paths.data_dir.clone(),
+        config.paths.assets_dir.clone(),
+        manifest_path.clone(),
+    ) {
+        Ok(config) => config,
+        Err(error) => {
+            error!("Generated world '{}' failed validation: {error:#}", manifest_path.display());
+            feedback.message = "Generated world failed validation. Check the application log.".to_owned();
+            feedback.tone = MenuFeedbackTone::Notice;
+            return;
+        }
+    };
+    selected.paths.project_root = project_root;
+
+    let selected_state =
+        match WorldStateFile::load_or_default(&selected.paths.world_state, &selected.world.id) {
+            Ok(state) => state,
+            Err(error) => {
+                error!("Could not initialize save state for generated world: {error:#}");
+                feedback.message = "Could not initialize the new world's save state.".to_owned();
+                feedback.tone = MenuFeedbackTone::Notice;
+                return;
+            }
+        };
+
+    gravity.0 = Vec3::from_array(
+        selected.world.gravity_m_s2.unwrap_or(selected.engine.physics.gravity_m_s2),
+    );
+    save_target.world_id.clone_from(&selected.world.id);
+    save_target.state_path.clone_from(&selected.paths.world_state);
+    journal.fractured.clone_from(&selected_state.fractured);
+    journal.broken_bonds.clone_from(&selected_state.broken_bonds);
+    journal.damaged_bonds.clone_from(&selected_state.damaged_bonds);
+    world_origin.0 = DVec3::from_array(selected_state.origin_m);
+    *world_state = selected_state;
+    *config = selected;
+
+    feedback.message.clear();
+    input_focus.clear();
+    menu_state.visible = false;
+    virtual_time.unpause();
+    next_state.set(AppMode::Simulation);
+    info!("Created and started procedural world '{}'.", config.world.id);
 }
 
 fn load_menu(path: &Path) -> Result<MenuAsset, String> {
