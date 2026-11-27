@@ -745,7 +745,26 @@ fn setup_menu(
         }
     };
 
-    let preferences = load_user_preferences(&config.paths.project_root);
+    let mut preferences = load_user_preferences(&config.paths.project_root);
+    if !config.start_in_library {
+        // A command-line --world launch is also a joined world. Only remember it when
+        // the inferred conventional manifest is present in the discovered library.
+        if let Some(manifest_path) = config
+            .paths
+            .world_state
+            .parent()
+            .map(|directory| directory.join("world.json"))
+            .filter(|path| library.entries.iter().any(|entry| entry.manifest_path == *path))
+        {
+            if let Err(error) = remember_world_manifest(
+                &config.paths.project_root,
+                &manifest_path,
+                &mut preferences,
+            ) {
+                warn!("Could not remember command-line world '{}': {error}", manifest_path.display());
+            }
+        }
+    }
     apply_user_preferences(&mut config, &preferences);
     let last_world_manifest =
         preferred_world_manifest(&config.paths.project_root, &library, &preferences);
@@ -1129,6 +1148,13 @@ fn setup_menu(
                         TextColor(button_text_color),
                         Node { flex_grow: 1.0, ..default() },
                     ));
+                    row.spawn((
+                        SettingsLodDetailValue,
+                        Text::new(""),
+                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
+                        TextColor(button_text_color),
+                        Node { width: Val::Px(130.0), ..default() },
+                    ));
                     for (label, action, index) in [("−", "lod_detail_down", 0), ("+", "lod_detail_up", 1)] {
                         row.spawn((
                             Button, TabIndex(6 + index), Hovered::default(),
@@ -1141,13 +1167,7 @@ fn setup_menu(
                             button.spawn((Text::new(label), TextFont { font_size: FontSize::Px(menu.button_font_size_px + 4.0), ..default() }, TextColor(button_text_color)));
                         });
                     }
-                    row.spawn((
-                        SettingsLodDetailValue,
-                        Text::new(""),
-                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
-                        TextColor(button_text_color),
-                        Node { width: Val::Px(130.0), ..default() },
-                    ));
+
                 });
 
                 panel.spawn((
