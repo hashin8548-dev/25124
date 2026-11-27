@@ -9,7 +9,7 @@ use bevy::{
     app::AppExit,
     input::mouse::{MouseScrollUnit, MouseWheel},
     input_focus::{
-        FocusCause, InputFocus, InputFocusVisible,
+        FocusCause, InputFocus,
         tab_navigation::{TabGroup, TabIndex, TabNavigationPlugin},
     },
     math::DVec3,
@@ -1192,8 +1192,10 @@ fn setup_menu(
                                 TextColor(title_color),
                             ));
                         });
-                    button_entity.expect("Continue button was created");
-                    input_focus.set(button_entity.unwrap(), FocusCause::Navigated);
+                    input_focus.set(
+                        button_entity.expect("Continue button was created"),
+                        FocusCause::Navigated,
+                    );
                 } else {
                     panel
                         .spawn(Node {
@@ -2808,7 +2810,6 @@ fn toggle_menu_with_escape(
 
 fn update_button_styles(
     input_focus: Res<InputFocus>,
-    focus_visible: Res<InputFocusVisible>,
     mut buttons: Query<
         (
             Entity,
@@ -2831,7 +2832,7 @@ fn update_button_styles(
         &mut buttons
     {
         let focused = focused_entity == Some(entity);
-        let active = pressed || hovered.get() || (focus_visible.0 && focused);
+        let active = pressed || hovered.get() || focused;
         let cursor_active = pressed || hovered.get() || focused;
         if cursor_active {
             active_buttons.push(entity);
