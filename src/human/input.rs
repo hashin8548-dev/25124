@@ -75,44 +75,49 @@ pub fn update_human_controls(
     let wall_ahead = wall_hit.is_some();
     let was_climbing = action_state.action_name == settings.controls.climb;
 
-    let mut selected: Option<(&str, bool)> = None;
-    let mut launch_jump = false;
-    let mut apply_wall_grip = false;
-
-    if crouching {
+    let (selected, launch_jump, apply_wall_grip) = if crouching {
         if horizontal_input {
-            selected = Some((
-                settings.controls.crouch.as_str(),
-                backwards && settings.controls.crouch_backwards_reverse,
-            ));
+            (
+                Some((
+                    settings.controls.crouch.as_str(),
+                    backwards && settings.controls.crouch_backwards_reverse,
+                )),
+                false,
+                false,
+            )
         } else {
-            selected = Some((settings.controls.crouched_idle.as_str(), false));
+            (Some((settings.controls.crouched_idle.as_str(), false)), false, false)
         }
     } else if was_climbing && wall_ahead && (jump_held || horizontal_input) {
-        selected = Some((settings.controls.climb.as_str(), backwards));
-        apply_wall_grip = true;
+        (Some((settings.controls.climb.as_str(), backwards)), false, true)
     } else if jump_pressed && wall_ahead {
-        selected = Some((settings.controls.climb.as_str(), false));
-        apply_wall_grip = true;
+        (Some((settings.controls.climb.as_str(), false)), false, true)
     } else if !grounded && descending {
-        selected = Some((settings.controls.fall.as_str(), false));
+        (Some((settings.controls.fall.as_str(), false)), false, false)
     } else if was_climbing && !grounded {
-        selected = Some((settings.controls.fall.as_str(), false));
-    } else if jump_pressed {
-        selected = Some((settings.controls.jump.as_str(), false));
-        launch_jump = settings.temporary_assists.jump_launch.enabled;
+        (Some((settings.controls.fall.as_str(), false)), false, false)
+    } else if jump_pressed && grounded {
+        (
+            Some((settings.controls.jump.as_str(), false)),
+            settings.temporary_assists.jump_launch.enabled,
+            false,
+        )
     } else if shift && run_input && !key_s {
-        selected = Some((settings.controls.run.as_str(), false));
+        (Some((settings.controls.run.as_str(), false)), false, false)
     } else if horizontal_input {
-        selected = Some((
-            settings.controls.walk.as_str(),
-            backwards && settings.controls.walk_backwards_reverse,
-        ));
+        (
+            Some((
+                settings.controls.walk.as_str(),
+                backwards && settings.controls.walk_backwards_reverse,
+            )),
+            false,
+            false,
+        )
     } else if !grounded && action_state.action_name == settings.controls.jump {
-        selected = Some((settings.controls.jump.as_str(), false));
+        (Some((settings.controls.jump.as_str(), false)), false, false)
     } else {
-        selected = Some((settings.controls.idle.as_str(), false));
-    }
+        (Some((settings.controls.idle.as_str(), false)), false, false)
+    };
 
     if let Some((action, reverse)) = selected {
         action_state.select(action, reverse);
