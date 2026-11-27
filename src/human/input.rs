@@ -133,8 +133,11 @@ pub fn update_human_controls(
         action_state.select(available_action, available_action == action && reverse);
     }
 
-    // Input decides intent; Avian force application stays in the fixed-step controller.
-    action_state.jump_launch_pending = launch_jump;
+    // Latch one-shot input until the next fixed physics tick consumes the impulse.
+    // FixedUpdate may execute before Update in a given render frame.
+    if launch_jump {
+        action_state.jump_launch_pending = true;
+    }
     action_state.wall_grip_active = apply_wall_grip && wall_ahead;
     action_state.wall_grip_normal = wall_hit.map_or(Vec3::ZERO, |hit| hit.normal);
 }
