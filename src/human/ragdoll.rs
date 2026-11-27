@@ -158,12 +158,28 @@ impl HumanPhysicsSettings {
             "human pose-actuation settings are invalid"
         );
         ensure!(
-            manifest.temporary_assists.jump_launch.launch_speed_m_s.is_finite()
+            manifest
+                .temporary_assists
+                .jump_launch
+                .launch_speed_m_s
+                .is_finite()
                 && manifest.temporary_assists.jump_launch.launch_speed_m_s >= 0.0
-                && manifest.temporary_assists.rotational_assistance.strength.is_finite()
+                && manifest
+                    .temporary_assists
+                    .rotational_assistance
+                    .strength
+                    .is_finite()
                 && manifest.temporary_assists.rotational_assistance.strength >= 0.0
-                && manifest.temporary_assists.rotational_assistance.max_torque_nm.is_finite()
-                && manifest.temporary_assists.rotational_assistance.max_torque_nm >= 0.0,
+                && manifest
+                    .temporary_assists
+                    .rotational_assistance
+                    .max_torque_nm
+                    .is_finite()
+                && manifest
+                    .temporary_assists
+                    .rotational_assistance
+                    .max_torque_nm
+                    >= 0.0,
             "human temporary-assist settings are invalid"
         );
         let limits = &source.limits;

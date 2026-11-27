@@ -19,8 +19,7 @@ impl Plugin for HumanPlugin {
             .add_systems(OnEnter(AppMode::Simulation), ragdoll::spawn_human_player)
             .add_systems(
                 FixedPostUpdate,
-                actuation::drive_human_action_pose
-                    .in_set(avian3d::schedule::PhysicsSystems::First),
+                actuation::drive_human_action_pose.in_set(avian3d::schedule::PhysicsSystems::First),
             );
     }
 }
