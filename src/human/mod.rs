@@ -6,6 +6,7 @@ use crate::config::RuntimeConfig;
 use bevy::prelude::*;
 
 /// Registers the external human action data source for the simulation runtime.
+/// All motion tracks remain data-driven and are sampled independently by time.
 pub struct HumanPlugin;
 
 impl Plugin for HumanPlugin {
