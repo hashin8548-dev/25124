@@ -5,7 +5,7 @@
     "category": "human",
     "simulation_model": "articulated_dynamic_ragdoll",
     "physics_authority": "rigid_body_solver",
-    "root_motion": "root_track_plus_contact_driven_displacement",
+    "root_motion": "contact_driven_displacement_no_authored_horizontal_root_curve",
     "root_track": "Root",
     "model_asset": "human/Character_Rig.glb",
     "source_model_asset": "human/Character_Rig.fbx",
