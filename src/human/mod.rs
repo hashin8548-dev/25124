@@ -8,7 +8,8 @@ mod skinning;
 pub use actuation::HumanActionState;
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
 pub use ragdoll::{
-    HumanBodyPart, HumanControlSettings, HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot,
+    HumanBodyPart, HumanCameraSettings, HumanControlSettings, HumanPhysicsSettings, HumanPlayer,
+    HumanPlayerRoot,
     HumanSkinnedSceneRoot,
 };
 pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
