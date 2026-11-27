@@ -465,11 +465,8 @@ mod tests {
     #[test]
     fn library_bootstrap_loads_shared_settings_without_a_world_manifest() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let config = RuntimeConfig::load_library_bootstrap(
-            root.join("data"),
-            root.join("assets"),
-        )
-        .expect("shared project configuration should validate");
+        let config = RuntimeConfig::load_library_bootstrap(root.join("data"), root.join("assets"))
+            .expect("shared project configuration should validate");
 
         assert_eq!(config.world.id, "__world_library__");
         assert!(config.world.objects.is_empty());
