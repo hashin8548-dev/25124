@@ -14,6 +14,7 @@ pub(crate) enum AppMode {
 use crate::{
     camera::CameraPlugin,
     config::RuntimeConfig,
+    human::HumanPlugin,
     persistence::{PersistencePlugin, WorldSaveTarget},
     physics::ContactPlugin,
     rendering::RenderingPlugin,
@@ -52,6 +53,7 @@ impl Plugin for EnginePlugin {
                 WorldPlugin,
                 RenderingPlugin,
                 CameraPlugin,
+                HumanPlugin,
                 ContactPlugin,
                 PersistencePlugin,
                 MenuPlugin,

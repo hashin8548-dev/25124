@@ -1,6 +1,7 @@
 mod camera;
 mod config;
 mod engine;
+mod human;
 mod persistence;
 mod physics;
 mod rendering;
