@@ -101,11 +101,17 @@ impl HumanRig {
         let body_names: BTreeSet<_> = document.body_track_names.into_iter().collect();
         let marker_names: BTreeSet<_> = document.joint_marker_track_names.into_iter().collect();
         ensure!(!body_names.is_empty(), "human rig contains no body tracks");
-        ensure!(body_names.contains("Root"), "human rig has no Root body track");
+        ensure!(
+            body_names.contains("Root"),
+            "human rig has no Root body track"
+        );
 
         let mut bones = BTreeMap::new();
         for bone in document.bones {
-            ensure!(!bone.name.trim().is_empty(), "human rig contains an empty bone name");
+            ensure!(
+                !bone.name.trim().is_empty(),
+                "human rig contains an empty bone name"
+            );
             ensure!(
                 bone.length_m.is_finite() && bone.length_m > 0.0,
                 "human rig bone '{}' has invalid length {}",
@@ -132,7 +138,11 @@ impl HumanRig {
                 );
             }
             if body_names.contains(&bone.name) {
-                ensure!(bone.deform, "body track '{}' is not a deformation bone", bone.name);
+                ensure!(
+                    bone.deform,
+                    "body track '{}' is not a deformation bone",
+                    bone.name
+                );
                 let collision = bone.collision_geometry.as_ref().with_context(|| {
                     format!(
                         "body track '{}' has no mesh-derived collision geometry",
@@ -263,11 +273,7 @@ impl HumanRig {
                 ) {
                     (Some(track), Some(reference)) => {
                         let idle_reference = matrix_from_flat_row_major(reference);
-                        let sampled = track.sample_matrix(
-                            elapsed_seconds,
-                            action.looping,
-                            reverse,
-                        );
+                        let sampled = track.sample_matrix(elapsed_seconds, action.looping, reverse);
                         rest_local * idle_reference.inverse() * sampled
                     }
                     (Some(_), None) => {
@@ -311,9 +317,7 @@ impl HumanRig {
                 .context("body collision geometry was validated during rig load")?;
             let source_matrix = source_pose[name];
             let source_head = source_matrix.transform_point3(Vec3::ZERO);
-            let source_axis = source_matrix
-                .transform_vector3(Vec3::Y)
-                .normalize_or_zero();
+            let source_axis = source_matrix.transform_vector3(Vec3::Y).normalize_or_zero();
             ensure!(
                 source_axis.length_squared() > 0.99,
                 "human body bone '{name}' has a degenerate longitudinal axis"
@@ -358,22 +362,9 @@ impl HumanRig {
 
 fn matrix_from_rows(rows: &[[f32; 4]; 4]) -> Mat4 {
     let flat = [
-        rows[0][0],
-        rows[0][1],
-        rows[0][2],
-        rows[0][3],
-        rows[1][0],
-        rows[1][1],
-        rows[1][2],
-        rows[1][3],
-        rows[2][0],
-        rows[2][1],
-        rows[2][2],
-        rows[2][3],
-        rows[3][0],
-        rows[3][1],
-        rows[3][2],
-        rows[3][3],
+        rows[0][0], rows[0][1], rows[0][2], rows[0][3], rows[1][0], rows[1][1], rows[1][2],
+        rows[1][3], rows[2][0], rows[2][1], rows[2][2], rows[2][3], rows[3][0], rows[3][1],
+        rows[3][2], rows[3][3],
     ];
     Mat4::from_cols_array(&flat).transpose()
 }
@@ -414,17 +405,24 @@ mod tests {
             let mut expected = super::matrix_from_rows(&bone.matrix_parent_local);
             let mut parent = bone.parent.as_deref();
             while let Some(parent_name) = parent {
-                expected = super::matrix_from_rows(
-                    &rig.bone(parent_name).unwrap().matrix_parent_local,
-                ) * expected;
+                expected =
+                    super::matrix_from_rows(&rig.bone(parent_name).unwrap().matrix_parent_local)
+                        * expected;
                 parent = rig.bone(parent_name).unwrap().parent.as_deref();
             }
             if bone.parent.is_none() {
                 expected = rig.armature_world * expected;
             }
-            let difference = actual.to_cols_array().iter().zip(expected.to_cols_array())
-                .map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
-            assert!(difference < 1.0e-4, "idle calibration mismatch for {name}: {difference}");
+            let difference = actual
+                .to_cols_array()
+                .iter()
+                .zip(expected.to_cols_array())
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
+            assert!(
+                difference < 1.0e-4,
+                "idle calibration mismatch for {name}: {difference}"
+            );
         }
     }
 

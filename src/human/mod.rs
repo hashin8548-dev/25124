@@ -25,7 +25,9 @@ fn load_human_data(mut commands: Commands, config: Res<RuntimeConfig>) {
             commands.insert_resource(library);
         }
         Err(error) => {
-            warn!("Human motion data is unavailable; human gameplay systems remain inactive: {error:#}");
+            warn!(
+                "Human motion data is unavailable; human gameplay systems remain inactive: {error:#}"
+            );
             return;
         }
     }
@@ -40,7 +42,9 @@ fn load_human_data(mut commands: Commands, config: Res<RuntimeConfig>) {
             commands.insert_resource(rig);
         }
         Err(error) => {
-            warn!("Human rig metadata is unavailable; human ragdoll systems remain inactive: {error:#}");
+            warn!(
+                "Human rig metadata is unavailable; human ragdoll systems remain inactive: {error:#}"
+            );
         }
     }
 }
