@@ -65,8 +65,11 @@ pub(super) fn spawn_object_chunk(
     let chunk_size_m = config.engine.streaming.object_chunk_size_m;
     let chunk_extent_m = chunk_size_m;
     let chunk_center = (DVec3::from_array(
-        source.coordinate.map(|axis| (axis as f64 + 0.5) * chunk_size_m as f64),
-    ) - world_origin).as_vec3();
+        source
+            .coordinate
+            .map(|axis| (axis as f64 + 0.5) * chunk_size_m as f64),
+    ) - world_origin)
+        .as_vec3();
     let lod_settings = &config.engine.streaming;
 
     for instance in &source.objects {
@@ -89,7 +92,8 @@ pub(super) fn spawn_object_chunk(
             None
         };
         let transform = Transform {
-            translation: (DVec3::from_array(instance.position_m.map(f64::from)) - world_origin).as_vec3(),
+            translation: (DVec3::from_array(instance.position_m.map(f64::from)) - world_origin)
+                .as_vec3(),
             rotation: rotation_from_degrees(instance.rotation_degrees_xyz),
             ..default()
         };
@@ -271,7 +275,8 @@ pub(super) fn spawn_chunk(
         chunk.coordinate[0] as f64 * dimensions[0] as f64 * chunk.voxel_size_m as f64,
         chunk.coordinate[1] as f64 * dimensions[1] as f64 * chunk.voxel_size_m as f64,
         chunk.coordinate[2] as f64 * dimensions[2] as f64 * chunk.voxel_size_m as f64,
-    ) - world_origin).as_vec3();
+    ) - world_origin)
+        .as_vec3();
 
     let lod_settings = &config.engine.streaming;
     let chunk_extent_m = dimensions.iter().copied().max().unwrap_or(0) as f32 * chunk.voxel_size_m;
