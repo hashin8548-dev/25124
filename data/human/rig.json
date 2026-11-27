@@ -160,6 +160,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.159467,
+        0.003163,
+        0.987198,
+        -0.0,
+        -0.915361,
+        0.374973,
+        0.146661,
+        0.39386,
+        -0.369709,
+        -0.927031,
+        0.062691,
+        -0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.1995470925251865,
+        "axial_min_m": -0.10644805431365967,
+        "axial_max_m": 0.29980194568634033,
+        "axial_length_m": 0.40625,
+        "capsule_segment_length_m": 0.007155814949627026,
+        "center_offset_bone_m": [
+          0.0,
+          0.09667694568634033,
+          0.0
+        ],
+        "weighted_vertex_count": 24,
+        "weight_threshold": 0.5
+      },
       "body_track": "Arm_L",
       "joint_marker_track": null
     },
@@ -256,6 +289,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.021071,
+        0.013447,
+        -0.999687,
+        0.0,
+        0.946416,
+        0.322036,
+        0.02428,
+        0.39386,
+        0.322262,
+        -0.946632,
+        -0.005941,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.19954760716986114,
+        "axial_min_m": -0.10644805431365967,
+        "axial_max_m": 0.29980194568634033,
+        "axial_length_m": 0.40625,
+        "capsule_segment_length_m": 0.007154785660277718,
+        "center_offset_bone_m": [
+          0.0,
+          0.09667694568634033,
+          0.0
+        ],
+        "weighted_vertex_count": 24,
+        "weight_threshold": 0.5
+      },
       "body_track": "Arm_R",
       "joint_marker_track": null
     },
@@ -352,6 +418,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.999771,
+        -0.021411,
+        -0.000206,
+        -0.0,
+        0.021411,
+        0.999586,
+        0.019228,
+        0.3,
+        -0.000206,
+        -0.019228,
+        0.999815,
+        -0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.3010010774236146,
+        "axial_min_m": 0.011028051376342773,
+        "axial_max_m": 0.4485280513763428,
+        "axial_length_m": 0.4375,
+        "capsule_segment_length_m": 0.0,
+        "center_offset_bone_m": [
+          0.0,
+          0.22977805137634277,
+          0.0
+        ],
+        "weighted_vertex_count": 16,
+        "weight_threshold": 0.5
+      },
       "body_track": "Chest",
       "joint_marker_track": null
     },
@@ -448,6 +547,25 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        -1.0,
+        0.0,
+        -0.0,
+        0.0,
+        0.0,
+        -0.0,
+        -1.0,
+        0.3,
+        -0.0,
+        -1.0,
+        -0.0,
+        -0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": null,
       "body_track": null,
       "joint_marker_track": "Elbow_L"
     },
@@ -544,6 +662,25 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        -1.0,
+        0.0,
+        -0.0,
+        0.0,
+        0.0,
+        -0.0,
+        -1.0,
+        0.3,
+        -0.0,
+        -1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": null,
       "body_track": null,
       "joint_marker_track": "Elbow_R"
     },
@@ -640,6 +777,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.99932,
+        -0.036878,
+        0.000448,
+        0.0,
+        0.03687,
+        0.999235,
+        0.013035,
+        0.3,
+        -0.000928,
+        -0.013009,
+        0.999915,
+        -0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.22575636238918667,
+        "axial_min_m": -0.015554167330265045,
+        "axial_max_m": 0.35703447461128235,
+        "axial_length_m": 0.3725886419415474,
+        "capsule_segment_length_m": 0.0,
+        "center_offset_bone_m": [
+          0.0,
+          0.17074015364050865,
+          0.0
+        ],
+        "weighted_vertex_count": 24,
+        "weight_threshold": 0.5
+      },
       "body_track": "Hand_L",
       "joint_marker_track": null
     },
@@ -736,6 +906,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.999985,
+        0.001325,
+        0.005391,
+        0.0,
+        -0.00125,
+        0.999903,
+        -0.013885,
+        0.3,
+        -0.005409,
+        0.013878,
+        0.999889,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.2257567451240625,
+        "axial_min_m": -0.015554150566458702,
+        "axial_max_m": 0.35703447461128235,
+        "axial_length_m": 0.37258862517774105,
+        "capsule_segment_length_m": 0.0,
+        "center_offset_bone_m": [
+          0.0,
+          0.17074016202241182,
+          0.0
+        ],
+        "weighted_vertex_count": 24,
+        "weight_threshold": 0.5
+      },
       "body_track": "Hand_R",
       "joint_marker_track": null
     },
@@ -832,6 +1035,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.85311,
+        0.037721,
+        0.520365,
+        0.0,
+        -0.006297,
+        0.998055,
+        -0.062025,
+        0.4,
+        -0.521693,
+        0.049637,
+        0.851688,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.3763235186914844,
+        "axial_min_m": -0.029597163200378418,
+        "axial_max_m": 0.5016528367996216,
+        "axial_length_m": 0.53125,
+        "capsule_segment_length_m": 0.0,
+        "center_offset_bone_m": [
+          0.0,
+          0.23602783679962158,
+          0.0
+        ],
+        "weighted_vertex_count": 16,
+        "weight_threshold": 0.5
+      },
       "body_track": "Head",
       "joint_marker_track": null
     },
@@ -928,6 +1164,25 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0,
+        -0.0,
+        1e-06,
+        -1.0,
+        0.37472,
+        -0.0,
+        1.0,
+        1e-06,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": null,
       "body_track": null,
       "joint_marker_track": "Knee_L"
     },
@@ -1024,6 +1279,25 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        1.0,
+        0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        1e-06,
+        -1.0,
+        0.37472,
+        -0.0,
+        1.0,
+        1e-06,
+        -0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": null,
       "body_track": null,
       "joint_marker_track": "Knee_R"
     },
@@ -1120,6 +1394,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        1.0,
+        -0.0,
+        1e-06,
+        0.0,
+        0.0,
+        0.984974,
+        0.172708,
+        0.37472,
+        -1e-06,
+        -0.172708,
+        0.984972,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.19956010737350496,
+        "axial_min_m": 0.011421054601669312,
+        "axial_max_m": 0.3864210546016693,
+        "axial_length_m": 0.375,
+        "capsule_segment_length_m": 0.0,
+        "center_offset_bone_m": [
+          0.0,
+          0.1989210546016693,
+          0.0
+        ],
+        "weighted_vertex_count": 24,
+        "weight_threshold": 0.5
+      },
       "body_track": "Leg_L",
       "joint_marker_track": null
     },
@@ -1216,6 +1523,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        1.0,
+        -0.0,
+        2e-06,
+        -0.0,
+        -0.0,
+        0.966098,
+        0.258173,
+        0.37472,
+        -2e-06,
+        -0.258173,
+        0.966099,
+        -0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.19956008637089057,
+        "axial_min_m": 0.011421054601669312,
+        "axial_max_m": 0.3864210546016693,
+        "axial_length_m": 0.375,
+        "capsule_segment_length_m": 0.0,
+        "center_offset_bone_m": [
+          0.0,
+          0.1989210546016693,
+          0.0
+        ],
+        "weighted_vertex_count": 24,
+        "weight_threshold": 0.5
+      },
       "body_track": "Leg_R",
       "joint_marker_track": null
     },
@@ -1312,6 +1652,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.854689,
+        0.0,
+        -0.51914,
+        -5e-06,
+        -0.51914,
+        0.0,
+        -0.854689,
+        0.000946,
+        0.0,
+        1.0,
+        0.0,
+        0.755725,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.3010010651404503,
+        "axial_min_m": -0.38897204399108887,
+        "axial_max_m": 0.29852795600891113,
+        "axial_length_m": 0.6875,
+        "capsule_segment_length_m": 0.08549786971909945,
+        "center_offset_bone_m": [
+          0.0,
+          -0.04522204399108887,
+          0.0
+        ],
+        "weighted_vertex_count": 64,
+        "weight_threshold": 0.5
+      },
       "body_track": "Root",
       "joint_marker_track": null
     },
@@ -1408,6 +1781,25 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.0885,
+        -0.949454,
+        -0.301172,
+        0.0,
+        -0.003902,
+        -0.302687,
+        0.953082,
+        0.4,
+        -0.996069,
+        -0.083172,
+        -0.030493,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": null,
       "body_track": null,
       "joint_marker_track": "Shoulder_L"
     },
@@ -1504,6 +1896,25 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.089555,
+        0.949274,
+        0.301428,
+        0.0,
+        -0.003656,
+        -0.302328,
+        0.953197,
+        0.4,
+        0.995975,
+        -0.086466,
+        -0.023605,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": null,
       "body_track": null,
       "joint_marker_track": "Shoulder_R"
     },
@@ -1600,6 +2011,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.866589,
+        -0.133702,
+        -0.480778,
+        -0.125006,
+        -0.027838,
+        -0.974889,
+        0.220935,
+        -0.002831,
+        -0.498245,
+        -0.178075,
+        -0.848552,
+        -1.2e-05,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.1995600975085092,
+        "axial_min_m": -0.11385893821716309,
+        "axial_max_m": 0.3861410617828369,
+        "axial_length_m": 0.5,
+        "capsule_segment_length_m": 0.1008798049829816,
+        "center_offset_bone_m": [
+          0.0,
+          0.13614106178283691,
+          0.0
+        ],
+        "weighted_vertex_count": 24,
+        "weight_threshold": 0.5
+      },
       "body_track": "Thigh_L",
       "joint_marker_track": null
     },
@@ -1696,6 +2140,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.996123,
+        0.056386,
+        -0.067528,
+        0.124994,
+        0.068868,
+        -0.977428,
+        0.199728,
+        -0.002831,
+        -0.054742,
+        -0.203604,
+        -0.977522,
+        -1.2e-05,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.1995600870072123,
+        "axial_min_m": -0.11385893821716309,
+        "axial_max_m": 0.3861410617828369,
+        "axial_length_m": 0.5,
+        "capsule_segment_length_m": 0.10087982598557538,
+        "center_offset_bone_m": [
+          0.0,
+          0.13614106178283691,
+          0.0
+        ],
+        "weighted_vertex_count": 24,
+        "weight_threshold": 0.5
+      },
       "body_track": "Thigh_R",
       "joint_marker_track": null
     },
@@ -1792,6 +2269,25 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.999836,
+        0.018122,
+        0.272858,
+        0.0,
+        -0.018122,
+        -0.999248,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": null,
       "body_track": null,
       "joint_marker_track": null
     },
@@ -1888,6 +2384,25 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.999836,
+        0.018122,
+        0.272858,
+        0.0,
+        -0.018122,
+        -0.999244,
+        -0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": null,
       "body_track": null,
       "joint_marker_track": null
     },
@@ -1984,6 +2499,39 @@
           1.0
         ]
       ],
+      "action_reference_parent_local": [
+        0.99978,
+        -0.020971,
+        -0.000197,
+        -0.0,
+        0.020971,
+        0.999603,
+        0.018833,
+        0.05,
+        -0.000198,
+        -0.018833,
+        0.999823,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "collision_geometry": {
+        "shape": "capsule",
+        "radius_m": 0.3010010774236146,
+        "axial_min_m": -0.1889721155166626,
+        "axial_max_m": 0.2485278844833374,
+        "axial_length_m": 0.4375,
+        "capsule_segment_length_m": 0.0,
+        "center_offset_bone_m": [
+          0.0,
+          0.029777884483337402,
+          0.0
+        ],
+        "weighted_vertex_count": 16,
+        "weight_threshold": 0.5
+      },
       "body_track": "Torso",
       "joint_marker_track": null
     }
