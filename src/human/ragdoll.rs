@@ -26,6 +26,9 @@ pub struct HumanPhysicsSettings {
     pub pose_stiffness_nm_per_rad: f32,
     pub pose_damping_nm_s_per_rad: f32,
     pub max_pose_torque_nm: f32,
+    pub pose_position_stiffness_n_per_m: f32,
+    pub pose_position_damping_n_s_per_m: f32,
+    pub max_pose_force_n: f32,
     pub climb_contact_push_force_n: f32,
     pub temporary_assists: HumanTemporaryAssists,
     pub controls: HumanControlSettings,
@@ -122,6 +125,9 @@ struct HumanPhysicsSettingsFile {
     pose_stiffness_nm_per_rad: f32,
     pose_damping_nm_s_per_rad: f32,
     max_pose_torque_nm: f32,
+    pose_position_stiffness_n_per_m: f32,
+    pose_position_damping_n_s_per_m: f32,
+    max_pose_force_n: f32,
     climb_contact_push_force_n: f32,
     limits: HumanJointLimits,
 }
@@ -227,6 +233,15 @@ impl HumanPhysicsSettings {
                     .max_torque_nm
                     >= 0.0,
             "human temporary-assist settings are invalid"
+        );
+        ensure!(
+            source.pose_position_stiffness_n_per_m.is_finite()
+                && source.pose_position_stiffness_n_per_m > 0.0
+                && source.pose_position_damping_n_s_per_m.is_finite()
+                && source.pose_position_damping_n_s_per_m >= 0.0
+                && source.max_pose_force_n.is_finite()
+                && source.max_pose_force_n > 0.0,
+            "human position-actuation settings are invalid"
         );
         ensure!(
             source.climb_contact_push_force_n.is_finite()
@@ -389,6 +404,9 @@ impl HumanPhysicsSettings {
             pose_stiffness_nm_per_rad: source.pose_stiffness_nm_per_rad,
             pose_damping_nm_s_per_rad: source.pose_damping_nm_s_per_rad,
             max_pose_torque_nm: source.max_pose_torque_nm,
+            pose_position_stiffness_n_per_m: source.pose_position_stiffness_n_per_m,
+            pose_position_damping_n_s_per_m: source.pose_position_damping_n_s_per_m,
+            max_pose_force_n: source.max_pose_force_n,
             climb_contact_push_force_n: source.climb_contact_push_force_n,
             temporary_assists: manifest.temporary_assists,
             controls: control_settings,
