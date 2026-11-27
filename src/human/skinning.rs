@@ -2,15 +2,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use bevy::prelude::*;
 
-use crate::world::WorldOrigin;
-
 use super::{HumanActionState, HumanBodyPart, HumanMotionLibrary, HumanRig, HumanSkinnedSceneRoot};
 
 /// Mirrors solver-owned body transforms into the actual skinned GLB hierarchy.
-/// Physics segments are authoritative for body bones; helper/tool bones use calibrated
-/// source motion targets so the mesh stays visually coherent between constrained segments.
+/// Physical bones follow their rigid bodies; helper/tool bones retain calibrated local
+/// action targets relative to their current physical parent.
 pub fn sync_human_skinned_mesh(
-    origin: Res<WorldOrigin>,
     actions: Res<HumanMotionLibrary>,
     action_state: Res<HumanActionState>,
     rig: Res<HumanRig>,
@@ -28,7 +25,7 @@ pub fn sync_human_skinned_mesh(
     let Some(action) = actions.action(&action_state.action_name) else {
         return;
     };
-    let source_pose = match rig.sample_source_world_pose(
+    let source_local_pose = match rig.sample_calibrated_local_pose(
         action,
         action_state.elapsed_seconds,
         action_state.reverse,
@@ -54,7 +51,7 @@ pub fn sync_human_skinned_mesh(
         }
     }
     if scene_entities.is_empty() {
-        // The GLB world instance has not spawned its hierarchy yet.
+        // WorldAssetRoot has not finished creating its world instance yet.
         return;
     }
 
@@ -69,73 +66,75 @@ pub fn sync_human_skinned_mesh(
         }
     }
 
-    let Some(root_transform) = physical_transforms.get("Root") else {
-        return;
-    };
-    let Some(root_geometry) = rig
-        .bone("Root")
-        .and_then(|bone| bone.collision_geometry.as_ref())
-    else {
-        return;
-    };
-
-    let root_offset = Vec3::from_array(root_geometry.center_offset_bone_m);
-    let root_head = root_transform.translation - root_transform.rotation * root_offset;
-    let root_actual_world = Mat4::from_rotation_translation(root_transform.rotation, root_head);
-
-    // Convert action/rest matrices from source Z-up to engine Y-up and then into the
-    // current floating-origin coordinate frame used by the physics world.
-    let source_to_engine = Mat4::from_quat(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2));
+    // Convert parent-relative action targets into the Y-up basis used by the GLB export.
+    let source_to_engine =
+        Mat4::from_quat(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2));
     let engine_to_source = source_to_engine.inverse();
-    let origin_offset = origin.0.as_vec3();
-    let convert_source_world = |mut matrix: Mat4| {
-        matrix = source_to_engine * matrix * engine_to_source;
-        matrix.w_axis = (matrix.w_axis.truncate() - origin_offset).extend(1.0);
-        matrix
-    };
-
-    let Some(root_target_source) = source_pose.get("Root") else {
-        return;
-    };
-    let root_target_world = convert_source_world(*root_target_source);
-    let root_delta = root_actual_world * root_target_world.inverse();
-
     let mut desired_world = BTreeMap::<String, Mat4>::new();
-    for name in rig.bone_names() {
-        if let Some(body_transform) = physical_transforms.get(name) {
-            let Some(geometry) = rig
-                .bone(name)
-                .and_then(|bone| bone.collision_geometry.as_ref())
-            else {
+    let mut pending: BTreeSet<String> = rig.bone_names().map(str::to_owned).collect();
+
+    while !pending.is_empty() {
+        let mut progressed = false;
+        let names: Vec<_> = pending.iter().cloned().collect();
+        for name in names {
+            let Some(bone) = rig.bone(&name) else {
                 continue;
             };
-            let center_offset = Vec3::from_array(geometry.center_offset_bone_m);
-            let bone_head = body_transform.translation - body_transform.rotation * center_offset;
-            desired_world.insert(
-                name.to_owned(),
-                Mat4::from_rotation_translation(body_transform.rotation, bone_head),
-            );
-        } else if let Some(source_matrix) = source_pose.get(name) {
-            desired_world.insert(
-                name.to_owned(),
-                root_delta * convert_source_world(*source_matrix),
-            );
+            let Some(&node_entity) = node_entities.get(&name) else {
+                continue;
+            };
+
+            let parent_world = if let Some(parent_name) = &bone.parent {
+                let Some(parent_matrix) = desired_world.get(parent_name) else {
+                    continue;
+                };
+                *parent_matrix
+            } else {
+                let Ok((_, _, _, Some(child_of), _)) = named_nodes.get(node_entity) else {
+                    continue;
+                };
+                let Ok(parent_global) = global_transforms.get(child_of.parent()) else {
+                    continue;
+                };
+                parent_global.to_matrix()
+            };
+
+            let desired = if let Some(body_transform) = physical_transforms.get(&name) {
+                let Some(geometry) = bone.collision_geometry.as_ref() else {
+                    continue;
+                };
+                let center_offset = Vec3::from_array(geometry.center_offset_bone_m);
+                let bone_head = body_transform.translation - body_transform.rotation * center_offset;
+                Mat4::from_rotation_translation(body_transform.rotation, bone_head)
+            } else {
+                let Some(source_local) = source_local_pose.get(&name) else {
+                    continue;
+                };
+                let engine_local = source_to_engine * *source_local * engine_to_source;
+                parent_world * engine_local
+            };
+
+            if !desired.to_cols_array().iter().all(|value| value.is_finite()) {
+                continue;
+            }
+            desired_world.insert(name.clone(), desired);
+            pending.remove(&name);
+            progressed = true;
+        }
+        if !progressed {
+            // The GLB instance may still be spawning a parent node; retry next frame.
+            break;
         }
     }
 
-    // Compose local node transforms from the current desired world transforms. For root
-    // bones, the armature object is the non-bone parent and supplies the live scene offset.
-    for name in rig.bone_names() {
-        let Some(&entity) = node_entities.get(name) else {
+    // Convert solved world-space bone targets back to local GLB node transforms.
+    for (name, entity) in node_entities {
+        let Some(target_world) = desired_world.get(&name) else {
             continue;
         };
-        let Some(target_world) = desired_world.get(name) else {
+        let Some(bone) = rig.bone(&name) else {
             continue;
         };
-        let Some(bone) = rig.bone(name) else {
-            continue;
-        };
-
         let parent_world = if let Some(parent_name) = &bone.parent {
             let Some(parent_matrix) = desired_world.get(parent_name) else {
                 continue;
@@ -150,7 +149,6 @@ pub fn sync_human_skinned_mesh(
             };
             parent_global.to_matrix()
         };
-
         let local = parent_world.inverse() * *target_world;
         if !local.to_cols_array().iter().all(|value| value.is_finite()) {
             continue;
