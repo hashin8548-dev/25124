@@ -223,9 +223,8 @@ pub fn drive_human_action_pose(
             )
         };
 
-        // Translate only non-root segments toward the action's calibrated body targets.
-        // Root translation is never commanded: equal-and-opposite joint/contact reactions
-        // determine how the character moves over the ground.
+        // Translate non-root segments toward the action's calibrated body targets.
+        // The Root's authored trajectory is handled separately above as a bounded force.
         if part.bone_name != "Root" {
             if let Some(target) = sampled.get(&part.bone_name) {
                 let root_relative = root_target.rotation_engine.inverse()
