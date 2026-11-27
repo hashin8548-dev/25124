@@ -323,11 +323,12 @@ impl HumanRig {
                 "human body bone '{name}' has a degenerate longitudinal axis"
             );
 
+            let (_, source_rotation, _) = source_matrix.to_scale_rotation_translation();
+            let rotation_engine = (source_to_engine * source_rotation).normalize();
+            let axis_engine = (rotation_engine * Vec3::Y).normalize_or_zero();
             let head_engine = source_to_engine * source_head;
-            let axis_engine = (source_to_engine * source_axis).normalize_or_zero();
-            let center_offset = geometry.center_offset_bone_m[1];
-            let center_engine = head_engine + axis_engine * center_offset;
-            let rotation_engine = Quat::from_rotation_arc(Vec3::Y, axis_engine);
+            let center_offset = Vec3::from_array(geometry.center_offset_bone_m);
+            let center_engine = head_engine + rotation_engine * center_offset;
 
             result.insert(
                 name.clone(),
