@@ -506,7 +506,10 @@ impl MenuAsset {
             if button.label.trim().is_empty() {
                 return Err("menu button labels cannot be empty".to_owned());
             }
-            if !matches!(button.action.as_str(), "start" | "resume" | "quit" | "create_world") {
+            if !matches!(
+                button.action.as_str(),
+                "start" | "resume" | "quit" | "create_world"
+            ) {
                 return Err(format!(
                     "unsupported menu action '{}' (expected start, resume, quit, or create_world)",
                     button.action
@@ -923,7 +926,11 @@ fn setup_menu(
                     },
                 ));
 
-                if let Some(create_world) = menu.buttons.iter().find(|button| button.action == "create_world") {
+                if let Some(create_world) = menu
+                    .buttons
+                    .iter()
+                    .find(|button| button.action == "create_world")
+                {
                     panel
                         .spawn((
                             Button,
@@ -969,7 +976,15 @@ fn setup_menu(
                             Button,
                             TabIndex(
                                 library.entries.len() as i32
-                                    + if menu.buttons.iter().any(|button| button.action == "create_world") { 1 } else { 0 },
+                                    + if menu
+                                        .buttons
+                                        .iter()
+                                        .any(|button| button.action == "create_world")
+                                    {
+                                        1
+                                    } else {
+                                        0
+                                    },
                             ),
                             Hovered::default(),
                             Node {
@@ -1393,7 +1408,9 @@ fn write_flat_platform_world(project_root: &Path) -> Result<PathBuf, String> {
     if let Err(error) = fs::rename(&temporary_path, &manifest_path) {
         let _ = fs::remove_file(&temporary_path);
         let _ = fs::remove_dir(&world_directory);
-        return Err(format!("could not commit generated world manifest: {error}"));
+        return Err(format!(
+            "could not commit generated world manifest: {error}"
+        ));
     }
     Ok(manifest_path)
 }
@@ -1417,7 +1434,9 @@ fn handle_create_world(
     mut virtual_time: ResMut<Time<Virtual>>,
 ) {
     if *mode.get() != AppMode::WorldLibrary
-        || !actions.get(activate.entity).is_ok_and(|action| action.0 == "create_world")
+        || !actions
+            .get(activate.entity)
+            .is_ok_and(|action| action.0 == "create_world")
     {
         return;
     }
@@ -1440,8 +1459,12 @@ fn handle_create_world(
     ) {
         Ok(config) => config,
         Err(error) => {
-            error!("Generated world '{}' failed validation: {error:#}", manifest_path.display());
-            feedback.message = "Generated world failed validation. Check the application log.".to_owned();
+            error!(
+                "Generated world '{}' failed validation: {error:#}",
+                manifest_path.display()
+            );
+            feedback.message =
+                "Generated world failed validation. Check the application log.".to_owned();
             feedback.tone = MenuFeedbackTone::Notice;
             return;
         }
@@ -1460,13 +1483,22 @@ fn handle_create_world(
         };
 
     gravity.0 = Vec3::from_array(
-        selected.world.gravity_m_s2.unwrap_or(selected.engine.physics.gravity_m_s2),
+        selected
+            .world
+            .gravity_m_s2
+            .unwrap_or(selected.engine.physics.gravity_m_s2),
     );
     save_target.world_id.clone_from(&selected.world.id);
-    save_target.state_path.clone_from(&selected.paths.world_state);
+    save_target
+        .state_path
+        .clone_from(&selected.paths.world_state);
     journal.fractured.clone_from(&selected_state.fractured);
-    journal.broken_bonds.clone_from(&selected_state.broken_bonds);
-    journal.damaged_bonds.clone_from(&selected_state.damaged_bonds);
+    journal
+        .broken_bonds
+        .clone_from(&selected_state.broken_bonds);
+    journal
+        .damaged_bonds
+        .clone_from(&selected_state.damaged_bonds);
     world_origin.0 = DVec3::from_array(selected_state.origin_m);
     *world_state = selected_state;
     *config = selected;
@@ -1476,7 +1508,10 @@ fn handle_create_world(
     menu_state.visible = false;
     virtual_time.unpause();
     next_state.set(AppMode::Simulation);
-    info!("Created and started procedural world '{}'.", config.world.id);
+    info!(
+        "Created and started procedural world '{}'.",
+        config.world.id
+    );
 }
 
 fn load_menu(path: &Path) -> Result<MenuAsset, String> {
