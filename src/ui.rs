@@ -1419,6 +1419,14 @@ fn setup_menu(
                                                 ));
                                             }
                                         });
+                                    button.spawn((
+                                        Text::new("JOIN  ▸"),
+                                        TextFont {
+                                            font_size: FontSize::Px(menu.world_metadata_size_px + 1.0),
+                                            ..default()
+                                        },
+                                        TextColor(title_color),
+                                    ));
                                 });
                         }
                     });
