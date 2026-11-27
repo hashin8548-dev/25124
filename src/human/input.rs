@@ -1,9 +1,8 @@
-use avian3d::prelude::{Dir3, Forces, LinearVelocity, SpatialQuery, SpatialQueryFilter};
+use avian3d::prelude::{Dir3, LinearVelocity, SpatialQuery, SpatialQueryFilter};
 use bevy::prelude::*;
 
 use super::{
-    HumanActionState, HumanBodyPart, HumanMotionLibrary, HumanPhysicsSettings, HumanPlayer,
-    HumanPlayerRoot, HumanRig,
+    HumanActionState, HumanMotionLibrary, HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot,
 };
 
 const WALL_PROBE_DISTANCE_M: f32 = 1.0;
@@ -17,18 +16,16 @@ pub fn update_human_controls(
     spatial_query: SpatialQuery,
     mut action_state: Option<ResMut<HumanActionState>>,
     motions: Option<Res<HumanMotionLibrary>>,
-    rig: Option<Res<HumanRig>>,
     settings: Option<Res<HumanPhysicsSettings>>,
     player: Option<Res<HumanPlayer>>,
-    root: Query<(&Transform, &LinearVelocity, Forces), With<HumanPlayerRoot>>,
-    mut limbs: Query<(&HumanBodyPart, Forces), Without<HumanPlayerRoot>>,
+    root: Query<(&Transform, &LinearVelocity), With<HumanPlayerRoot>>,
 ) {
-    let (Some(mut action_state), Some(motions), Some(rig), Some(settings), Some(player)) =
-        (action_state, motions, rig, settings, player)
+    let (Some(mut action_state), Some(motions), Some(settings), Some(player)) =
+        (action_state, motions, settings, player)
     else {
         return;
     };
-    let Ok((root_transform, root_velocity, mut root_forces)) = root.single() else {
+    let Ok((root_transform, root_velocity)) = root.single() else {
         return;
     };
 
@@ -128,35 +125,16 @@ pub fn update_human_controls(
     };
 
     if let Some((action, reverse)) = selected {
-        action_state.select(action, reverse);
+        let available_action = if motions.action(action).is_some() {
+            action
+        } else {
+            settings.controls.idle.as_str()
+        };
+        action_state.select(available_action, available_action == action && reverse);
     }
 
-    if launch_jump {
-        if let Some(geometry) = rig
-            .bone("Root")
-            .and_then(|bone| bone.collision_geometry.as_ref())
-        {
-            let radius = geometry.radius_m;
-            let segment = geometry.capsule_segment_length_m;
-            let volume = std::f32::consts::PI * radius * radius * segment
-                + (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3);
-            let estimated_mass = volume * settings.density_kg_m3;
-            let impulse =
-                Vec3::Y * estimated_mass * settings.temporary_assists.jump_launch.launch_speed_m_s;
-            root_forces.apply_linear_impulse(impulse);
-        }
-    }
-
-    if apply_wall_grip {
-        if let Some(hit) = wall_hit {
-            // Grip is a physical push into the wall. Surface friction and gravity determine
-            // whether the current climbing pose can support the body; no vertical teleport.
-            let grip_force = -hit.normal * settings.climb_contact_push_force_n * 0.5;
-            for (part, mut forces) in &mut limbs {
-                if part.bone_name == "Hand_L" || part.bone_name == "Hand_R" {
-                    forces.apply_force(grip_force);
-                }
-            }
-        }
-    }
+    // Input decides intent; Avian force application stays in the fixed-step controller.
+    action_state.jump_launch_pending = launch_jump;
+    action_state.wall_grip_active = apply_wall_grip && wall_ahead;
+    action_state.wall_grip_normal = wall_hit.map_or(Vec3::ZERO, |hit| hit.normal);
 }
