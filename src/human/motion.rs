@@ -308,6 +308,30 @@ mod tests {
     }
 
     #[test]
+    fn supplied_actions_do_not_encode_horizontal_root_travel() {
+        // Source coordinates are Z-up, so X/Y are horizontal and Z is vertical.
+        // Preserve this distinction: horizontal locomotion must emerge from physical contact.
+        for (name, source) in ACTIONS {
+            let document: super::ActionDocument = serde_json::from_str(source).unwrap();
+            let action = HumanAction::from_document(name, document, true).unwrap();
+            let root = action.track("Root").unwrap();
+            let first = &root.transform[0];
+            let first_x = first[3];
+            let first_y = first[7];
+            for matrix in &root.transform {
+                let horizontal_delta = ((matrix[3] - first_x).powi(2)
+                    + (matrix[7] - first_y).powi(2))
+                    .sqrt();
+                assert!(
+                    horizontal_delta <= 0.003,
+                    "action '{name}' unexpectedly contains {:.6} m horizontal Root travel",
+                    horizontal_delta
+                );
+            }
+        }
+    }
+
+    #[test]
     fn tracks_keep_independent_timestamps() {
         let document: super::ActionDocument = serde_json::from_str(ACTIONS[0].1).unwrap();
         let action = HumanAction::from_document("walk", document, true).unwrap();
