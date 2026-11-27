@@ -5,7 +5,7 @@ use anyhow::{Result, ensure};
 use super::load::ChunkSource;
 use super::schema::{
     AlphaMode, BodyType, ChunkFile, ColliderShape, ComponentCatalog, EngineSettings,
-    MAX_CHUNK_DIMENSION, MaterialCatalog, WorldManifest,
+    MAX_CHUNK_DIMENSION, MaterialCatalog, WorldGeneration, WorldManifest,
 };
 
 const SCHEMA_VERSION: u32 = 1;
@@ -283,6 +283,30 @@ pub fn validate_all(
                 "destructible component definition '{id}' must use a procedural primitive visual"
             );
         }
+    }
+
+    if let Some(WorldGeneration::FlatPlatform {
+        size_units,
+        border_height_units,
+        border_thickness_units,
+    }) = &world.generation
+    {
+        ensure!(
+            (32..=255_000_000).contains(size_units) && size_units % 2 == 0,
+            "flat-platform size_units must be an even value in [32, 255000000]"
+        );
+        ensure!(
+            (1..=7).contains(border_height_units),
+            "flat-platform border_height_units must be in [1, 7]"
+        );
+        ensure!(
+            (1..=16).contains(border_thickness_units),
+            "flat-platform border_thickness_units must be in [1, 16]"
+        );
+        ensure!(
+            world.regions.is_empty(),
+            "procedural flat-platform worlds cannot also declare authored voxel regions"
+        );
     }
 
     ensure!(!world.id.trim().is_empty(), "world id cannot be empty");
