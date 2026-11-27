@@ -407,7 +407,7 @@ struct MenuButtonDefinition {
     action: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 struct UserPreferences {
     schema_version: u32,
@@ -2908,5 +2908,82 @@ mod tests {
         let mut menu = valid_menu();
         menu.button_width_px = f32::NAN;
         assert!(menu.validate().is_err());
+    }
+
+    fn temp_root(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("25124-ui-{label}-{nonce}"))
+    }
+
+    #[test]
+    fn user_preferences_round_trip_and_reject_out_of_range_values() {
+        let root = temp_root("preferences");
+        fs::create_dir_all(&root).unwrap();
+
+        let mut preferences = UserPreferences {
+            last_world_manifest: Some("worlds/alpha/world.json".to_owned()),
+            render_distance_chunks: 8,
+            lod_detail: 2,
+            ..default()
+        };
+        save_user_preferences(&root, &preferences).unwrap();
+        assert_eq!(load_user_preferences(&root), preferences);
+
+        preferences.render_distance_chunks = 9;
+        save_user_preferences(&root, &preferences).unwrap();
+        assert_eq!(load_user_preferences(&root), UserPreferences::default());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn continue_target_must_be_relative_and_present_in_the_world_library() {
+        let root = temp_root("recent-world");
+        let world_directory = root.join("worlds/alpha");
+        fs::create_dir_all(&world_directory).unwrap();
+        fs::write(
+            world_directory.join("world.json"),
+            r#"{"id":"alpha","name":"Alpha"}"#,
+        )
+        .unwrap();
+
+        let library = WorldLibrary::discover(&root).unwrap();
+        let mut preferences = UserPreferences {
+            last_world_manifest: Some("worlds/alpha/world.json".to_owned()),
+            ..default()
+        };
+        assert_eq!(
+            preferred_world_manifest(&root, &library, &preferences),
+            Some(world_directory.join("world.json"))
+        );
+
+        for unsafe_or_stale in [
+            "../outside/world.json",
+            "worlds/missing/world.json",
+            "",
+        ] {
+            preferences.last_world_manifest = Some(unsafe_or_stale.to_owned());
+            assert_eq!(
+                preferred_world_manifest(&root, &library, &preferences),
+                None
+            );
+        }
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn lod_detail_profiles_preserve_strict_distance_ordering() {
+        let profiles = [
+            (0.75_f32, 1.5_f32, 2.25_f32),
+            (1.0_f32, 1.75_f32, 2.5_f32),
+            (1.25_f32, 2.0_f32, 2.75_f32),
+        ];
+        for (near, mid, far) in profiles {
+            assert!(near > 0.0 && near < mid && mid < far && far <= 3.0);
+        }
     }
 }
