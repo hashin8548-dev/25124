@@ -961,82 +961,81 @@ fn setup_menu(
                 TabGroup::modal(),
             ))
             .with_children(|panel| {
-                panel.spawn((
-                    Node {
-                        width: Val::Px(menu.home_layout.title_frame_width_px),
-                        height: Val::Px(menu.home_layout.title_frame_height_px),
-                        padding: UiRect::axes(Val::Px(34.0), Val::Px(14.0)),
-                        flex_direction: FlexDirection::Column,
-                        justify_content: JustifyContent::SpaceBetween,
-                        border: UiRect::all(Val::Px(1.0)),
-                        border_radius: BorderRadius::all(Val::Px(0.0)),
-                        ..default()
-                    },
-                    BorderColor::all(panel_border_color),
-                    BackgroundColor(panel_color),
-                    BoxShadow::new(
-                        Color::srgba(1.0, 1.0, 1.0, 0.10),
-                        Val::Px(0.0),
-                        Val::Px(0.0),
-                        Val::Px(0.0),
-                        Val::Px(18.0),
-                    ),
-                ))
-                .with_children(|frame| {
-                    frame.spawn((
+                panel
+                    .spawn((
                         Node {
-                            width: Val::Percent(100.0),
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
+                            width: Val::Px(menu.home_layout.title_frame_width_px),
+                            height: Val::Px(menu.home_layout.title_frame_height_px),
+                            padding: UiRect::axes(Val::Px(34.0), Val::Px(14.0)),
+                            flex_direction: FlexDirection::Column,
                             justify_content: JustifyContent::SpaceBetween,
+                            border: UiRect::all(Val::Px(1.0)),
+                            border_radius: BorderRadius::all(Val::Px(0.0)),
                             ..default()
                         },
+                        BorderColor::all(panel_border_color),
+                        BackgroundColor(panel_color),
+                        BoxShadow::new(
+                            Color::srgba(1.0, 1.0, 1.0, 0.10),
+                            Val::Px(0.0),
+                            Val::Px(0.0),
+                            Val::Px(0.0),
+                            Val::Px(18.0),
+                        ),
                     ))
-                    .with_children(|row| {
-                        row.spawn((
-                            Text::new("III"),
-                            TextFont {
-                                font_size: FontSize::Px(menu.home_layout.eyebrow_font_size_px),
+                    .with_children(|frame| {
+                        frame
+                            .spawn((Node {
+                                width: Val::Percent(100.0),
+                                flex_direction: FlexDirection::Row,
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::SpaceBetween,
                                 ..default()
-                            },
-                            TextColor(subtitle_color),
-                        ));
-                        row.spawn((
-                            Text::new("+"),
+                            },))
+                            .with_children(|row| {
+                                row.spawn((
+                                    Text::new("III"),
+                                    TextFont {
+                                        font_size: FontSize::Px(menu.home_layout.eyebrow_font_size_px),
+                                        ..default()
+                                    },
+                                    TextColor(subtitle_color),
+                                ));
+                                row.spawn((
+                                    Text::new("+"),
+                                    TextFont {
+                                        font_size: FontSize::Px(25.0),
+                                        ..default()
+                                    },
+                                    TextColor(title_color),
+                                ));
+                            });
+                        frame.spawn((
+                            Text::new(menu.title.clone()),
                             TextFont {
-                                font_size: FontSize::Px(25.0),
+                                font_size: FontSize::Px(menu.home_layout.title_font_size_px),
                                 ..default()
                             },
                             TextColor(title_color),
                         ));
-                    });
-                    frame.spawn((
-                        Text::new(menu.title.clone()),
-                        TextFont {
-                            font_size: FontSize::Px(menu.home_layout.title_font_size_px),
-                            ..default()
-                        },
-                        TextColor(title_color),
-                    ));
-                    frame.spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            flex_direction: FlexDirection::Row,
-                            justify_content: JustifyContent::FlexEnd,
-                            ..default()
-                        },
-                    ))
-                    .with_children(|row| {
-                        row.spawn((
-                            Text::new(format!("v{}", env!("CARGO_PKG_VERSION"))),
-                            TextFont {
-                                font_size: FontSize::Px(menu.home_layout.version_font_size_px),
+                        frame
+                            .spawn((Node {
+                                width: Val::Percent(100.0),
+                                flex_direction: FlexDirection::Row,
+                                justify_content: JustifyContent::FlexEnd,
                                 ..default()
-                            },
-                            TextColor(subtitle_color),
-                        ));
+                            },))
+                            .with_children(|row| {
+                                row.spawn((
+                                    Text::new(format!("v{}", env!("CARGO_PKG_VERSION"))),
+                                    TextFont {
+                                        font_size: FontSize::Px(menu.home_layout.version_font_size_px),
+                                        ..default()
+                                    },
+                                    TextColor(subtitle_color),
+                                ));
+                            });
                     });
-                });
 
                 panel.spawn(Node {
                     width: Val::Px(1.0),
@@ -1336,26 +1335,14 @@ fn setup_menu(
                     .iter()
                     .find(|definition| definition.action == "worlds")
                     .expect("validated home menu contains Worlds");
-                home_action_button!(
-                    worlds,
-                    2,
-                    "worlds",
-                    handle_navigation_action,
-                    false
-                );
+                home_action_button!(worlds, 2, "worlds", handle_navigation_action, false);
 
                 let settings = menu
                     .home_buttons
                     .iter()
                     .find(|definition| definition.action == "settings")
                     .expect("validated home menu contains Settings");
-                home_action_button!(
-                    settings,
-                    3,
-                    "settings",
-                    handle_navigation_action,
-                    false
-                );
+                home_action_button!(settings, 3, "settings", handle_navigation_action, false);
 
                 panel.spawn((
                     MenuNotice,
