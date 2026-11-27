@@ -487,15 +487,18 @@ mod tests {
 
     #[test]
     fn procedural_platform_manifest_loads_without_authored_chunk_files() {
-        use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+        use std::{
+            fs,
+            time::{SystemTime, UNIX_EPOCH},
+        };
 
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let world_directory = std::env::temp_dir()
-            .join(format!("physics-sandbox-procedural-world-{nonce}"));
+        let world_directory =
+            std::env::temp_dir().join(format!("physics-sandbox-procedural-world-{nonce}"));
         fs::create_dir_all(&world_directory).unwrap();
         let manifest_path = world_directory.join("world.json");
         fs::write(
@@ -517,12 +520,8 @@ mod tests {
         )
         .unwrap();
 
-        let config = RuntimeConfig::load(
-            root.join("data"),
-            root.join("assets"),
-            manifest_path,
-        )
-        .expect("procedural platform manifest should validate");
+        let config = RuntimeConfig::load(root.join("data"), root.join("assets"), manifest_path)
+            .expect("procedural platform manifest should validate");
 
         assert_eq!(config.world.id, "flat-platform-test");
         assert!(config.world.objects.is_empty());
