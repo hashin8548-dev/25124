@@ -83,6 +83,11 @@ def extract_rig(armature: bpy.types.Object, manifest: dict) -> dict:
                 "head_armature_m": vector3(bone.head_local),
                 "tail_armature_m": vector3(bone.tail_local),
                 "matrix_armature": matrix_rows(bone.matrix_local),
+                "matrix_parent_local": matrix_rows(
+                    bone.parent.matrix_local.inverted_safe() @ bone.matrix_local
+                    if bone.parent
+                    else bone.matrix_local
+                ),
                 "matrix_world": matrix_rows(armature_world @ bone.matrix_local),
                 "body_track": bone.name if bone.name in body_tracks else None,
                 "joint_marker_track": bone.name if bone.name in marker_tracks else None,
@@ -95,7 +100,12 @@ def extract_rig(armature: bpy.types.Object, manifest: dict) -> dict:
         idle = json.load(stream)
 
     pose_bones = armature.pose.bones
-    errors = {"bone_local_basis": [], "armature_rest": [], "armature_pose": []}
+    errors = {
+        "parent_relative_rest": [],
+        "bone_local_basis": [],
+        "armature_rest": [],
+        "armature_pose": [],
+    }
     for track in idle.get("animation", []):
         name = track.get("name")
         pose_bone = pose_bones.get(name)
@@ -105,6 +115,12 @@ def extract_rig(armature: bpy.types.Object, manifest: dict) -> dict:
         source_matrix = Matrix(
             [samples[0][0:4], samples[0][4:8], samples[0][8:12], samples[0][12:16]]
         )
+        parent_relative_rest = (
+            pose_bone.parent.bone.matrix_local.inverted_safe() @ pose_bone.bone.matrix_local
+            if pose_bone.parent
+            else pose_bone.bone.matrix_local
+        )
+        errors["parent_relative_rest"].append(matrix_error(source_matrix, parent_relative_rest))
         errors["bone_local_basis"].append(matrix_error(source_matrix, pose_bone.matrix_basis))
         errors["armature_rest"].append(matrix_error(source_matrix, pose_bone.bone.matrix_local))
         errors["armature_pose"].append(matrix_error(source_matrix, pose_bone.matrix))
