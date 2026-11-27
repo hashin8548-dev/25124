@@ -137,7 +137,7 @@ pub(crate) fn generate_platform_chunk(
     );
     ensure!(
         (1..CHUNK_HEIGHT).contains(border_height_units),
-        "border height must be in [1, {}",
+        "border height must be in [1, {}]",
         CHUNK_HEIGHT - 1
     );
     ensure!(
