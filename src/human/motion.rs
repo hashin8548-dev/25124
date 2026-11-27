@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::{Component, Path, PathBuf}};
 use anyhow::{Context, Result, ensure};
-use bevy::prelude::{Mat4, Resource, Vec3};
+use bevy::prelude::{Mat4, Resource};
 use serde::Deserialize;
 
 /// Validated external action library. Tracks are body-pose targets, never rendered clips.
