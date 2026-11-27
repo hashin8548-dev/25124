@@ -10,6 +10,12 @@ pub struct HumanActionState {
     pub elapsed_seconds: f32,
     pub reverse: bool,
     pub heading_yaw_radians: f32,
+    /// One-shot launch request produced by the render-rate input system.
+    pub jump_launch_pending: bool,
+    /// Continuous wall-grip intent, consumed on every fixed physics step.
+    pub wall_grip_active: bool,
+    /// Outward normal returned by the most recent wall probe.
+    pub wall_grip_normal: Vec3,
 }
 
 impl Default for HumanActionState {
@@ -19,6 +25,9 @@ impl Default for HumanActionState {
             elapsed_seconds: 0.0,
             reverse: false,
             heading_yaw_radians: 0.0,
+            jump_launch_pending: false,
+            wall_grip_active: false,
+            wall_grip_normal: Vec3::ZERO,
         }
     }
 }
@@ -96,8 +105,49 @@ pub fn drive_human_action_pose(
     let heading = Quat::from_rotation_y(heading_yaw);
     let desired_root_rotation = heading * root_target.rotation_engine;
     let rotational_assist = &settings.temporary_assists.rotational_assistance;
+    let jump_impulse = if action_state.jump_launch_pending
+        && settings.temporary_assists.jump_launch.enabled
+    {
+        rig.bone("Root")
+            .and_then(|bone| bone.collision_geometry.as_ref())
+            .map(|geometry| {
+                let radius = geometry.radius_m;
+                let segment = geometry.capsule_segment_length_m;
+                let volume = std::f32::consts::PI * radius * radius * segment
+                    + (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3);
+                let estimated_root_mass = volume * settings.density_kg_m3;
+                Vec3::Y
+                    * estimated_root_mass
+                    * settings.temporary_assists.jump_launch.launch_speed_m_s
+            })
+    } else {
+        None
+    };
+    let wall_grip_force = if action_state.wall_grip_active
+        && action_state.wall_grip_normal.is_finite()
+        && action_state.wall_grip_normal.length_squared() > 0.9
+    {
+        Some(
+            -action_state.wall_grip_normal.normalize()
+                * settings.climb_contact_push_force_n
+                * 0.5,
+        )
+    } else {
+        None
+    };
 
     for (part, transform, linear_velocity, angular_velocity, mut forces) in &mut bodies {
+        // Apply one-shot and continuous assistance at the same fixed rate as Avian's solver.
+        if part.bone_name == "Root" {
+            if let Some(impulse) = jump_impulse {
+                forces.apply_linear_impulse(impulse);
+            }
+        } else if (part.bone_name == "Hand_L" || part.bone_name == "Hand_R")
+            && let Some(force) = wall_grip_force
+        {
+            forces.apply_force(force);
+        }
+
         let desired_rotation = if part.bone_name == "Root" {
             if !rotational_assist.enabled {
                 continue;
@@ -154,4 +204,7 @@ pub fn drive_human_action_pose(
             .clamp_length_max(max_torque);
         forces.apply_torque(torque);
     }
+
+    // A jump launch is consumed exactly once, even if multiple physics substeps run.
+    action_state.jump_launch_pending = false;
 }
