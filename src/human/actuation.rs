@@ -91,20 +91,18 @@ pub fn drive_human_action_pose(
     if action_state.root_motion_origin_world.is_none()
         || action_state.root_motion_reference_center_engine.is_none()
     {
-        let reference_pose =
-            match rig.sample_engine_body_pose(action, 0.0, action_state.reverse) {
-                Ok(pose) => pose,
-                Err(error) => {
-                    warn!("Human Root reference sampling failed: {error:#}");
-                    return;
-                }
-            };
+        let reference_pose = match rig.sample_engine_body_pose(action, 0.0, action_state.reverse) {
+            Ok(pose) => pose,
+            Err(error) => {
+                warn!("Human Root reference sampling failed: {error:#}");
+                return;
+            }
+        };
         let Some(reference_root) = reference_pose.get("Root") else {
             return;
         };
         action_state.root_motion_origin_world = Some(root_transform.translation);
-        action_state.root_motion_reference_center_engine =
-            Some(reference_root.center_engine);
+        action_state.root_motion_reference_center_engine = Some(reference_root.center_engine);
     }
 
     action_state.elapsed_seconds += time.delta_secs();
@@ -140,10 +138,7 @@ pub fn drive_human_action_pose(
         action_state.root_motion_reference_center_engine,
     ) {
         (Some(origin_world), Some(reference_center)) if !suppress_authored_jump_root => {
-            Some(
-                origin_world
-                    + heading * (root_target.center_engine - reference_center),
-            )
+            Some(origin_world + heading * (root_target.center_engine - reference_center))
         }
         _ => None,
     };
