@@ -1,7 +1,9 @@
+mod actuation;
 mod motion;
 mod ragdoll;
 mod rig;
 
+pub use actuation::HumanActionState;
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
 pub use ragdoll::{HumanBodyPart, HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot};
 pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
@@ -14,7 +16,12 @@ pub struct HumanPlugin;
 impl Plugin for HumanPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load_human_data)
-            .add_systems(OnEnter(AppMode::Simulation), ragdoll::spawn_human_player);
+            .add_systems(OnEnter(AppMode::Simulation), ragdoll::spawn_human_player)
+            .add_systems(
+                FixedPostUpdate,
+                actuation::drive_human_action_pose
+                    .in_set(avian3d::schedule::PhysicsSystems::First),
+            );
     }
 }
 
