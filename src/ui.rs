@@ -709,7 +709,7 @@ impl MenuAsset {
 fn setup_menu(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    config: Res<RuntimeConfig>,
+    mut config: ResMut<RuntimeConfig>,
     library: Res<WorldLibrary>,
     mut state: ResMut<MenuState>,
     mut feedback: ResMut<MenuFeedback>,
@@ -740,6 +740,13 @@ fn setup_menu(
             MenuAsset::fallback()
         }
     };
+
+    let preferences = load_user_preferences(&config.paths.project_root);
+    apply_user_preferences(&mut config, &preferences);
+    let last_world_manifest =
+        preferred_world_manifest(&config.paths.project_root, &library, &preferences);
+    state.preferences = preferences;
+    state.page = MenuPage::Home;
 
     state.visible = config.start_in_library;
     if state.visible {
@@ -792,8 +799,342 @@ fn setup_menu(
         ))
         .with_children(|root| {
             root.spawn((
+                HomeOnly,
+                Visibility::Hidden,
+                Node {
+                    width: Val::Percent(92.0),
+                    max_width: Val::Px(700.0),
+                    min_height: Val::Px(520.0),
+                    padding: UiRect::axes(Val::Px(54.0), Val::Px(46.0)),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    row_gap: Val::Px(16.0),
+                    border: UiRect::all(Val::Px(1.0)),
+                    border_radius: BorderRadius::all(Val::Px(0.0)),
+                    ..default()
+                },
+                BorderColor::all(panel_border_color),
+                BackgroundColor(panel_color),
+                BoxShadow::new(
+                    panel_shadow_color,
+                    Val::Px(0.0),
+                    Val::Px(menu.panel_shadow_offset_y_px),
+                    Val::Px(0.0),
+                    Val::Px(menu.panel_shadow_blur_px),
+                ),
+                TabGroup::modal(),
+            ))
+            .with_children(|panel| {
+                panel.spawn((
+                    Text::new(menu.title.clone()),
+                    TextFont {
+                        font_size: FontSize::Px(68.0),
+                        ..default()
+                    },
+                    TextColor(title_color),
+                ));
+                panel.spawn((
+                    Text::new("WORLD SIMULATION SYSTEM"),
+                    TextFont {
+                        font_size: FontSize::Px(menu.subtitle_size_px),
+                        ..default()
+                    },
+                    TextColor(subtitle_color),
+                ));
+                panel.spawn((
+                    Node {
+                        width: Val::Percent(66.0),
+                        height: Val::Px(1.0),
+                        margin: UiRect::vertical(Val::Px(10.0)),
+                        ..default()
+                    },
+                    BackgroundColor(panel_border_color),
+                ));
+
+                macro_rules! home_action_button {
+                    ($definition:expr, $tab:expr, $action:expr, $observer:expr) => {{
+                        let label = format!("▸ {}", $definition.label);
+                        panel
+                            .spawn((
+                                Button,
+                                TabIndex($tab),
+                                Hovered::default(),
+                                Node {
+                                    width: Val::Percent(100.0),
+                                    max_width: Val::Px(menu.button_width_px.min(390.0)),
+                                    height: Val::Px(menu.button_height_px + 8.0),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    border_radius: BorderRadius::all(Val::Px(0.0)),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::Center,
+                                    ..default()
+                                },
+                                BorderColor::all(button_border_color),
+                                BackgroundColor(button_color),
+                                MenuAction($action.to_owned()),
+                                MenuButtonColors {
+                                    normal: button_color,
+                                    hovered: button_hover_color,
+                                    border_normal: button_border_color,
+                                    border_active: button_active_border_color,
+                                },
+                                observe($observer),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new(label),
+                                    TextFont {
+                                        font_size: FontSize::Px(menu.button_font_size_px),
+                                        ..default()
+                                    },
+                                    TextColor(button_text_color),
+                                ));
+                            });
+                    }};
+                }
+
+                let continue_definition = menu.home_buttons.iter()
+                    .find(|definition| definition.action == "continue")
+                    .expect("validated home menu contains Continue");
+                if let Some(last_world_manifest) = last_world_manifest.clone() {
+                    panel
+                        .spawn((
+                            Button,
+                            TabIndex(0),
+                            Hovered::default(),
+                            Node {
+                                width: Val::Percent(100.0),
+                                max_width: Val::Px(menu.button_width_px.min(390.0)),
+                                height: Val::Px(menu.button_height_px + 8.0),
+                                border: UiRect::all(Val::Px(1.0)),
+                                border_radius: BorderRadius::all(Val::Px(0.0)),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BorderColor::all(button_border_color),
+                            BackgroundColor(button_color),
+                            WorldSelection(last_world_manifest),
+                            MenuButtonColors {
+                                normal: button_color,
+                                hovered: button_hover_color,
+                                border_normal: button_border_color,
+                                border_active: button_active_border_color,
+                            },
+                            observe(handle_world_selection),
+                        ))
+                        .with_children(|button| {
+                            button.spawn((
+                                Text::new(format!("▸ {}", continue_definition.label)),
+                                TextFont {
+                                    font_size: FontSize::Px(menu.button_font_size_px),
+                                    ..default()
+                                },
+                                TextColor(button_text_color),
+                            ));
+                        });
+                } else {
+                    panel
+                        .spawn((
+                            Node {
+                                width: Val::Percent(100.0),
+                                max_width: Val::Px(menu.button_width_px.min(390.0)),
+                                height: Val::Px(menu.button_height_px + 8.0),
+                                border: UiRect::all(Val::Px(1.0)),
+                                border_radius: BorderRadius::all(Val::Px(0.0)),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BorderColor::all(button_border_color),
+                            BackgroundColor(panel_color),
+                        ))
+                        .with_children(|button| {
+                            button.spawn((
+                                Text::new("CONTINUE  /  NO RECENT WORLD"),
+                                TextFont {
+                                    font_size: FontSize::Px(menu.button_font_size_px),
+                                    ..default()
+                                },
+                                TextColor(subtitle_color),
+                            ));
+                        });
+                }
+
+                let new_world = menu.home_buttons.iter()
+                    .find(|definition| definition.action == "create_world")
+                    .expect("validated home menu contains New World");
+                home_action_button!(new_world, 1, "create_world", handle_create_world);
+
+                let worlds = menu.home_buttons.iter()
+                    .find(|definition| definition.action == "worlds")
+                    .expect("validated home menu contains Worlds");
+                home_action_button!(worlds, 2, "worlds", handle_navigation_action);
+
+                let settings = menu.home_buttons.iter()
+                    .find(|definition| definition.action == "settings")
+                    .expect("validated home menu contains Settings");
+                home_action_button!(settings, 3, "settings", handle_navigation_action);
+
+                panel.spawn((
+                    Text::new("TAB / SHIFT+TAB  ·  ENTER SELECT"),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_metadata_size_px),
+                        ..default()
+                    },
+                    TextColor(subtitle_color),
+                ));
+            });
+
+            root.spawn((
+                SettingsOnly,
+                Visibility::Hidden,
+                Node {
+                    width: Val::Percent(92.0),
+                    max_width: Val::Px(650.0),
+                    padding: UiRect::all(Val::Px(menu.panel_padding_px + 12.0)),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    row_gap: Val::Px(menu.vertical_gap_px),
+                    border: UiRect::all(Val::Px(1.0)),
+                    border_radius: BorderRadius::all(Val::Px(0.0)),
+                    ..default()
+                },
+                BorderColor::all(panel_border_color),
+                BackgroundColor(panel_color),
+                BoxShadow::new(
+                    panel_shadow_color,
+                    Val::Px(0.0),
+                    Val::Px(menu.panel_shadow_offset_y_px),
+                    Val::Px(0.0),
+                    Val::Px(menu.panel_shadow_blur_px),
+                ),
+                TabGroup::modal(),
+            ))
+            .with_children(|panel| {
+                panel.spawn((
+                    Text::new("SETTINGS"),
+                    TextFont {
+                        font_size: FontSize::Px(menu.title_size_px + 14.0),
+                        ..default()
+                    },
+                    TextColor(title_color),
+                ));
+                panel.spawn((
+                    Text::new("STREAMING / VISUAL QUALITY"),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_metadata_size_px + 2.0),
+                        ..default()
+                    },
+                    TextColor(subtitle_color),
+                ));
+
+                panel.spawn(Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Px(1.0),
+                    margin: UiRect::vertical(Val::Px(12.0)),
+                    ..default()
+                }).insert(BackgroundColor(panel_border_color));
+
+                panel.spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        min_height: Val::Px(64.0),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(12.0),
+                        ..default()
+                    },
+                ))
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new("RENDER DISTANCE"),
+                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
+                        TextColor(button_text_color),
+                        Node { flex_grow: 1.0, ..default() },
+                    ));
+                    for (label, action, index) in [("−", "render_distance_down", 0), ("+", "render_distance_up", 1)] {
+                        row.spawn((
+                            Button, TabIndex(4 + index), Hovered::default(),
+                            Node { width: Val::Px(42.0), height: Val::Px(42.0), border: UiRect::all(Val::Px(1.0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, ..default() },
+                            BorderColor::all(button_border_color), BackgroundColor(button_color),
+                            MenuButtonColors { normal: button_color, hovered: button_hover_color, border_normal: button_border_color, border_active: button_active_border_color },
+                            SettingAction(action.to_owned()), observe(handle_setting_action),
+                        ))
+                        .with_children(|button| {
+                            button.spawn((Text::new(label), TextFont { font_size: FontSize::Px(menu.button_font_size_px + 4.0), ..default() }, TextColor(button_text_color)));
+                        });
+                    }
+                    row.spawn((
+                        SettingsRenderDistanceValue,
+                        Text::new(""),
+                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
+                        TextColor(button_text_color),
+                        Node { width: Val::Px(104.0), ..default() },
+                    ));
+                });
+
+                panel.spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        min_height: Val::Px(64.0),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(12.0),
+                        ..default()
+                    },
+                ))
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new("LOD DETAIL"),
+                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
+                        TextColor(button_text_color),
+                        Node { flex_grow: 1.0, ..default() },
+                    ));
+                    for (label, action, index) in [("−", "lod_detail_down", 0), ("+", "lod_detail_up", 1)] {
+                        row.spawn((
+                            Button, TabIndex(6 + index), Hovered::default(),
+                            Node { width: Val::Px(42.0), height: Val::Px(42.0), border: UiRect::all(Val::Px(1.0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, ..default() },
+                            BorderColor::all(button_border_color), BackgroundColor(button_color),
+                            MenuButtonColors { normal: button_color, hovered: button_hover_color, border_normal: button_border_color, border_active: button_active_border_color },
+                            SettingAction(action.to_owned()), observe(handle_setting_action),
+                        ))
+                        .with_children(|button| {
+                            button.spawn((Text::new(label), TextFont { font_size: FontSize::Px(menu.button_font_size_px + 4.0), ..default() }, TextColor(button_text_color)));
+                        });
+                    }
+                    row.spawn((
+                        SettingsLodDetailValue,
+                        Text::new(""),
+                        TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() },
+                        TextColor(button_text_color),
+                        Node { width: Val::Px(130.0), ..default() },
+                    ));
+                });
+
+                panel.spawn((
+                    Text::new("Changes apply live and are saved automatically."),
+                    TextFont { font_size: FontSize::Px(menu.world_metadata_size_px), ..default() },
+                    TextColor(subtitle_color),
+                ));
+
+                panel.spawn((
+                    Button, TabIndex(8), Hovered::default(),
+                    Node { width: Val::Percent(100.0), height: Val::Px(menu.button_height_px), margin: UiRect::top(Val::Px(10.0)), border: UiRect::all(Val::Px(1.0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, ..default() },
+                    BorderColor::all(button_border_color), BackgroundColor(button_color),
+                    MenuAction("home".to_owned()),
+                    MenuButtonColors { normal: button_color, hovered: button_hover_color, border_normal: button_border_color, border_active: button_active_border_color },
+                    observe(handle_navigation_action),
+                ))
+                .with_children(|button| {
+                    button.spawn((Text::new("BACK"), TextFont { font_size: FontSize::Px(menu.button_font_size_px), ..default() }, TextColor(button_text_color)));
+                });
+            });
+
+            root.spawn((
                 LibraryOnly,
-                Visibility::Visible,
+                Visibility::Hidden,
                 Node {
                     width: Val::Percent(92.0),
                     max_width: Val::Px(menu.panel_width_px),
