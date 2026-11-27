@@ -1,22 +1,21 @@
 mod motion;
+mod rig;
 
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
+pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
 
 use crate::config::RuntimeConfig;
 use bevy::prelude::*;
 
-/// Registers the external human action data source for the simulation runtime.
-/// All motion tracks remain data-driven and are sampled independently by time.
-/// This plugin only loads and validates the source actions; physics actuation is a separate runtime stage.
 pub struct HumanPlugin;
 
 impl Plugin for HumanPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, load_motion_library);
+        app.add_systems(Startup, load_human_data);
     }
 }
 
-fn load_motion_library(mut commands: Commands, config: Res<RuntimeConfig>) {
+fn load_human_data(mut commands: Commands, config: Res<RuntimeConfig>) {
     match HumanMotionLibrary::load(&config.paths.data_dir) {
         Ok(library) => {
             info!(
@@ -26,9 +25,22 @@ fn load_motion_library(mut commands: Commands, config: Res<RuntimeConfig>) {
             commands.insert_resource(library);
         }
         Err(error) => {
-            warn!(
-                "Human motion data is unavailable; human gameplay systems remain inactive: {error:#}"
+            warn!("Human motion data is unavailable; human gameplay systems remain inactive: {error:#}");
+            return;
+        }
+    }
+
+    match HumanRig::load(&config.paths.data_dir) {
+        Ok(rig) => {
+            info!(
+                "Loaded human deformation rig: {} body tracks and {} joint markers",
+                rig.body_names().count(),
+                rig.marker_names().count()
             );
+            commands.insert_resource(rig);
+        }
+        Err(error) => {
+            warn!("Human rig metadata is unavailable; human ragdoll systems remain inactive: {error:#}");
         }
     }
 }
