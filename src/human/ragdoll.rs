@@ -26,8 +26,24 @@ pub struct HumanPhysicsSettings {
     pub pose_stiffness_nm_per_rad: f32,
     pub pose_damping_nm_s_per_rad: f32,
     pub max_pose_torque_nm: f32,
+    pub climb_contact_push_force_n: f32,
     pub temporary_assists: HumanTemporaryAssists,
+    pub controls: HumanControlSettings,
     pub limits: HumanJointLimits,
+}
+
+#[derive(Clone, Debug)]
+pub struct HumanControlSettings {
+    pub walk: String,
+    pub run: String,
+    pub crouch: String,
+    pub crouched_idle: String,
+    pub jump: String,
+    pub climb: String,
+    pub fall: String,
+    pub idle: String,
+    pub walk_backwards_reverse: bool,
+    pub crouch_backwards_reverse: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -76,6 +92,7 @@ struct HumanManifest {
     schema_version: u32,
     physics: HumanPhysicsSettingsFile,
     temporary_assists: HumanTemporaryAssists,
+    controls: serde_json::Value,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -92,6 +109,7 @@ struct HumanPhysicsSettingsFile {
     pose_stiffness_nm_per_rad: f32,
     pose_damping_nm_s_per_rad: f32,
     max_pose_torque_nm: f32,
+    climb_contact_push_force_n: f32,
     limits: HumanJointLimits,
 }
 
@@ -189,6 +207,64 @@ impl HumanPhysicsSettings {
                     >= 0.0,
             "human temporary-assist settings are invalid"
         );
+        ensure!(
+            source.climb_contact_push_force_n.is_finite()
+                && source.climb_contact_push_force_n >= 0.0,
+            "human climb contact force must be non-negative and finite"
+        );
+        let controls = &manifest.controls;
+        let action_name = |state: &str| -> Result<String> {
+            controls
+                .get(state)
+                .and_then(|entry| entry.get("action"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+                .with_context(|| format!("human control state '{state}' has no action name"))
+        };
+        let walk_backwards_reverse = controls
+            .get("walk")
+            .and_then(|entry| entry.get("backward"))
+            .and_then(|entry| entry.get("time_direction"))
+            .and_then(serde_json::Value::as_str)
+            == Some("reverse");
+        let crouch_backwards_reverse = controls
+            .get("crouch")
+            .and_then(|entry| entry.get("backward"))
+            .and_then(|entry| entry.get("time_direction"))
+            .and_then(serde_json::Value::as_str)
+            == Some("reverse");
+        ensure!(
+            walk_backwards_reverse && crouch_backwards_reverse,
+            "human backwards walk and crouch must use reverse-time source motions"
+        );
+        ensure!(
+            controls
+                .get("run")
+                .and_then(|entry| entry.get("backward"))
+                .and_then(serde_json::Value::as_bool)
+                == Some(false),
+            "human run must explicitly disable backwards running"
+        );
+        ensure!(
+            controls
+                .get("jump")
+                .and_then(|entry| entry.get("when_wall_ahead"))
+                .and_then(serde_json::Value::as_str)
+                == Some("climb"),
+            "human jump must select climb when a wall is ahead"
+        );
+        let control_settings = HumanControlSettings {
+            walk: action_name("walk")?,
+            run: action_name("run")?,
+            crouch: action_name("crouch")?,
+            crouched_idle: action_name("crouched_idle")?,
+            jump: action_name("jump")?,
+            climb: action_name("climb")?,
+            fall: action_name("fall")?,
+            idle: action_name("idle")?,
+            walk_backwards_reverse,
+            crouch_backwards_reverse,
+        };
         let limits = &source.limits;
         for (name, value) in [
             ("hip swing", limits.hip_swing_rad),
@@ -227,7 +303,9 @@ impl HumanPhysicsSettings {
             pose_stiffness_nm_per_rad: source.pose_stiffness_nm_per_rad,
             pose_damping_nm_s_per_rad: source.pose_damping_nm_s_per_rad,
             max_pose_torque_nm: source.max_pose_torque_nm,
+            climb_contact_push_force_n: source.climb_contact_push_force_n,
             temporary_assists: manifest.temporary_assists,
+            controls: control_settings,
             limits: source.limits,
         })
     }
