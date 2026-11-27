@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::{
-    camera::FreeFlyCamera, engine::AppMode, physics::DestructionJournal,
-    world::parse_voxel_instance_id,
+    camera::FreeFlyCamera, config::RuntimeConfig, engine::AppMode,
+    physics::DestructionJournal, world::parse_voxel_instance_id,
 };
 
 /// Visual-only level-of-detail membership for every static voxel in a resident chunk.
@@ -26,9 +26,10 @@ pub(crate) struct ChunkLodVisual {
 
 pub(super) fn update_chunk_lod(
     mode: Res<State<AppMode>>,
+    config: Res<RuntimeConfig>,
     camera: Query<&Transform, With<FreeFlyCamera>>,
     journal: Res<DestructionJournal>,
-    mut visuals: Query<(&ChunkLodVisual, &mut Visibility)>,
+    mut visuals: Query<(&mut ChunkLodVisual, &mut Visibility)>,
 ) {
     if *mode.get() != AppMode::Simulation {
         return;
@@ -38,6 +39,8 @@ pub(super) fn update_chunk_lod(
         return;
     };
 
+    let streaming = &config.engine.streaming;
+
     // Coarse proxies are snapshots of static occupancy. Once any voxel in a chunk fractures,
     // fall back to its exact LOD0 visuals so the proxy cannot resurrect broken platforms.
     let damaged_chunks: HashSet<String> = journal
@@ -46,7 +49,15 @@ pub(super) fn update_chunk_lod(
         .filter_map(|id| parse_voxel_instance_id(id).map(|(chunk_id, _)| chunk_id.to_owned()))
         .collect();
 
-    for (lod, mut visibility) in &mut visuals {
+    for (mut lod, mut visibility) in &mut visuals {
+        if config.is_changed() {
+            let chunk_extent_m = lod.half_extents.max_element() * 2.0;
+            lod.near_distance_m = streaming.lod_near_distance_chunks * chunk_extent_m;
+            lod.mid_distance_m = streaming.lod_mid_distance_chunks * chunk_extent_m;
+            lod.far_distance_m = streaming.lod_far_distance_chunks * chunk_extent_m;
+            lod.unload_distance_m = streaming.unload_radius_chunks as f32 * chunk_extent_m;
+        }
+
         let distance = distance_to_aabb(
             camera_position,
             lod.center - lod.half_extents,
