@@ -40,6 +40,7 @@ pub struct HumanTemporaryAssists {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JumpLaunchAssist {
+    pub kind: String,
     pub enabled: bool,
     pub launch_speed_m_s: f32,
 }
@@ -47,6 +48,7 @@ pub struct JumpLaunchAssist {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RotationalAssist {
+    pub kind: String,
     pub enabled: bool,
     pub strength: f32,
     pub max_torque_nm: f32,
@@ -156,6 +158,11 @@ impl HumanPhysicsSettings {
                 && source.max_pose_torque_nm.is_finite()
                 && source.max_pose_torque_nm > 0.0,
             "human pose-actuation settings are invalid"
+        );
+        ensure!(
+            manifest.temporary_assists.jump_launch.kind == "impulse"
+                && manifest.temporary_assists.rotational_assistance.kind == "bounded_torque_pd",
+            "human temporary-assist kind is unsupported"
         );
         ensure!(
             manifest
@@ -442,5 +449,25 @@ fn joint_marker_for(child: &str) -> Option<&'static str> {
         "Leg_L" => Some("Knee_L"),
         "Leg_R" => Some("Knee_R"),
         _ => None,
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::HumanPhysicsSettings;
+    use std::path::Path;
+
+    #[test]
+    fn human_physics_and_temporary_assists_load_from_manifest() {
+        let settings = HumanPhysicsSettings::load(Path::new("data")).unwrap();
+        assert!((settings.density_kg_m3 - 985.0).abs() < f32::EPSILON);
+        assert!(settings.temporary_assists.jump_launch.enabled);
+        assert!(settings.temporary_assists.rotational_assistance.enabled);
+        assert_eq!(settings.temporary_assists.jump_launch.kind, "impulse");
+        assert_eq!(
+            settings.temporary_assists.rotational_assistance.kind,
+            "bounded_torque_pd"
+        );
     }
 }
