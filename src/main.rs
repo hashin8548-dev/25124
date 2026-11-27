@@ -8,7 +8,7 @@ mod ui;
 mod world;
 
 use anyhow::Result;
-use bevy::{asset::AssetPlugin, prelude::*};
+use bevy::{asset::AssetPlugin, math::DVec3, prelude::*};
 
 use crate::{
     config::{BodyType, RuntimeConfig, WorldLibrary},
