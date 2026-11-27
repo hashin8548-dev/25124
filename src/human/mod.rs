@@ -8,10 +8,13 @@ mod skinning;
 pub use actuation::HumanActionState;
 pub use motion::{HumanAction, HumanMotionLibrary, MotionTrack};
 pub use ragdoll::{
-    HumanBodyPart, HumanCameraSettings, HumanControlSettings, HumanPhysicsSettings, HumanPlayer,
-    HumanPlayerRoot, HumanSkinnedSceneRoot,
+    HumanBodyPart, HumanCameraSettings, HumanControlSettings, HumanJointLimits,
+    HumanPhysicsSettings, HumanPlayer, HumanPlayerRoot, HumanSkinnedSceneRoot,
+    HumanTemporaryAssists, JumpLaunchAssist, RotationalAssist,
 };
-pub use rig::{BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone};
+pub use rig::{
+    BoneCollisionGeometry, BoneCollisionGeometryValue, HumanBonePose, HumanRig, RigBone,
+};
 
 use crate::{config::RuntimeConfig, engine::AppMode};
 use bevy::prelude::*;
