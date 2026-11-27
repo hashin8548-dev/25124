@@ -212,6 +212,7 @@
     },
     "pose_stiffness_nm_per_rad": 48,
     "pose_damping_nm_s_per_rad": 7.5,
-    "max_pose_torque_nm": 42
+    "max_pose_torque_nm": 42,
+    "climb_contact_push_force_n": 135
   }
 }
