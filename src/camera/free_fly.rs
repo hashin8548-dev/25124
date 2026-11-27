@@ -108,7 +108,10 @@ pub(super) fn sync_camera_settings(
 
     let camera = &config.engine.camera;
     let yaw = camera.yaw_degrees.to_radians();
-    let pitch = camera.pitch_degrees.to_radians().clamp(-1.553_343, 1.553_343);
+    let pitch = camera
+        .pitch_degrees
+        .to_radians()
+        .clamp(-1.553_343, 1.553_343);
     for (mut transform, mut controller) in &mut cameras {
         controller.yaw_radians = yaw;
         controller.pitch_radians = pitch;
