@@ -134,6 +134,10 @@ pub struct HumanBodyPart {
 #[derive(Component, Clone, Copy, Debug)]
 pub struct HumanPlayerRoot;
 
+/// Marks the Bevy world instance containing the human deformation skeleton.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct HumanSkinnedSceneRoot;
+
 /// Marker for standalone Avian joint entities so they are removed with the player assembly.
 #[derive(Component, Clone, Copy, Debug)]
 struct HumanJointConstraint;
@@ -572,6 +576,7 @@ pub fn spawn_human_player(
     commands.entity(bodies["Root"]).with_children(|children| {
         children.spawn((
             Name::new("Human::SkinnedVisual"),
+            HumanSkinnedSceneRoot,
             WorldAssetRoot(scene),
             Transform {
                 translation: visual_local_translation,
