@@ -66,6 +66,10 @@
   "world_metadata_max_fields": 4,
   "buttons": [
     {
+      "label": "CREATE FLAT WORLD",
+      "action": "create_world"
+    },
+    {
       "label": "RESUME",
       "action": "resume"
     },
