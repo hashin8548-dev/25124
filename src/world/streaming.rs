@@ -344,11 +344,6 @@ pub(super) fn update_chunk_streaming(
             config.engine.streaming.load_radius_chunks,
         ));
     }
-    for source in &available_sources {
-        state
-            .known_sources
-            .insert(source.id.clone(), source.clone());
-    }
     let mut candidates: Vec<_> = available_sources
         .into_iter()
         .filter(|source| {
@@ -430,6 +425,11 @@ pub(super) fn update_chunk_streaming(
         match spawn_result {
             Ok(body_count) => {
                 state.loaded.insert(source.id.clone());
+                if source.generated {
+                    state
+                        .known_sources
+                        .insert(source.id.clone(), source.clone());
+                }
                 info!(
                     "Streamed chunk '{}' from region '{}' at {:?} with {} individual interactive bodies",
                     source.id, source.region_id, source.region_coordinate, body_count
