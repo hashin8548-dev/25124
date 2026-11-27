@@ -14,6 +14,9 @@ use serde::{Deserialize, Serialize};
 pub struct WorldStateFile {
     pub format_version: u32,
     pub world_id: String,
+    /// Absolute double-precision origin corresponding to local f32 coordinates in this save.
+    #[serde(default)]
+    pub origin_m: [f64; 3],
     pub bodies: BTreeMap<String, PersistedBodyState>,
     #[serde(default)]
     pub fractured: BTreeSet<String>,
@@ -50,8 +53,9 @@ pub struct PersistedFragmentState {
 impl WorldStateFile {
     pub fn new(world_id: String) -> Self {
         Self {
-            format_version: 2,
+            format_version: 3,
             world_id,
+            origin_m: [0.0; 3],
             bodies: BTreeMap::new(),
             fractured: BTreeSet::new(),
             broken_bonds: BTreeSet::new(),
@@ -115,7 +119,7 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
         .with_context(|| format!("invalid save file '{}'", path.display()))?;
 
     ensure!(
-        (1..=2).contains(&state.format_version),
+        (1..=3).contains(&state.format_version),
         "unsupported save format version {} in '{}'",
         state.format_version,
         path.display()
@@ -125,6 +129,11 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
         "save belongs to world '{}', but the active world is '{}'",
         state.world_id,
         expected_world_id
+    );
+
+    ensure!(
+        state.origin_m.iter().all(|value| value.is_finite()),
+        "save contains a non-finite world origin"
     );
 
     for (id, body) in &mut state.bodies {
@@ -181,7 +190,7 @@ fn load_valid_state(path: &Path, expected_world_id: &str) -> Result<Option<World
             "save contains invalid progressive damage for bond '{id}'"
         );
     }
-    state.format_version = 2;
+    state.format_version = 3;
     for (id, fragment) in &mut state.fragments {
         ensure!(!id.trim().is_empty(), "save contains an empty fragment id");
         ensure!(
@@ -546,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn version_one_save_migrates_to_version_two_without_losing_legacy_state() {
+    fn version_one_save_migrates_to_current_format_without_losing_legacy_state() {
         let path = unique_save_path("version-one-migration");
         let mut legacy = serde_json::to_value(sample_state()).unwrap();
         legacy["format_version"] = serde_json::json!(1);
@@ -555,7 +564,7 @@ mod tests {
 
         let loaded = WorldStateFile::load_or_default(&path, "test-world")
             .expect("version-one save should migrate");
-        assert_eq!(loaded.format_version, 2);
+        assert_eq!(loaded.format_version, 3);
         assert!(loaded.damaged_bonds.is_empty());
         assert_eq!(loaded.bodies["body-a"].translation_m, [1.0, 2.0, 3.0]);
 

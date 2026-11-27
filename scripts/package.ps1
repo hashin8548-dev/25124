@@ -110,7 +110,7 @@ worlds folder writable and back it up when moving the portable folder.
 
 COMMAND LINE
 You can pass the same options as the executable, for example:
-  Physics Sandbox.cmd --world worlds/sandbox/world.json
+  Physics Sandbox.cmd --world worlds/<world-id>/world.json
 
 Do not move the executable out of this folder. The application resolves
 its portable data and asset roots beside the executable.

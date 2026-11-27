@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "entity": {
+    "id": "human",
+    "category": "human",
+    "simulation_model": "articulated_dynamic_ragdoll",
+    "physics_authority": "rigid_body_solver",
+    "root_motion": "root_track_plus_contact_driven_displacement",
+    "root_track": "Root",
+    "model_asset": "human/Character_Rig.glb",
+    "source_model_asset": "human/Character_Rig.fbx",
+    "authoring_rig_asset": "human/Character_Rig.blend",
+    "source_front_axis": "+Y",
+    "source_up_axis": "+Z",
+    "meters_per_unit": 1
+  },
+  "rig": {
+    "deformation_skeleton": "human/Character_Rig.glb",
+    "source_control_rig": "human/Character_Rig.blend",
+    "track_layout": "row_major_4x4",
+    "track_time_unit": "seconds",
+    "tracks_are": "local_body_motion_targets",
+    "body_tracks": [
+      "Root",
+      "Torso",
+      "Chest",
+      "Head",
+      "Thigh_R",
+      "Leg_R",
+      "Thigh_L",
+      "Leg_L",
+      "Arm_R",
+      "Hand_R",
+      "Arm_L",
+      "Hand_L"
+    ],
+    "joint_marker_tracks": [
+      "Shoulder_R",
+      "Elbow_R",
+      "Knee_R",
+      "Shoulder_L",
+      "Elbow_L",
+      "Knee_L"
+    ],
+    "auxiliary_tracks": [
+      "Tool_R",
+      "Tool_L"
+    ],
+    "hierarchy_source": "deformation_skeleton",
+    "coordinate_conversion": "source_z_up_to_engine_y_up"
+  },
+  "actions": {
+    "directory": "human/actions",
+    "format": "external_body_motion_targets",
+    "looping": true,
+    "idle": {
+      "file": "actions/idle.json",
+      "loop": true
+    },
+    "walk": {
+      "file": "actions/walk.json",
+      "loop": true
+    },
+    "run": {
+      "file": "actions/run.json",
+      "loop": true
+    },
+    "crouch": {
+      "file": "actions/sneak.json",
+      "loop": true
+    },
+    "crouched_idle": {
+      "file": "actions/kneel.json",
+      "loop": true
+    },
+    "jump": {
+      "file": "actions/jump.json",
+      "loop": false
+    },
+    "climb": {
+      "file": "actions/climb.json",
+      "loop": true
+    },
+    "fall": {
+      "file": "actions/fall.json",
+      "loop": false
+    }
+  },
+  "controls": {
+    "walk": {
+      "keys": [
+        "W",
+        "A",
+        "S",
+        "D"
+      ],
+      "action": "walk",
+      "backward": {
+        "action": "walk",
+        "time_direction": "reverse"
+      }
+    },
+    "run": {
+      "keys": [
+        "SHIFT",
+        "W",
+        "A",
+        "D"
+      ],
+      "action": "run",
+      "backward": false
+    },
+    "crouch": {
+      "keys": [
+        "C",
+        "W",
+        "A",
+        "S",
+        "D"
+      ],
+      "action": "crouch",
+      "backward": {
+        "action": "crouch",
+        "time_direction": "reverse"
+      }
+    },
+    "crouched_idle": {
+      "keys": [
+        "C"
+      ],
+      "action": "crouched_idle"
+    },
+    "jump": {
+      "keys": [
+        "SPACE"
+      ],
+      "action": "jump",
+      "when_wall_ahead": "climb"
+    },
+    "climb": {
+      "trigger": "jump_pressed_and_wall_ahead",
+      "action": "climb",
+      "release": "fall"
+    },
+    "idle": {
+      "trigger": "no_locomotion_input_and_grounded",
+      "action": "idle"
+    },
+    "fall": {
+      "trigger": "airborne_and_descending",
+      "action": "fall"
+    }
+  },
+  "temporary_assists": {
+    "jump_launch": {
+      "enabled": true,
+      "kind": "impulse",
+      "launch_speed_m_s": 4.5
+    },
+    "rotational_assistance": {
+      "enabled": true,
+      "kind": "bounded_torque_pd",
+      "strength": 0.12,
+      "max_torque_nm": 18
+    }
+  },
+  "camera": {
+    "mode": "third_person_over_shoulder",
+    "follow": "human.Root",
+    "trailing_distance_m": 4.2,
+    "shoulder_offset_m": [
+      0.42,
+      1.45,
+      0
+    ],
+    "look_at_offset_m": [
+      0,
+      1.22,
+      0
+    ],
+    "vertical_fov_degrees": 74,
+    "spring_stiffness": 90,
+    "spring_damping": 18,
+    "crosshair": {
+      "kind": "single_dot",
+      "diameter_px": 3
+    }
+  }
+}
