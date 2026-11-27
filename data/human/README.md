@@ -37,3 +37,8 @@ The requested input map and trailing over-the-shoulder camera are data-described
 ## Authored root motion measurement
 
 The supplied Root tracks do not encode meaningful horizontal displacement. The maximum horizontal Root variation across the eight supplied actions is approximately 2 mm (jump); walk, run, crouch and climb have zero horizontal Root displacement in the source data. Locomotion must emerge through physical limb actuation and contact with the ground or wall, not a fixed root velocity.
+
+
+## Physics scheduling
+
+Input sampling selects the action and publishes contact intent. Jump launch impulses are consumed once, and wall-grip forces are reapplied, by the fixed-step Avian controller. Per-body position and orientation targets are bounded force/torque controllers; the controller never writes horizontal root translation or velocity. The skinned GLB is updated from the resulting rigid-body transforms, while helper bones follow calibrated action targets relative to the physical root.
