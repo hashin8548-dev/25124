@@ -1006,7 +1006,9 @@ fn setup_menu(
                                 row.spawn((
                                     Text::new("III"),
                                     TextFont {
-                                        font_size: FontSize::Px(menu.home_layout.eyebrow_font_size_px),
+                                        font_size: FontSize::Px(
+                                            menu.home_layout.eyebrow_font_size_px,
+                                        ),
                                         ..default()
                                     },
                                     TextColor(subtitle_color),
@@ -1039,7 +1041,9 @@ fn setup_menu(
                                 row.spawn((
                                     Text::new(format!("v{}", env!("CARGO_PKG_VERSION"))),
                                     TextFont {
-                                        font_size: FontSize::Px(menu.home_layout.version_font_size_px),
+                                        font_size: FontSize::Px(
+                                            menu.home_layout.version_font_size_px,
+                                        ),
                                         ..default()
                                     },
                                     TextColor(subtitle_color),
@@ -1072,9 +1076,15 @@ fn setup_menu(
                                         Hovered::default(),
                                         Node {
                                             width: Val::Px(menu.home_layout.action_button_width_px),
-                                            height: Val::Px(menu.home_layout.action_button_height_px),
-                                            margin: UiRect::left(Val::Px(menu.home_layout.action_button_left_px)),
-                                            padding: UiRect::left(Val::Px(menu.home_layout.action_button_padding_left_px)),
+                                            height: Val::Px(
+                                                menu.home_layout.action_button_height_px,
+                                            ),
+                                            margin: UiRect::left(Val::Px(
+                                                menu.home_layout.action_button_left_px,
+                                            )),
+                                            padding: UiRect::left(Val::Px(
+                                                menu.home_layout.action_button_padding_left_px,
+                                            )),
                                             border: UiRect::all(Val::Px(1.5)),
                                             border_radius: BorderRadius::all(Val::Px(0.0)),
                                             align_items: AlignItems::Center,
@@ -1104,7 +1114,9 @@ fn setup_menu(
                                         button.spawn((
                                             Text::new(label),
                                             TextFont {
-                                                font_size: FontSize::Px(menu.home_layout.action_font_size_px),
+                                                font_size: FontSize::Px(
+                                                    menu.home_layout.action_font_size_px,
+                                                ),
                                                 ..default()
                                             },
                                             TextColor(button_text_color),
@@ -1120,12 +1132,18 @@ fn setup_menu(
                                         height: Val::Px(menu.home_layout.cursor_font_size_px + 9.0),
                                         position_type: PositionType::Absolute,
                                         left: Val::Px(0.0),
-                                        top: Val::Px((menu.home_layout.action_row_height_px - menu.home_layout.cursor_font_size_px) * 0.5),
+                                        top: Val::Px(
+                                            (menu.home_layout.action_row_height_px
+                                                - menu.home_layout.cursor_font_size_px)
+                                                * 0.5,
+                                        ),
                                         ..default()
                                     },
                                     Text::new("▶"),
                                     TextFont {
-                                        font_size: FontSize::Px(menu.home_layout.cursor_font_size_px),
+                                        font_size: FontSize::Px(
+                                            menu.home_layout.cursor_font_size_px,
+                                        ),
                                         ..default()
                                     },
                                     TextColor(title_color),
@@ -1196,8 +1214,12 @@ fn setup_menu(
                                     Node {
                                         width: Val::Px(menu.home_layout.action_button_width_px),
                                         height: Val::Px(menu.home_layout.action_button_height_px),
-                                        margin: UiRect::left(Val::Px(menu.home_layout.action_button_left_px)),
-                                        padding: UiRect::left(Val::Px(menu.home_layout.action_button_padding_left_px)),
+                                        margin: UiRect::left(Val::Px(
+                                            menu.home_layout.action_button_left_px,
+                                        )),
+                                        padding: UiRect::left(Val::Px(
+                                            menu.home_layout.action_button_padding_left_px,
+                                        )),
                                         border: UiRect::all(Val::Px(1.5)),
                                         border_radius: BorderRadius::all(Val::Px(0.0)),
                                         align_items: AlignItems::Center,
@@ -1227,7 +1249,9 @@ fn setup_menu(
                                     button.spawn((
                                         Text::new(label),
                                         TextFont {
-                                            font_size: FontSize::Px(menu.home_layout.action_font_size_px),
+                                            font_size: FontSize::Px(
+                                                menu.home_layout.action_font_size_px,
+                                            ),
                                             ..default()
                                         },
                                         TextColor(button_text_color),
@@ -1243,7 +1267,11 @@ fn setup_menu(
                                     height: Val::Px(menu.home_layout.cursor_font_size_px + 9.0),
                                     position_type: PositionType::Absolute,
                                     left: Val::Px(0.0),
-                                    top: Val::Px((menu.home_layout.action_row_height_px - menu.home_layout.cursor_font_size_px) * 0.5),
+                                    top: Val::Px(
+                                        (menu.home_layout.action_row_height_px
+                                            - menu.home_layout.cursor_font_size_px)
+                                            * 0.5,
+                                    ),
                                     ..default()
                                 },
                                 Text::new("▶"),
@@ -1303,8 +1331,12 @@ fn setup_menu(
                                 Node {
                                     width: Val::Px(menu.home_layout.action_button_width_px),
                                     height: Val::Px(menu.home_layout.action_button_height_px),
-                                    margin: UiRect::left(Val::Px(menu.home_layout.action_button_left_px)),
-                                    padding: UiRect::left(Val::Px(menu.home_layout.action_button_padding_left_px)),
+                                    margin: UiRect::left(Val::Px(
+                                        menu.home_layout.action_button_left_px,
+                                    )),
+                                    padding: UiRect::left(Val::Px(
+                                        menu.home_layout.action_button_padding_left_px,
+                                    )),
                                     border: UiRect::all(Val::Px(1.0)),
                                     border_radius: BorderRadius::all(Val::Px(0.0)),
                                     align_items: AlignItems::Center,
