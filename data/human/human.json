@@ -47,7 +47,8 @@
       "Tool_L"
     ],
     "hierarchy_source": "deformation_skeleton",
-    "coordinate_conversion": "source_z_up_to_engine_y_up"
+    "coordinate_conversion": "source_to_engine_rotation_x_minus_90_degrees",
+    "metadata_file": "human/rig.json"
   },
   "actions": {
     "directory": "human/actions",
