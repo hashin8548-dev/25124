@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "title": "25124",
-  "subtitle": "PHYSICS SANDBOX  /  WORLD SELECT",
+  "subtitle": "WORLD LIBRARY  /  PROCEDURAL WORLD CREATION",
   "background_srgba": [
     0.008,
     0.014,
@@ -99,7 +99,7 @@
   "panel_radius_px": 18,
   "card_radius_px": 12,
   "empty_library_title": "YOUR WORLD LIBRARY IS EMPTY",
-  "empty_library_hint": "Add a world manifest at worlds/<name>/world.json to get started.",
+  "empty_library_hint": "Create a flat platform world to begin.",
   "panel_shadow_srgba": [
     0,
     0,
