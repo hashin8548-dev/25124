@@ -486,26 +486,58 @@ mod tests {
     }
 
     #[test]
-    fn checked_in_configuration_loads_region_indexes_without_loading_chunk_bodies() {
+    fn procedural_platform_manifest_loads_without_authored_chunk_files() {
+        use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let world_directory = std::env::temp_dir()
+            .join(format!("physics-sandbox-procedural-world-{nonce}"));
+        fs::create_dir_all(&world_directory).unwrap();
+        let manifest_path = world_directory.join("world.json");
+        fs::write(
+            &manifest_path,
+            r#"{
+                "schema_version": 1,
+                "id": "flat-platform-test",
+                "name": "Flat Platform Test",
+                "gravity_m_s2": null,
+                "generation": {
+                    "kind": "flat_platform",
+                    "size_units": 255000000,
+                    "border_height_units": 4,
+                    "border_thickness_units": 2
+                },
+                "regions": [],
+                "objects": []
+            }"#,
+        )
+        .unwrap();
+
         let config = RuntimeConfig::load(
             root.join("data"),
             root.join("assets"),
-            root.join("worlds/sandbox/world.json"),
+            manifest_path,
         )
-        .expect("sample configuration should validate");
+        .expect("procedural platform manifest should validate");
 
-        assert_eq!(config.world.id, "sandbox");
-        assert_eq!(config.world.objects.len(), 4);
-        assert_eq!(config.chunks.len(), 4);
-        assert!(config.chunks.iter().all(|source| source.path.is_file()));
-        assert_eq!(config.chunks[0].dimensions, [16, 16, 16]);
-        assert_eq!(config.chunks[0].voxel_size_m, 1.0);
-        assert_eq!(config.object_chunks.len(), 2);
-        assert_eq!(config.object_chunks[0].coordinate, [-1, 0, 0]);
-        assert_eq!(config.object_chunks[0].objects.len(), 2);
-        assert_eq!(config.object_chunks[1].coordinate, [0, 0, 0]);
-        assert_eq!(config.object_chunks[1].objects.len(), 2);
+        assert_eq!(config.world.id, "flat-platform-test");
+        assert!(config.world.objects.is_empty());
+        assert!(config.chunks.is_empty());
+        assert!(config.object_chunks.is_empty());
+        assert!(matches!(
+            config.world.generation,
+            Some(crate::config::schema::WorldGeneration::FlatPlatform {
+                size_units: 255000000,
+                border_height_units: 4,
+                border_thickness_units: 2
+            })
+        ));
+
+        fs::remove_dir_all(world_directory).unwrap();
     }
 
     #[test]
