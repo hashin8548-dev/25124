@@ -20,10 +20,13 @@ pub(super) fn rebase_world_origin(
     mut world_state: ResMut<crate::persistence::WorldStateFile>,
     mut queries: ParamSet<(
         Query<&Transform, With<crate::camera::FreeFlyCamera>>,
-        Query<(
-            &mut Transform,
-            Option<&mut crate::world::lod::ChunkLodVisual>,
-        )>,
+        Query<
+            (
+                &mut Transform,
+                Option<&mut crate::world::lod::ChunkLodVisual>,
+            ),
+            Without<ChildOf>,
+        >,
     )>,
 ) {
     let Some(camera_position) = queries
