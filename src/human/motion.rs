@@ -38,6 +38,8 @@ struct HumanManifest {
 struct ActionCatalog {
     directory: String,
     format: String,
+    #[serde(default)]
+    looping: bool,
     #[serde(flatten)]
     entries: BTreeMap<String, ActionReference>,
 }
@@ -46,7 +48,7 @@ struct ActionCatalog {
 struct ActionReference {
     file: String,
     #[serde(default, rename = "loop")]
-    looping: bool,
+    looping: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -83,6 +85,7 @@ impl HumanMotionLibrary {
             "human manifest has no actions"
         );
 
+        let default_looping = manifest.actions.looping;
         let mut actions = BTreeMap::new();
         for (action_name, reference) in manifest.actions.entries {
             let relative = PathBuf::from(&reference.file);
@@ -113,7 +116,8 @@ impl HumanMotionLibrary {
                     action_path.display()
                 )
             })?;
-            let action = HumanAction::from_document(&action_name, document, reference.looping)?;
+            let looping = reference.looping.unwrap_or(default_looping);
+            let action = HumanAction::from_document(&action_name, document, looping)?;
             ensure!(
                 actions.insert(action_name.clone(), action).is_none(),
                 "duplicate human action name '{action_name}'"
@@ -292,8 +296,28 @@ mod tests {
         assert_eq!(manifest.actions.directory, "human/actions");
         assert_eq!(manifest.actions.format, "external_body_motion_targets");
         assert_eq!(manifest.actions.entries.len(), 8);
+        assert!(manifest.actions.looping);
         assert!(manifest.actions.entries.contains_key("walk"));
         assert!(manifest.actions.entries.contains_key("crouched_idle"));
+    }
+
+
+    #[test]
+    fn loads_all_manifest_referenced_actions_from_data_directory() {
+        let library = super::HumanMotionLibrary::load(std::path::Path::new("data")).unwrap();
+        assert_eq!(library.action_names().count(), 8);
+        for name in [
+            "walk",
+            "run",
+            "crouch",
+            "crouched_idle",
+            "jump",
+            "climb",
+            "fall",
+            "idle",
+        ] {
+            assert!(library.action(name).is_some(), "{name}");
+        }
     }
 
     #[test]
