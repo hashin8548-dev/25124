@@ -9,6 +9,7 @@ pub struct HumanActionState {
     pub action_name: String,
     pub elapsed_seconds: f32,
     pub reverse: bool,
+    pub heading_yaw_radians: f32,
 }
 
 impl Default for HumanActionState {
@@ -17,6 +18,7 @@ impl Default for HumanActionState {
             action_name: "idle".to_owned(),
             elapsed_seconds: 0.0,
             reverse: false,
+            heading_yaw_radians: 0.0,
         }
     }
 }
@@ -79,7 +81,12 @@ pub fn drive_human_action_pose(
         return;
     };
 
-    let (heading_yaw, _, _) = root_transform.rotation.to_euler(EulerRot::YXZ);
+    let (root_yaw, _, _) = root_transform.rotation.to_euler(EulerRot::YXZ);
+    let heading_yaw = if action_state.heading_yaw_radians.is_finite() {
+        action_state.heading_yaw_radians
+    } else {
+        root_yaw
+    };
     let heading = Quat::from_rotation_y(heading_yaw);
     let desired_root_rotation = heading * root_target.rotation_engine;
     let rotational_assist = &settings.temporary_assists.rotational_assistance;
