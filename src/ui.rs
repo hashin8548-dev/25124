@@ -585,7 +585,7 @@ fn apply_user_preferences(config: &mut RuntimeConfig, preferences: &UserPreferen
     let streaming = &mut config.engine.streaming;
     streaming.load_radius_chunks = preferences.render_distance_chunks;
     streaming.unload_radius_chunks = preferences.render_distance_chunks.saturating_add(1);
-    let (near, mid, far) = match preferences.lod_detail {
+    let (near, mid, far): (f32, f32, f32) = match preferences.lod_detail {
         0 => (0.75, 1.5, 2.25),
         1 => (1.0, 1.75, 2.5),
         _ => (1.25, 2.0, 2.75),
