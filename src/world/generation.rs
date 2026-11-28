@@ -37,7 +37,8 @@ pub(super) fn rebase_world_origin(
     mut world_state: ResMut<crate::persistence::WorldStateFile>,
     mut params: WorldRebaseParams,
 ) {
-    let Some(camera_position) = params.queries
+    let Some(camera_position) = params
+        .queries
         .p0()
         .iter()
         .next()
