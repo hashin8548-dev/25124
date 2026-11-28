@@ -72,6 +72,10 @@ fn default_lod_quality() -> u8 {
     1
 }
 
+fn default_max_far_lod_chunks() -> u32 {
+    1024
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StreamingSettings {
@@ -96,6 +100,10 @@ pub struct StreamingSettings {
     /// Selected geometry-quality profile: 0 = Performance, 1 = Balanced, 2 = Quality.
     #[serde(default = "default_lod_quality")]
     pub lod_quality: u8,
+    /// Maximum authored chunks retained in the residency-independent far-LOD cache.
+    /// Zero disables authored far-chunk LOD without disabling resident-chunk LOD.
+    #[serde(default = "default_max_far_lod_chunks")]
+    pub max_far_lod_chunks: u32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -333,5 +341,6 @@ mod tests {
         assert_eq!(settings.lod_visibility_distance_chunks, 512);
         assert_eq!(settings.lod_geometry_errors_m, [0.75, 0.25, 0.05]);
         assert_eq!(settings.lod_quality, 1);
+        assert_eq!(settings.max_far_lod_chunks, 1024);
     }
 }

@@ -40,6 +40,16 @@ pub struct ChunkStreamingState {
     active_bond_ids: HashSet<String>,
 }
 
+impl ChunkStreamingState {
+    pub(super) fn is_loaded(&self, chunk_id: &str) -> bool {
+        self.loaded.contains(chunk_id)
+    }
+
+    pub(super) fn pending_count(&self) -> usize {
+        self.pending.len()
+    }
+}
+
 // Separate ECS queries/resources keep read/write access tracking precise for the scheduler.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn update_chunk_streaming(

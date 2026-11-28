@@ -9,7 +9,7 @@ use bevy::{gltf::prelude::GltfAssetLabel, math::DVec3, prelude::*};
 use crate::{
     config::{
         AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ChunkFile, ColliderShape,
-        ComponentDefinition, ObjectChunkSource, RuntimeConfig, SweepModeDefinition,
+        ComponentCatalog, ComponentDefinition, ObjectChunkSource, RuntimeConfig, SweepModeDefinition,
         VisualDefinition, object_chunk_coordinate,
     },
     persistence::{
@@ -41,6 +41,95 @@ fn static_cell_render_policy(
     let lod_renderable = matches!(body_type, BodyType::Static) && intact;
     let greedy_mergeable = lod_renderable && greedy_meshing_enabled && !destructible && !bonded;
     (lod_renderable, greedy_mergeable)
+}
+
+/// One material group in a residency-independent far-chunk surface proxy.
+pub(super) struct FarChunkLodMesh {
+    pub(super) definition_id: String,
+    pub(super) visual: VisualDefinition,
+    pub(super) mesh: Mesh,
+}
+
+/// Builds one coarse, render-only surface representation from validated authored chunk data.
+/// Physics bodies, destructible/bonded cells, imported models, and blended visuals are excluded.
+pub(super) fn build_far_chunk_lod_meshes(
+    chunk: &ChunkFile,
+    components: &ComponentCatalog,
+    max_error_m: f32,
+) -> Result<Vec<FarChunkLodMesh>, String> {
+    let dimensions = chunk.dimensions.map(|dimension| dimension as usize);
+    let volume = dimensions[0]
+        .checked_mul(dimensions[1])
+        .and_then(|area| area.checked_mul(dimensions[2]))
+        .ok_or_else(|| format!("chunk '{}' dimensions overflow addressable memory", chunk.id))?;
+    let index = |x: usize, y: usize, z: usize| (y * dimensions[2] + z) * dimensions[0] + x;
+    let mut cells = vec![0_u8; volume];
+
+    for layer in &chunk.layers {
+        for (z, row) in layer.rows.iter().enumerate() {
+            for (x, character) in row.chars().enumerate() {
+                let palette = character.to_digit(16).ok_or_else(|| {
+                    format!("chunk '{}' contains a non-hex palette cell", chunk.id)
+                })?;
+                cells[index(x, layer.y as usize, z)] = palette as u8;
+            }
+        }
+    }
+
+    let grid = VoxelGrid::from_cells(dimensions, chunk.voxel_size_m, cells)
+        .map_err(|error| format!("chunk '{}' has invalid voxel data: {error}", chunk.id))?;
+    let mut definitions = BTreeMap::<u8, (String, VisualDefinition)>::new();
+    for (palette, definition_id) in chunk.palette.iter().enumerate().skip(1) {
+        let definition = components.definitions.get(definition_id).ok_or_else(|| {
+            format!(
+                "chunk '{}' references missing definition '{definition_id}'",
+                chunk.id
+            )
+        })?;
+        if matches!(definition.body_type, BodyType::Static)
+            && definition.destructibility.is_none()
+            && definition.bond_strength.is_none()
+            && definition.visual.model.is_none()
+            && matches!(definition.visual.alpha_mode, AlphaMode::Opaque)
+        {
+            definitions.insert(
+                palette as u8,
+                (definition_id.clone(), definition.visual.clone()),
+            );
+        }
+    }
+
+    if definitions.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut renderable = vec![false; volume];
+    for y in 0..dimensions[1] {
+        for z in 0..dimensions[2] {
+            for x in 0..dimensions[0] {
+                let palette = grid.cell(x, y, z);
+                renderable[index(x, y, z)] = palette != 0 && definitions.contains_key(&palette);
+            }
+        }
+    }
+
+    let meshes = grid
+        .build_surface_lod_meshes(&renderable, max_error_m)
+        .map_err(|error| {
+            format!("chunk '{}' far surface LOD generation failed: {error}", chunk.id)
+        })?;
+    Ok(meshes
+        .into_iter()
+        .filter_map(|(palette, mesh)| {
+            definitions
+                .get(&palette)
+                .map(|(definition_id, visual)| FarChunkLodMesh {
+                    definition_id: definition_id.clone(),
+                    visual: visual.clone(),
+                    mesh,
+                })
+        })
+        .collect())
 }
 
 #[derive(Clone)]
@@ -1200,8 +1289,11 @@ fn rotation_from_degrees(rotation_xyz: [f32; 3]) -> Quat {
 
 #[cfg(test)]
 mod tests {
-    use super::{object_lod_enabled, static_cell_render_policy};
-    use crate::config::BodyType;
+    use super::{
+        build_far_chunk_lod_meshes, object_lod_enabled, static_cell_render_policy,
+    };
+    use bevy::prelude::Mesh;
+    use crate::config::{BodyType, ChunkFile, ComponentCatalog};
 
     #[test]
     fn legacy_dynamic_objects_keep_rendering_when_they_move_out_of_their_source_chunk() {
@@ -1235,4 +1327,54 @@ mod tests {
             (false, false)
         );
     }
+    #[test]
+    fn far_chunk_lod_builds_a_render_only_mesh_for_plain_static_terrain() {
+        let components: ComponentCatalog = serde_json::from_str(
+            r#"{
+                "schema_version": 1,
+                "definitions": {
+                    "terrain": {
+                        "body_type": "static",
+                        "collider": {
+                            "kind": "cuboid",
+                            "half_extents": [0.5, 0.5, 0.5]
+                        },
+                        "material": "stone",
+                        "swept_ccd": null,
+                        "destructibility": null,
+                        "bond_strength": null,
+                        "visual": {
+                            "model": null,
+                            "color_srgba": [0.4, 0.5, 0.6, 1.0],
+                            "perceptual_roughness": 0.8,
+                            "metallic": 0.0,
+                            "alpha_mode": "opaque"
+                        }
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+        let chunk: ChunkFile = serde_json::from_str(
+            r#"{
+                "schema_version": 1,
+                "id": "authored_0_0_0",
+                "coordinate": [0, 0, 0],
+                "dimensions": [2, 1, 2],
+                "voxel_size_m": 1.0,
+                "palette": ["air", "terrain"],
+                "layers": [
+                    { "y": 0, "rows": ["11", "11"] }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let meshes = build_far_chunk_lod_meshes(&chunk, &components, 0.25).unwrap();
+
+        assert_eq!(meshes.len(), 1);
+        assert_eq!(meshes[0].definition_id, "terrain");
+        assert!(meshes[0].mesh.attribute(Mesh::ATTRIBUTE_POSITION).is_some());
+    }
+
 }

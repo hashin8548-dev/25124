@@ -17,6 +17,7 @@ fn validate_lod_distance_settings(
     lod_visibility_distance_chunks: u32,
     lod_geometry_errors_m: [f32; 3],
     lod_quality: u8,
+    max_far_lod_chunks: u32,
 ) -> Result<()> {
     ensure!(
         (2..=124).contains(&load_radius_chunks),
@@ -38,6 +39,10 @@ fn validate_lod_distance_settings(
     ensure!(
         lod_quality <= 2,
         "streaming.lod_quality must be 0 (Performance), 1 (Balanced), or 2 (Quality)"
+    );
+    ensure!(
+        max_far_lod_chunks <= 4_096,
+        "streaming.max_far_lod_chunks must not exceed 4096"
     );
     Ok(())
 }
@@ -177,6 +182,7 @@ pub fn validate_all(
         streaming.lod_visibility_distance_chunks,
         streaming.lod_geometry_errors_m,
         streaming.lod_quality,
+        streaming.max_far_lod_chunks,
     )?;
     ensure!(
         streaming.unload_radius_chunks > streaming.load_radius_chunks,
@@ -647,18 +653,20 @@ mod tests {
 
     #[test]
     fn lod_distance_validation_accepts_124_and_500000_chunks() {
-        assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1).is_ok());
+        assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 4_096).is_ok());
+        assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 0).is_ok());
+        assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 4_097).is_err());
     }
 
     #[test]
     fn lod_distance_validation_rejects_unsupported_radius_and_quality_values() {
-        assert!(validate_lod_distance_settings(125, 500_000, [0.75, 0.25, 0.05], 1).is_err());
-        assert!(validate_lod_distance_settings(124, 500_001, [0.75, 0.25, 0.05], 1).is_err());
-        assert!(validate_lod_distance_settings(124, 126, [0.75, 0.25, 0.05], 1).is_err());
-        assert!(validate_lod_distance_settings(124, 127, [0.75, f32::NAN, 0.05], 1).is_err());
-        assert!(validate_lod_distance_settings(124, 127, [0.75, 0.25, 0.05], 3).is_err());
-        assert!(validate_lod_distance_settings(124, 127, [0.25, 0.75, 0.05], 1).is_err());
-        assert!(validate_lod_distance_settings(124, 127, [0.75, 0.25, 0.0], 1).is_err());
+        assert!(validate_lod_distance_settings(125, 500_000, [0.75, 0.25, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 500_001, [0.75, 0.25, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 126, [0.75, 0.25, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 127, [0.75, f32::NAN, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 127, [0.75, 0.25, 0.05], 3, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 127, [0.25, 0.75, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 127, [0.75, 0.25, 0.0], 1, 1024).is_err());
     }
 
     #[test]
