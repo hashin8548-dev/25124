@@ -656,17 +656,15 @@ fn segment_segment_distance(
                     / denominator)
                     .clamp(0.0, 1.0);
             }
-            second_parameter = (cross_projection * first_parameter + second_projection)
-                / second_length_squared;
+            second_parameter =
+                (cross_projection * first_parameter + second_projection) / second_length_squared;
             if second_parameter < 0.0 {
                 second_parameter = 0.0;
-                first_parameter =
-                    (-first_projection / first_length_squared).clamp(0.0, 1.0);
+                first_parameter = (-first_projection / first_length_squared).clamp(0.0, 1.0);
             } else if second_parameter > 1.0 {
                 second_parameter = 1.0;
-                first_parameter = ((cross_projection - first_projection)
-                    / first_length_squared)
-                    .clamp(0.0, 1.0);
+                first_parameter =
+                    ((cross_projection - first_projection) / first_length_squared).clamp(0.0, 1.0);
             }
         }
     }
@@ -700,9 +698,7 @@ fn body_collision_layers(
         let child_bone = rig
             .bone(child_name)
             .ok_or_else(|| anyhow::anyhow!("human body '{child_name}' has no rig bone"))?;
-        if let Some(parent_name) =
-            nearest_body_parent(rig, child_bone.parent.as_deref())
-        {
+        if let Some(parent_name) = nearest_body_parent(rig, child_bone.parent.as_deref()) {
             let pair = if parent_name < child_name {
                 (parent_name.to_owned(), child_name.clone())
             } else {
@@ -716,9 +712,9 @@ fn body_collision_layers(
         let capsules: BTreeMap<_, _> = names
             .iter()
             .map(|name| {
-                let pose = poses
-                    .get(name)
-                    .ok_or_else(|| anyhow::anyhow!("human body '{name}' has no idle collision pose"))?;
+                let pose = poses.get(name).ok_or_else(|| {
+                    anyhow::anyhow!("human body '{name}' has no idle collision pose")
+                })?;
                 Ok((name.clone(), capsule_centerline(pose)))
             })
             .collect::<Result<_>>()?;
@@ -734,12 +730,8 @@ fn body_collision_layers(
 
                 let first = capsules[first_name];
                 let second = capsules[second_name];
-                let centerline_distance = segment_segment_distance(
-                    first.start,
-                    first.end,
-                    second.start,
-                    second.end,
-                );
+                let centerline_distance =
+                    segment_segment_distance(first.start, first.end, second.start, second.end);
                 let penetration = first.radius + second.radius - centerline_distance;
                 if penetration > overlap_margin_m {
                     excluded_pairs.insert(pair);
@@ -748,17 +740,12 @@ fn body_collision_layers(
         }
     } else {
         // Disabling ragdoll self-collision also excludes direct joint pairs.
-        excluded_pairs.extend(
+        excluded_pairs.extend(names.iter().enumerate().flat_map(|(index, first)| {
             names
                 .iter()
-                .enumerate()
-                .flat_map(|(index, first)| {
-                    names
-                        .iter()
-                        .skip(index + 1)
-                        .map(move |second| (first.clone(), second.clone()))
-                }),
-        );
+                .skip(index + 1)
+                .map(move |second| (first.clone(), second.clone()))
+        }));
     }
 
     // Bit zero is the Avian default environment layer. Every human collider keeps
@@ -1070,7 +1057,9 @@ fn nearest_body_parent<'a>(rig: &'a HumanRig, mut parent: Option<&'a str>) -> Op
 
 #[cfg(test)]
 mod tests {
-    use super::{HumanPhysicsSettings, body_collision_layers, capsule_centerline, segment_segment_distance};
+    use super::{
+        HumanPhysicsSettings, body_collision_layers, capsule_centerline, segment_segment_distance,
+    };
     use crate::human::{HumanMotionLibrary, HumanRig};
     use avian3d::prelude::CollisionLayers;
     use bevy::prelude::{KeyCode, Vec3};
@@ -1129,22 +1118,21 @@ mod tests {
                 let second_pose = &poses[second_name];
                 let first = capsule_centerline(first_pose);
                 let second = capsule_centerline(second_pose);
-                let distance = segment_segment_distance(
-                    first.start,
-                    first.end,
-                    second.start,
-                    second.end,
-                );
-                let initially_overlapping =
-                    first.radius + second.radius - distance > 0.005;
+                let distance =
+                    segment_segment_distance(first.start, first.end, second.start, second.end);
+                let initially_overlapping = first.radius + second.radius - distance > 0.005;
                 let can_collide = layers[first_name].interacts_with(layers[second_name]);
                 assert_eq!(
                     can_collide,
                     !initially_overlapping
-                        && nearest_body_parent(&rig, rig.bone(first_name).unwrap().parent.as_deref())
-                            != Some(second_name)
-                        && nearest_body_parent(&rig, rig.bone(second_name).unwrap().parent.as_deref())
-                            != Some(first_name),
+                        && nearest_body_parent(
+                            &rig,
+                            rig.bone(first_name).unwrap().parent.as_deref()
+                        ) != Some(second_name)
+                        && nearest_body_parent(
+                            &rig,
+                            rig.bone(second_name).unwrap().parent.as_deref()
+                        ) != Some(first_name),
                     "unexpected idle self-collision policy for {first_name} / {second_name}"
                 );
                 if initially_overlapping {
@@ -1168,26 +1156,17 @@ mod tests {
 
     #[test]
     fn capsule_segment_distance_handles_degenerate_and_skew_segments() {
-        assert!(
-            (segment_segment_distance(
-                Vec3::ZERO,
-                Vec3::ZERO,
-                Vec3::X,
-                Vec3::X,
-            ) - 1.0)
-                .abs()
-                < f32::EPSILON
+        let degenerate_distance =
+            segment_segment_distance(Vec3::ZERO, Vec3::ZERO, Vec3::X, Vec3::X);
+        assert!((degenerate_distance - 1.0).abs() < f32::EPSILON);
+
+        let skew_distance = segment_segment_distance(
+            Vec3::new(-1.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, -1.0),
+            Vec3::new(0.0, 1.0, 1.0),
         );
-        assert!(
-            (segment_segment_distance(
-                Vec3::new(-1.0, 0.0, 0.0),
-                Vec3::new(1.0, 0.0, 0.0),
-                Vec3::new(0.0, 1.0, -1.0),
-                Vec3::new(0.0, 1.0, 1.0),
-            ) - 1.0)
-                .abs()
-                < f32::EPSILON
-        );
+        assert!((skew_distance - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]
