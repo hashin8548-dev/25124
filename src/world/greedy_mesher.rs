@@ -390,7 +390,9 @@ fn emit_adaptive_surface_region(
     let mut covered = true;
     for z in z0..z1 {
         for x in x0..x1 {
-            if !context.samples[z * context.width + x].is_some_and(|sample| sample.palette == context.palette) {
+            if !context.samples[z * context.width + x]
+                .is_some_and(|sample| sample.palette == context.palette)
+            {
                 covered = false;
                 break;
             }
@@ -402,9 +404,15 @@ fn emit_adaptive_surface_region(
 
     if covered {
         let h00 = context.samples[z0 * context.width + x0].unwrap().height_m;
-        let h10 = context.samples[z0 * context.width + x1 - 1].unwrap().height_m;
-        let h01 = context.samples[(z1 - 1) * context.width + x0].unwrap().height_m;
-        let h11 = context.samples[(z1 - 1) * context.width + x1 - 1].unwrap().height_m;
+        let h10 = context.samples[z0 * context.width + x1 - 1]
+            .unwrap()
+            .height_m;
+        let h01 = context.samples[(z1 - 1) * context.width + x0]
+            .unwrap()
+            .height_m;
+        let h11 = context.samples[(z1 - 1) * context.width + x1 - 1]
+            .unwrap()
+            .height_m;
         let span_x = (x1 - x0) as f32;
         let span_z = (z1 - z0) as f32;
         let mut max_error = 0.0_f32;
@@ -427,7 +435,8 @@ fn emit_adaptive_surface_region(
 
         // The error bound is measured at every source cell centre. Patches share deterministic
         // edge samples; deviations are bounded and no generated point leaves the source bounds.
-        let touches_chunk_boundary = x0 == 0 || z0 == 0 || x1 == context.width || z1 == context.depth;
+        let touches_chunk_boundary =
+            x0 == 0 || z0 == 0 || x1 == context.width || z1 == context.depth;
         let boundary_is_exact = !touches_chunk_boundary || max_height - min_height <= 1.0e-6;
         if max_error <= context.max_error_m && boundary_is_exact {
             append_surface_quad(
