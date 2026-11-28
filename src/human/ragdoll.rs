@@ -866,7 +866,7 @@ pub fn spawn_human_player(
             RigidBody::Dynamic,
             collider,
             ColliderDensity(collider_density_kg_m3),
-            collision_layers[name].clone(),
+            collision_layers[name],
             Friction::new(settings.dynamic_friction)
                 .with_static_coefficient(settings.static_friction),
             Restitution::new(settings.restitution),
