@@ -119,7 +119,11 @@ type BodyLodProxies<'w, 's> = Query<
         &'static mut Transform,
         &'static mut Visibility,
     ),
-    (With<BodyLodProxy>, Without<BodyLodOwner>, Without<FreeFlyCamera>),
+    (
+        With<BodyLodProxy>,
+        Without<BodyLodOwner>,
+        Without<FreeFlyCamera>,
+    ),
 >;
 
 pub(super) fn update_physics_body_lod(
