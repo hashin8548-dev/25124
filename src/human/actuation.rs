@@ -259,8 +259,8 @@ fn root_vertical_pose_force(
     damping: f32,
     max_force: f32,
 ) -> Vec3 {
-    let force_y =
-        ((desired_y - current_y) * stiffness - vertical_velocity * damping).clamp(-max_force, max_force);
+    let force_y = ((desired_y - current_y) * stiffness - vertical_velocity * damping)
+        .clamp(-max_force, max_force);
     Vec3::Y * force_y
 }
 
@@ -270,14 +270,7 @@ mod tests {
 
     #[test]
     fn authored_root_position_assistance_never_resists_horizontal_motion() {
-        let force = root_vertical_pose_force(
-            2.0,
-            1.0,
-            0.5,
-            180.0,
-            28.0,
-            240.0,
-        );
+        let force = root_vertical_pose_force(2.0, 1.0, 0.5, 180.0, 28.0, 240.0);
         assert_eq!(force.x, 0.0);
         assert_eq!(force.z, 0.0);
         assert!((force.y - 166.0).abs() < f32::EPSILON);

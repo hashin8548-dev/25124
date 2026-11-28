@@ -64,10 +64,7 @@ pub fn update_human_controls(
     let key_s = keys.pressed(bindings.backward);
     let key_d = keys.pressed(bindings.right);
     let crouching = keys.pressed(bindings.crouch);
-    let shift = bindings
-        .run_modifiers
-        .iter()
-        .any(|key| keys.pressed(*key));
+    let shift = bindings.run_modifiers.iter().any(|key| keys.pressed(*key));
     let jump_pressed = keys.just_pressed(bindings.jump);
     let jump_held = keys.pressed(bindings.jump);
     let horizontal_input = key_w || key_a || key_s || key_d;

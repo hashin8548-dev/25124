@@ -229,10 +229,7 @@ fn key_codes_for_binding(name: &str) -> Result<Vec<KeyCode>> {
     Ok(vec![single])
 }
 
-fn required_input_binding(
-    controls: &serde_json::Value,
-    name: &str,
-) -> Result<Vec<KeyCode>> {
+fn required_input_binding(controls: &serde_json::Value, name: &str) -> Result<Vec<KeyCode>> {
     key_codes_for_binding(input_binding_name(controls, name)?)
 }
 
@@ -264,10 +261,9 @@ fn validate_action_key_set(
     let actual: BTreeSet<_> = values
         .iter()
         .map(|value| {
-            value
-                .as_str()
-                .map(str::to_owned)
-                .ok_or_else(|| anyhow::anyhow!("human control '{action}' contains a non-string key"))
+            value.as_str().map(str::to_owned).ok_or_else(|| {
+                anyhow::anyhow!("human control '{action}' contains a non-string key")
+            })
         })
         .collect::<Result<_>>()?;
     ensure!(
