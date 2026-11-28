@@ -519,10 +519,6 @@ pub fn spawn_human_player(
         };
         let marker_name = rig.joint_marker_for_body(child_name);
         let anchor_name = marker_name.unwrap_or(child_name);
-        let Some(anchor_source) = source_pose.get(anchor_name) else {
-            error!("Human joint '{child_name}' has no '{anchor_name}' marker transform");
-            return;
-        };
         let Some(anchor_engine) = rig.joint_anchor_position_engine(&source_pose, anchor_name) else {
             error!("Human joint '{child_name}' has no convertible '{anchor_name}' anchor");
             return;
