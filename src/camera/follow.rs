@@ -9,7 +9,7 @@ use crate::{
 use super::free_fly::{CameraSpring, FreeFlyCamera};
 
 #[derive(Component)]
-struct PlayerCrosshair;
+pub(super) struct PlayerCrosshair;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn follow_player_camera(

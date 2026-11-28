@@ -106,12 +106,15 @@ pub fn drive_human_action_pose(
         action_state.root_motion_reference_center_engine = Some(reference_root.center_engine);
     }
 
-    action_state.elapsed_seconds += time.delta_secs();
-    let sampled = match rig.sample_engine_body_pose(
-        action,
-        action_state.elapsed_seconds,
-        action_state.reverse,
-    ) {
+    let sample_time = if action.looping {
+        action_state.elapsed_seconds += time.delta_secs();
+        action_state.elapsed_seconds
+    } else {
+        action_state.elapsed_seconds =
+            (action_state.elapsed_seconds + time.delta_secs()).min(action.duration_seconds);
+        action_state.elapsed_seconds
+    };
+    let sampled = match rig.sample_engine_body_pose(action, sample_time, action_state.reverse) {
         Ok(pose) => pose,
         Err(error) => {
             warn!("Human action target sampling failed: {error:#}");

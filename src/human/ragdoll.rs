@@ -146,7 +146,7 @@ pub struct HumanSkinnedSceneRoot;
 
 /// Marker for standalone Avian joint entities so they are removed with the player assembly.
 #[derive(Component, Clone, Copy, Debug)]
-struct HumanJointConstraint;
+pub(super) struct HumanJointConstraint;
 
 #[derive(Clone, Debug, Resource)]
 pub struct HumanPlayer {
@@ -523,9 +523,10 @@ pub fn spawn_human_player(
             error!("Human joint '{child_name}' has no '{anchor_name}' marker transform");
             return;
         };
-        let source_anchor = anchor_source.transform_point3(Vec3::ZERO);
-        let source_to_engine = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-        let anchor_engine = source_to_engine * source_anchor;
+        let Some(anchor_engine) = rig.joint_anchor_position_engine(&source_pose, anchor_name) else {
+            error!("Human joint '{child_name}' has no convertible '{anchor_name}' anchor");
+            return;
+        };
 
         let parent_pose = &target_pose[parent_name];
         let child_pose = &target_pose[child_name];

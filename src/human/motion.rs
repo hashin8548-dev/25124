@@ -200,9 +200,6 @@ impl HumanAction {
     pub fn track(&self, name: &str) -> Option<&MotionTrack> {
         self.tracks.get(name)
     }
-    pub fn track_names(&self) -> impl Iterator<Item = &str> {
-        self.tracks.keys().map(String::as_str)
-    }
 }
 
 impl MotionTrack {

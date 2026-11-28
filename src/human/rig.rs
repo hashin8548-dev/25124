@@ -63,11 +63,8 @@ struct ArmatureMetadata {
 
 #[derive(Clone, Copy, Debug)]
 pub struct HumanBonePose {
-    pub head_engine: Vec3,
-    pub axis_engine: Vec3,
     pub rotation_engine: Quat,
     pub center_engine: Vec3,
-    pub length_m: f32,
     pub collision: BoneCollisionGeometryValue,
 }
 
@@ -75,7 +72,6 @@ pub struct HumanBonePose {
 pub struct BoneCollisionGeometryValue {
     pub radius_m: f32,
     pub capsule_segment_length_m: f32,
-    pub center_offset_m: Vec3,
 }
 
 impl HumanRig {
@@ -162,11 +158,24 @@ impl HumanRig {
                 ensure!(
                     collision.radius_m.is_finite()
                         && collision.radius_m > 0.0
+                        && collision.axial_min_m.is_finite()
+                        && collision.axial_max_m.is_finite()
+                        && collision.axial_max_m > collision.axial_min_m
                         && collision.axial_length_m.is_finite()
                         && collision.axial_length_m > 0.0
+                        && (collision.axial_length_m
+                            - (collision.axial_max_m - collision.axial_min_m))
+                            .abs()
+                            <= 1.0e-4
                         && collision.capsule_segment_length_m.is_finite()
                         && collision.capsule_segment_length_m >= 0.0
+                        && (collision.capsule_segment_length_m
+                            - (collision.axial_length_m - 2.0 * collision.radius_m).max(0.0))
+                            .abs()
+                            <= 1.0e-4
                         && collision.center_offset_bone_m.iter().all(|x| x.is_finite())
+                        && collision.weight_threshold.is_finite()
+                        && (0.0..=1.0).contains(&collision.weight_threshold)
                         && collision.weighted_vertex_count >= 4,
                     "body track '{}' has invalid mesh-derived collision dimensions",
                     bone.name
@@ -385,7 +394,6 @@ impl HumanRig {
 
             let (_, source_rotation, _) = source_matrix.to_scale_rotation_translation();
             let rotation_engine = (source_to_engine * source_rotation).normalize();
-            let axis_engine = (rotation_engine * Vec3::Y).normalize_or_zero();
             let head_engine = source_to_engine * source_head;
             let center_offset = Vec3::from_array(geometry.center_offset_bone_m);
             let center_engine = head_engine + rotation_engine * center_offset;
@@ -393,15 +401,11 @@ impl HumanRig {
             result.insert(
                 name.clone(),
                 HumanBonePose {
-                    head_engine,
-                    axis_engine,
                     rotation_engine,
                     center_engine,
-                    length_m: bone.length_m,
                     collision: BoneCollisionGeometryValue {
                         radius_m: geometry.radius_m,
                         capsule_segment_length_m: geometry.capsule_segment_length_m,
-                        center_offset_m: Vec3::from_array(geometry.center_offset_bone_m),
                     },
                 },
             );
@@ -410,12 +414,13 @@ impl HumanRig {
         Ok(result)
     }
 
-    pub fn marker_position_engine(
+    /// Converts a calibrated source-space joint-anchor bone origin into engine coordinates.
+    pub fn joint_anchor_position_engine(
         &self,
         source_world_pose: &BTreeMap<String, Mat4>,
-        marker_name: &str,
+        bone_name: &str,
     ) -> Option<Vec3> {
-        let matrix = source_world_pose.get(marker_name)?;
+        let matrix = source_world_pose.get(bone_name)?;
         let source_position = matrix.transform_point3(Vec3::ZERO);
         Some(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2) * source_position)
     }
