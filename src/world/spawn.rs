@@ -551,7 +551,8 @@ pub(super) fn spawn_chunk(
                             quality_level: u8::MAX,
                             center: lod_center,
                             half_extents: Vec3::from_array(
-                                dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                                dimensions
+                                    .map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
                             ),
                             near_distance_m: lod_near_distance_m,
                             mid_distance_m: lod_mid_distance_m,
@@ -1008,7 +1009,9 @@ fn spawn_body_lod_proxy(
             BodyLodProxy { owner },
         ))
         .id();
-    commands.entity(owner).insert(BodyLodOwner { proxy, radius_m });
+    commands
+        .entity(owner)
+        .insert(BodyLodOwner { proxy, radius_m });
 }
 
 fn add_visual(
