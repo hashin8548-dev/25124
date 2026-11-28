@@ -134,9 +134,13 @@ pub fn update_human_controls(
         action_state.select(available_action, available_action == action && reverse);
     }
 
-    // Latch one-shot input until the next fixed physics tick consumes the impulse.
-    // FixedUpdate may execute before Update in a given render frame.
+    // A new grounded jump is a new action instance, even if the previous jump
+    // has not yet transitioned through idle. Restart its non-looping pose timeline
+    // and recapture the Root reference before the next fixed physics tick.
     if launch_jump {
+        action_state.elapsed_seconds = 0.0;
+        action_state.root_motion_origin_world = None;
+        action_state.root_motion_reference_center_engine = None;
         action_state.jump_launch_pending = true;
     }
     action_state.wall_grip_active = apply_wall_grip && wall_ahead;
