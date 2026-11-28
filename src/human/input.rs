@@ -93,11 +93,7 @@ pub fn update_human_controls(
     } else if action_state.has_pending_jump_launch_for(&settings.controls.jump) {
         // Keep the jump selected until FixedPostUpdate consumes its one-shot impulse.
         // Update can run on render frames that contain no fixed physics tick.
-        (
-            Some((settings.controls.jump.as_str(), false)),
-            false,
-            false,
-        )
+        (Some((settings.controls.jump.as_str(), false)), false, false)
     } else if was_climbing && wall_ahead && (jump_held || horizontal_input) {
         (
             Some((settings.controls.climb.as_str(), backwards)),
