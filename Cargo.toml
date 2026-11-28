@@ -16,3 +16,12 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+
+# Keep validation builds fast without changing the runtime development profile.
+[profile.ci]
+inherits = "dev"
+opt-level = 0
+debug = 0
+
+[profile.ci.package."*"]
+opt-level = 0

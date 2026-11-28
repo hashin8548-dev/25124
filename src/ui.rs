@@ -7,19 +7,19 @@ use std::{
 
 use bevy::{
     app::AppExit,
-    math::DVec3,
     input::mouse::{MouseScrollUnit, MouseWheel},
     input_focus::{
-        FocusCause, InputFocus, InputFocusVisible,
+        FocusCause, InputFocus,
         tab_navigation::{TabGroup, TabIndex, TabNavigationPlugin},
     },
+    math::DVec3,
     picking::hover::{HoverMap, Hovered},
     prelude::*,
     text::{FontSize, TextFont},
     ui::Pressed,
     ui_widgets::{Activate, Button, observe},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     config::{RuntimeConfig, WorldLibrary},
@@ -47,15 +47,26 @@ impl Plugin for MenuPlugin {
                     sync_menu_visibility,
                     update_world_list_scroll,
                     sync_menu_feedback,
+                    sync_settings_labels,
                     sync_quit_confirmation_visibility,
                 ),
             );
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum MenuPage {
+    #[default]
+    Home,
+    Worlds,
+    Settings,
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct MenuState {
     pub(crate) visible: bool,
+    page: MenuPage,
+    preferences: UserPreferences,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -99,10 +110,31 @@ struct QuitConfirmationPanel;
 struct MenuAction(String);
 
 #[derive(Component)]
+struct HomeOnly;
+
+#[derive(Component)]
+struct MenuCursorMarker(Entity);
+
+#[derive(Component)]
 struct LibraryOnly;
 
 #[derive(Component)]
+struct SettingsOnly;
+
+#[derive(Component)]
 struct SimulationOnly;
+
+#[derive(Component)]
+struct SettingAction(String);
+
+#[derive(Component)]
+struct SettingsRenderDistanceValue;
+
+#[derive(Component)]
+struct SettingsLodDetailValue;
+
+#[derive(Component, Default)]
+struct MenuGlowState(bool);
 
 #[derive(Component, Clone, Copy)]
 struct MenuButtonColors {
@@ -118,6 +150,10 @@ struct MenuAsset {
     schema_version: u32,
     title: String,
     subtitle: String,
+    #[serde(default = "default_home_buttons")]
+    home_buttons: Vec<MenuButtonDefinition>,
+    #[serde(default)]
+    home_layout: HomeLayoutDefinition,
     #[serde(default = "default_empty_library_title")]
     empty_library_title: String,
     #[serde(default = "default_empty_library_hint")]
@@ -360,11 +396,223 @@ fn default_world_metadata_max_fields() -> usize {
     4
 }
 
+fn default_home_buttons() -> Vec<MenuButtonDefinition> {
+    vec![
+        MenuButtonDefinition {
+            label: "CONTINUE".to_owned(),
+            action: "continue".to_owned(),
+        },
+        MenuButtonDefinition {
+            label: "NEW WORLD".to_owned(),
+            action: "create_world".to_owned(),
+        },
+        MenuButtonDefinition {
+            label: "WORLDS".to_owned(),
+            action: "worlds".to_owned(),
+        },
+        MenuButtonDefinition {
+            label: "SETTINGS".to_owned(),
+            action: "settings".to_owned(),
+        },
+    ]
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct HomeLayoutDefinition {
+    left_percent: f32,
+    top_percent: f32,
+    panel_width_px: f32,
+    panel_height_percent: f32,
+    title_frame_width_px: f32,
+    title_frame_height_px: f32,
+    title_font_size_px: f32,
+    eyebrow_font_size_px: f32,
+    version_font_size_px: f32,
+    actions_top_gap_px: f32,
+    action_list_gap_px: f32,
+    action_row_width_px: f32,
+    action_row_height_px: f32,
+    action_button_width_px: f32,
+    action_button_height_px: f32,
+    action_button_left_px: f32,
+    action_button_padding_left_px: f32,
+    action_font_size_px: f32,
+    cursor_font_size_px: f32,
+}
+
+impl Default for HomeLayoutDefinition {
+    fn default() -> Self {
+        Self {
+            left_percent: 3.125,
+            top_percent: 10.9,
+            panel_width_px: 600.0,
+            panel_height_percent: 86.0,
+            title_frame_width_px: 540.0,
+            title_frame_height_px: 190.0,
+            title_font_size_px: 104.0,
+            eyebrow_font_size_px: 16.0,
+            version_font_size_px: 18.0,
+            actions_top_gap_px: 82.0,
+            action_list_gap_px: 16.0,
+            action_row_width_px: 540.0,
+            action_row_height_px: 76.0,
+            action_button_width_px: 465.0,
+            action_button_height_px: 76.0,
+            action_button_left_px: 36.0,
+            action_button_padding_left_px: 48.0,
+            action_font_size_px: 32.0,
+            cursor_font_size_px: 27.0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct MenuButtonDefinition {
     label: String,
     action: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+struct UserPreferences {
+    schema_version: u32,
+    last_world_manifest: Option<String>,
+    render_distance_chunks: u32,
+    /// 0 = performance, 1 = balanced, 2 = quality.
+    lod_detail: u8,
+}
+
+impl Default for UserPreferences {
+    fn default() -> Self {
+        Self {
+            schema_version: 1,
+            last_world_manifest: None,
+            render_distance_chunks: 2,
+            lod_detail: 1,
+        }
+    }
+}
+
+fn user_preferences_path(project_root: &Path) -> PathBuf {
+    project_root.join(".25124-preferences.json")
+}
+
+fn load_user_preferences(project_root: &Path) -> UserPreferences {
+    let path = user_preferences_path(project_root);
+    let source = match fs::read_to_string(&path) {
+        Ok(source) => source,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return UserPreferences::default();
+        }
+        Err(error) => {
+            warn!("Could not read preferences '{}': {error}", path.display());
+            return UserPreferences::default();
+        }
+    };
+
+    let preferences: UserPreferences = match serde_json::from_str(&source) {
+        Ok(preferences) => preferences,
+        Err(error) => {
+            warn!(
+                "Preferences '{}' are invalid: {error}; using defaults",
+                path.display()
+            );
+            return UserPreferences::default();
+        }
+    };
+    if preferences.schema_version != 1
+        || !(2..=8).contains(&preferences.render_distance_chunks)
+        || preferences.lod_detail > 2
+    {
+        warn!(
+            "Preferences '{}' contain unsupported or out-of-range values; using defaults",
+            path.display()
+        );
+        return UserPreferences::default();
+    }
+    preferences
+}
+
+fn save_user_preferences(project_root: &Path, preferences: &UserPreferences) -> Result<(), String> {
+    let path = user_preferences_path(project_root);
+    let temporary_path = path.with_extension("json.tmp");
+    let contents = serde_json::to_vec_pretty(preferences)
+        .map_err(|error| format!("could not serialize preferences: {error}"))?;
+    fs::write(&temporary_path, contents)
+        .map_err(|error| format!("could not write preferences: {error}"))?;
+    if let Err(first_error) = fs::rename(&temporary_path, &path) {
+        // Windows does not replace an existing destination with rename; preserve the
+        // temporary file until the previous preferences file has been removed.
+        if path.exists() {
+            fs::remove_file(&path).map_err(|error| {
+                format!("could not replace preferences after '{first_error}': {error}")
+            })?;
+            fs::rename(&temporary_path, &path)
+                .map_err(|error| format!("could not commit preferences: {error}"))?;
+        } else {
+            let _ = fs::remove_file(&temporary_path);
+            return Err(format!("could not commit preferences: {first_error}"));
+        }
+    }
+    Ok(())
+}
+
+fn preferred_world_manifest(
+    project_root: &Path,
+    library: &WorldLibrary,
+    preferences: &UserPreferences,
+) -> Option<PathBuf> {
+    let relative = Path::new(preferences.last_world_manifest.as_deref()?);
+    if relative.as_os_str().is_empty()
+        || relative.is_absolute()
+        || !relative
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    let candidate = project_root.join(relative);
+    library
+        .entries
+        .iter()
+        .find(|entry| entry.manifest_path == candidate)
+        .map(|entry| entry.manifest_path.clone())
+}
+
+fn apply_user_preferences(config: &mut RuntimeConfig, preferences: &UserPreferences) {
+    let streaming = &mut config.engine.streaming;
+    streaming.load_radius_chunks = preferences.render_distance_chunks;
+    streaming.unload_radius_chunks = preferences.render_distance_chunks.saturating_add(1);
+    let (near, mid, far): (f32, f32, f32) = match preferences.lod_detail {
+        0 => (0.75, 1.5, 2.25),
+        1 => (1.0, 1.75, 2.5),
+        _ => (1.25, 2.0, 2.75),
+    };
+    streaming.lod_near_distance_chunks = near;
+    streaming.lod_mid_distance_chunks = mid;
+    streaming.lod_far_distance_chunks = far.min(streaming.unload_radius_chunks as f32);
+}
+
+fn remember_world_manifest(
+    project_root: &Path,
+    manifest_path: &Path,
+    preferences: &mut UserPreferences,
+) -> Result<(), String> {
+    let relative = manifest_path
+        .strip_prefix(project_root)
+        .map_err(|error| format!("world manifest is outside the project root: {error}"))?;
+    preferences.last_world_manifest = Some(relative.to_string_lossy().replace('\\', "/"));
+    save_user_preferences(project_root, preferences)
+}
+
+fn lod_detail_label(detail: u8) -> &'static str {
+    match detail {
+        0 => "PERFORMANCE",
+        1 => "BALANCED",
+        _ => "QUALITY",
+    }
 }
 
 impl MenuAsset {
@@ -375,6 +623,7 @@ impl MenuAsset {
         fallback
     }
 
+    // Older external menu themes may omit newer navigation actions.
     fn ensure_required_actions(&mut self) {
         if !self.buttons.iter().any(|button| button.action == "resume") {
             self.buttons.push(MenuButtonDefinition {
@@ -386,6 +635,12 @@ impl MenuAsset {
             self.buttons.push(MenuButtonDefinition {
                 label: "QUIT".to_owned(),
                 action: "quit".to_owned(),
+            });
+        }
+        if !self.buttons.iter().any(|button| button.action == "home") {
+            self.buttons.push(MenuButtonDefinition {
+                label: "RETURN TO MAIN MENU".to_owned(),
+                action: "home".to_owned(),
             });
         }
     }
@@ -498,6 +753,62 @@ impl MenuAsset {
                     .to_owned(),
             );
         }
+        let home_dimensions = [
+            self.home_layout.panel_width_px,
+            self.home_layout.panel_height_percent,
+            self.home_layout.title_frame_width_px,
+            self.home_layout.title_frame_height_px,
+            self.home_layout.title_font_size_px,
+            self.home_layout.eyebrow_font_size_px,
+            self.home_layout.version_font_size_px,
+            self.home_layout.actions_top_gap_px,
+            self.home_layout.action_list_gap_px,
+            self.home_layout.action_row_width_px,
+            self.home_layout.action_row_height_px,
+            self.home_layout.action_button_width_px,
+            self.home_layout.action_button_height_px,
+            self.home_layout.action_button_left_px,
+            self.home_layout.action_button_padding_left_px,
+            self.home_layout.action_font_size_px,
+            self.home_layout.cursor_font_size_px,
+        ];
+        if !home_dimensions
+            .iter()
+            .all(|value| value.is_finite() && *value > 0.0)
+            || !self.home_layout.left_percent.is_finite()
+            || !(0.0..100.0).contains(&self.home_layout.left_percent)
+            || !self.home_layout.top_percent.is_finite()
+            || !(0.0..100.0).contains(&self.home_layout.top_percent)
+            || self.home_layout.top_percent + self.home_layout.panel_height_percent > 100.0
+            || self.home_layout.panel_height_percent > 100.0
+            || self.home_layout.title_frame_width_px > self.home_layout.panel_width_px
+            || self.home_layout.action_row_width_px > self.home_layout.panel_width_px
+            || self.home_layout.action_button_left_px + self.home_layout.action_button_width_px
+                > self.home_layout.action_row_width_px
+            || self.home_layout.action_button_padding_left_px
+                >= self.home_layout.action_button_width_px
+            || self.home_layout.action_button_height_px > self.home_layout.action_row_height_px
+        {
+            return Err(
+                "home layout dimensions must be finite, positive, and internally consistent"
+                    .to_owned(),
+            );
+        }
+
+        if self.home_buttons.len() != 4 {
+            return Err("menu must define exactly four home buttons".to_owned());
+        }
+        let expected_home_actions = ["continue", "create_world", "worlds", "settings"];
+        let mut home_actions = BTreeSet::new();
+        for button in &self.home_buttons {
+            if button.label.trim().is_empty()
+                || !expected_home_actions.contains(&button.action.as_str())
+                || !home_actions.insert(button.action.as_str())
+            {
+                return Err("home buttons must uniquely define continue, create_world, worlds, and settings with non-empty labels".to_owned());
+            }
+        }
+
         if self.buttons.is_empty() {
             return Err("menu must define at least one button".to_owned());
         }
@@ -509,7 +820,7 @@ impl MenuAsset {
             }
             if !matches!(
                 button.action.as_str(),
-                "start" | "resume" | "quit" | "create_world"
+                "start" | "resume" | "quit" | "create_world" | "home"
             ) {
                 return Err(format!(
                     "unsupported menu action '{}' (expected start, resume, quit, or create_world)",
@@ -520,21 +831,23 @@ impl MenuAsset {
                 return Err(format!("duplicate menu action '{}'", button.action));
             }
         }
-        if !actions.contains("resume") || !actions.contains("quit") {
-            return Err("menu must define both resume and quit actions".to_owned());
+        if !actions.contains("resume") || !actions.contains("quit") || !actions.contains("home") {
+            return Err("menu must define resume, return-to-menu, and quit actions".to_owned());
         }
         Ok(())
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn setup_menu(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    config: Res<RuntimeConfig>,
+    mut config: ResMut<RuntimeConfig>,
     library: Res<WorldLibrary>,
     mut state: ResMut<MenuState>,
     mut feedback: ResMut<MenuFeedback>,
     mut virtual_time: ResMut<Time<Virtual>>,
+    mut input_focus: ResMut<InputFocus>,
 ) {
     let menu_path = config.paths.assets_dir.join("ui/main_menu.json");
     info!(
@@ -561,6 +874,35 @@ fn setup_menu(
             MenuAsset::fallback()
         }
     };
+
+    let mut preferences = load_user_preferences(&config.paths.project_root);
+    // A command-line --world launch is also a joined world. Only remember it when
+    // the inferred conventional manifest is present in the discovered library.
+    if !config.start_in_library
+        && let Some(manifest_path) = config
+            .paths
+            .world_state
+            .parent()
+            .map(|directory| directory.join("world.json"))
+            .filter(|path| {
+                library
+                    .entries
+                    .iter()
+                    .any(|entry| entry.manifest_path == *path)
+            })
+        && let Err(error) =
+            remember_world_manifest(&config.paths.project_root, &manifest_path, &mut preferences)
+    {
+        warn!(
+            "Could not remember command-line world '{}': {error}",
+            manifest_path.display()
+        );
+    }
+    apply_user_preferences(&mut config, &preferences);
+    let last_world_manifest =
+        preferred_world_manifest(&config.paths.project_root, &library, &preferences);
+    state.preferences = preferences;
+    state.page = MenuPage::Home;
 
     state.visible = config.start_in_library;
     if state.visible {
@@ -613,8 +955,733 @@ fn setup_menu(
         ))
         .with_children(|root| {
             root.spawn((
+                HomeOnly,
+                Visibility::Hidden,
+                Node {
+                    width: Val::Px(menu.home_layout.panel_width_px),
+                    height: Val::Percent(menu.home_layout.panel_height_percent),
+                    position_type: PositionType::Absolute,
+                    left: Val::Percent(menu.home_layout.left_percent),
+                    top: Val::Percent(menu.home_layout.top_percent),
+                    padding: UiRect::all(Val::Px(0.0)),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::FlexStart,
+                    justify_content: JustifyContent::FlexStart,
+                    row_gap: Val::Px(menu.home_layout.action_list_gap_px),
+                    ..default()
+                },
+                TabGroup::modal(),
+                UiTransform::from_scale(Vec2::splat(0.85)),
+            ))
+            .with_children(|panel| {
+                panel
+                    .spawn((
+                        Node {
+                            width: Val::Px(menu.home_layout.title_frame_width_px),
+                            height: Val::Px(menu.home_layout.title_frame_height_px),
+                            padding: UiRect::axes(Val::Px(34.0), Val::Px(14.0)),
+                            flex_direction: FlexDirection::Column,
+                            justify_content: JustifyContent::SpaceBetween,
+                            border: UiRect::all(Val::Px(1.0)),
+                            border_radius: BorderRadius::all(Val::Px(0.0)),
+                            ..default()
+                        },
+                        BorderColor::all(panel_border_color),
+                        BackgroundColor(panel_color),
+                        BoxShadow::new(
+                            Color::srgba(1.0, 1.0, 1.0, 0.10),
+                            Val::Px(0.0),
+                            Val::Px(0.0),
+                            Val::Px(0.0),
+                            Val::Px(18.0),
+                        ),
+                    ))
+                    .with_children(|frame| {
+                        frame
+                            .spawn((Node {
+                                width: Val::Percent(100.0),
+                                flex_direction: FlexDirection::Row,
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::SpaceBetween,
+                                ..default()
+                            },))
+                            .with_children(|row| {
+                                row.spawn((
+                                    Text::new("III"),
+                                    TextFont {
+                                        font_size: FontSize::Px(
+                                            menu.home_layout.eyebrow_font_size_px,
+                                        ),
+                                        ..default()
+                                    },
+                                    TextColor(subtitle_color),
+                                ));
+                                row.spawn((
+                                    Text::new("+"),
+                                    TextFont {
+                                        font_size: FontSize::Px(25.0),
+                                        ..default()
+                                    },
+                                    TextColor(title_color),
+                                ));
+                            });
+                        frame.spawn((
+                            Text::new(menu.title.clone()),
+                            TextFont {
+                                font_size: FontSize::Px(menu.home_layout.title_font_size_px),
+                                ..default()
+                            },
+                            TextColor(title_color),
+                        ));
+                        frame
+                            .spawn((Node {
+                                width: Val::Percent(100.0),
+                                flex_direction: FlexDirection::Row,
+                                justify_content: JustifyContent::FlexEnd,
+                                ..default()
+                            },))
+                            .with_children(|row| {
+                                row.spawn((
+                                    Text::new(format!("v{}", env!("CARGO_PKG_VERSION"))),
+                                    TextFont {
+                                        font_size: FontSize::Px(
+                                            menu.home_layout.version_font_size_px,
+                                        ),
+                                        ..default()
+                                    },
+                                    TextColor(subtitle_color),
+                                ));
+                            });
+                    });
+
+                panel.spawn(Node {
+                    width: Val::Px(1.0),
+                    height: Val::Px(menu.home_layout.actions_top_gap_px),
+                    ..default()
+                });
+
+                macro_rules! home_action_button {
+                    ($definition:expr, $tab:expr, $action:expr, $observer:expr, $focus:expr) => {{
+                        let label = $definition.label.clone();
+                        let mut button_entity = None;
+                        panel
+                            .spawn(Node {
+                                width: Val::Px(menu.home_layout.action_row_width_px),
+                                height: Val::Px(menu.home_layout.action_row_height_px),
+                                position_type: PositionType::Relative,
+                                ..default()
+                            })
+                            .with_children(|item| {
+                                let button = item
+                                    .spawn((
+                                        Button,
+                                        TabIndex($tab),
+                                        Hovered::default(),
+                                        Node {
+                                            width: Val::Px(menu.home_layout.action_button_width_px),
+                                            height: Val::Px(
+                                                menu.home_layout.action_button_height_px,
+                                            ),
+                                            margin: UiRect::left(Val::Px(
+                                                menu.home_layout.action_button_left_px,
+                                            )),
+                                            padding: UiRect::left(Val::Px(
+                                                menu.home_layout.action_button_padding_left_px,
+                                            )),
+                                            border: UiRect::all(Val::Px(1.5)),
+                                            border_radius: BorderRadius::all(Val::Px(0.0)),
+                                            align_items: AlignItems::Center,
+                                            justify_content: JustifyContent::FlexStart,
+                                            ..default()
+                                        },
+                                        BorderColor::all(button_border_color),
+                                        BackgroundColor(button_color),
+                                        MenuAction($action.to_owned()),
+                                        MenuButtonColors {
+                                            normal: button_color,
+                                            hovered: button_hover_color,
+                                            border_normal: button_border_color,
+                                            border_active: button_active_border_color,
+                                        },
+                                        MenuGlowState::default(),
+                                        BoxShadow::new(
+                                            Color::srgba(1.0, 1.0, 1.0, 0.0),
+                                            Val::Px(0.0),
+                                            Val::Px(0.0),
+                                            Val::Px(0.0),
+                                            Val::Px(16.0),
+                                        ),
+                                        observe($observer),
+                                    ))
+                                    .with_children(|button| {
+                                        button.spawn((
+                                            Text::new(label),
+                                            TextFont {
+                                                font_size: FontSize::Px(
+                                                    menu.home_layout.action_font_size_px,
+                                                ),
+                                                ..default()
+                                            },
+                                            TextColor(button_text_color),
+                                        ));
+                                    })
+                                    .id();
+                                button_entity = Some(button);
+                                item.spawn((
+                                    MenuCursorMarker(button),
+                                    Visibility::Hidden,
+                                    Node {
+                                        width: Val::Px(28.0),
+                                        height: Val::Px(menu.home_layout.cursor_font_size_px + 9.0),
+                                        position_type: PositionType::Absolute,
+                                        left: Val::Px(0.0),
+                                        top: Val::Px(
+                                            (menu.home_layout.action_row_height_px
+                                                - menu.home_layout.cursor_font_size_px)
+                                                * 0.5,
+                                        ),
+                                        ..default()
+                                    },
+                                    Text::new("▶"),
+                                    TextFont {
+                                        font_size: FontSize::Px(
+                                            menu.home_layout.cursor_font_size_px,
+                                        ),
+                                        ..default()
+                                    },
+                                    TextColor(title_color),
+                                ));
+                                item.spawn((
+                                    Node {
+                                        width: Val::Px(18.0),
+                                        height: Val::Px(18.0),
+                                        position_type: PositionType::Absolute,
+                                        left: Val::Px(490.0),
+                                        top: Val::Px(-2.0),
+                                        ..default()
+                                    },
+                                    Text::new("╱"),
+                                    TextFont {
+                                        font_size: FontSize::Px(20.0),
+                                        ..default()
+                                    },
+                                    TextColor(title_color),
+                                ));
+                                item.spawn((
+                                    Node {
+                                        width: Val::Px(18.0),
+                                        height: Val::Px(18.0),
+                                        position_type: PositionType::Absolute,
+                                        left: Val::Px(32.0),
+                                        top: Val::Px(58.0),
+                                        ..default()
+                                    },
+                                    Text::new("╱"),
+                                    TextFont {
+                                        font_size: FontSize::Px(20.0),
+                                        ..default()
+                                    },
+                                    TextColor(title_color),
+                                ));
+                            });
+                        if $focus {
+                            input_focus.set(
+                                button_entity.expect("home action button was created"),
+                                FocusCause::Navigated,
+                            );
+                        }
+                    }};
+                }
+
+                let continue_definition = menu
+                    .home_buttons
+                    .iter()
+                    .find(|definition| definition.action == "continue")
+                    .expect("validated home menu contains Continue");
+                if let Some(last_world_manifest) = last_world_manifest.clone() {
+                    let label = continue_definition.label.clone();
+                    let mut button_entity = None;
+                    panel
+                        .spawn(Node {
+                            width: Val::Px(menu.home_layout.action_row_width_px),
+                            height: Val::Px(menu.home_layout.action_row_height_px),
+                            position_type: PositionType::Relative,
+                            ..default()
+                        })
+                        .with_children(|item| {
+                            let button = item
+                                .spawn((
+                                    Button,
+                                    TabIndex(0),
+                                    Hovered::default(),
+                                    Node {
+                                        width: Val::Px(menu.home_layout.action_button_width_px),
+                                        height: Val::Px(menu.home_layout.action_button_height_px),
+                                        margin: UiRect::left(Val::Px(
+                                            menu.home_layout.action_button_left_px,
+                                        )),
+                                        padding: UiRect::left(Val::Px(
+                                            menu.home_layout.action_button_padding_left_px,
+                                        )),
+                                        border: UiRect::all(Val::Px(1.5)),
+                                        border_radius: BorderRadius::all(Val::Px(0.0)),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::FlexStart,
+                                        ..default()
+                                    },
+                                    BorderColor::all(button_border_color),
+                                    BackgroundColor(button_color),
+                                    WorldSelection(last_world_manifest),
+                                    MenuButtonColors {
+                                        normal: button_color,
+                                        hovered: button_hover_color,
+                                        border_normal: button_border_color,
+                                        border_active: button_active_border_color,
+                                    },
+                                    MenuGlowState::default(),
+                                    BoxShadow::new(
+                                        Color::srgba(1.0, 1.0, 1.0, 0.0),
+                                        Val::Px(0.0),
+                                        Val::Px(0.0),
+                                        Val::Px(0.0),
+                                        Val::Px(16.0),
+                                    ),
+                                    observe(handle_world_selection),
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new(label),
+                                        TextFont {
+                                            font_size: FontSize::Px(
+                                                menu.home_layout.action_font_size_px,
+                                            ),
+                                            ..default()
+                                        },
+                                        TextColor(button_text_color),
+                                    ));
+                                })
+                                .id();
+                            button_entity = Some(button);
+                            item.spawn((
+                                MenuCursorMarker(button),
+                                Visibility::Hidden,
+                                Node {
+                                    width: Val::Px(28.0),
+                                    height: Val::Px(menu.home_layout.cursor_font_size_px + 9.0),
+                                    position_type: PositionType::Absolute,
+                                    left: Val::Px(0.0),
+                                    top: Val::Px(
+                                        (menu.home_layout.action_row_height_px
+                                            - menu.home_layout.cursor_font_size_px)
+                                            * 0.5,
+                                    ),
+                                    ..default()
+                                },
+                                Text::new("▶"),
+                                TextFont {
+                                    font_size: FontSize::Px(menu.home_layout.cursor_font_size_px),
+                                    ..default()
+                                },
+                                TextColor(title_color),
+                            ));
+                            item.spawn((
+                                Node {
+                                    width: Val::Px(18.0),
+                                    height: Val::Px(18.0),
+                                    position_type: PositionType::Absolute,
+                                    left: Val::Px(490.0),
+                                    top: Val::Px(-2.0),
+                                    ..default()
+                                },
+                                Text::new("╱"),
+                                TextFont {
+                                    font_size: FontSize::Px(20.0),
+                                    ..default()
+                                },
+                                TextColor(title_color),
+                            ));
+                            item.spawn((
+                                Node {
+                                    width: Val::Px(18.0),
+                                    height: Val::Px(18.0),
+                                    position_type: PositionType::Absolute,
+                                    left: Val::Px(32.0),
+                                    top: Val::Px(58.0),
+                                    ..default()
+                                },
+                                Text::new("╱"),
+                                TextFont {
+                                    font_size: FontSize::Px(20.0),
+                                    ..default()
+                                },
+                                TextColor(title_color),
+                            ));
+                        });
+                    input_focus.set(
+                        button_entity.expect("Continue button was created"),
+                        FocusCause::Navigated,
+                    );
+                } else {
+                    panel
+                        .spawn(Node {
+                            width: Val::Px(menu.home_layout.action_row_width_px),
+                            height: Val::Px(menu.home_layout.action_row_height_px),
+                            position_type: PositionType::Relative,
+                            ..default()
+                        })
+                        .with_children(|item| {
+                            item.spawn((
+                                Node {
+                                    width: Val::Px(menu.home_layout.action_button_width_px),
+                                    height: Val::Px(menu.home_layout.action_button_height_px),
+                                    margin: UiRect::left(Val::Px(
+                                        menu.home_layout.action_button_left_px,
+                                    )),
+                                    padding: UiRect::left(Val::Px(
+                                        menu.home_layout.action_button_padding_left_px,
+                                    )),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    border_radius: BorderRadius::all(Val::Px(0.0)),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::FlexStart,
+                                    ..default()
+                                },
+                                BorderColor::all(panel_border_color),
+                                BackgroundColor(panel_color),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new("Continue  /  NO RECENT WORLD"),
+                                    TextFont {
+                                        font_size: FontSize::Px(17.0),
+                                        ..default()
+                                    },
+                                    TextColor(subtitle_color),
+                                ));
+                            });
+                        });
+                }
+
+                let new_world = menu
+                    .home_buttons
+                    .iter()
+                    .find(|definition| definition.action == "create_world")
+                    .expect("validated home menu contains New World");
+                home_action_button!(
+                    new_world,
+                    1,
+                    "create_world",
+                    handle_create_world,
+                    last_world_manifest.is_none()
+                );
+
+                let worlds = menu
+                    .home_buttons
+                    .iter()
+                    .find(|definition| definition.action == "worlds")
+                    .expect("validated home menu contains Worlds");
+                home_action_button!(worlds, 2, "worlds", handle_navigation_action, false);
+
+                let settings = menu
+                    .home_buttons
+                    .iter()
+                    .find(|definition| definition.action == "settings")
+                    .expect("validated home menu contains Settings");
+                home_action_button!(settings, 3, "settings", handle_navigation_action, false);
+
+                panel.spawn((
+                    MenuNotice,
+                    Text::new(""),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_description_size_px),
+                        ..default()
+                    },
+                    TextColor(notice_color),
+                    notice_colors,
+                    Node {
+                        width: Val::Px(menu.home_layout.action_row_width_px),
+                        min_height: Val::Px(18.0),
+                        margin: UiRect::left(Val::Px(menu.home_layout.action_button_left_px)),
+                        ..default()
+                    },
+                ));
+
+                panel.spawn((
+                    Text::new("TAB / SHIFT+TAB  ·  ENTER SELECT"),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_metadata_size_px),
+                        ..default()
+                    },
+                    TextColor(subtitle_color),
+                ));
+            });
+
+            root.spawn((
+                SettingsOnly,
+                Visibility::Hidden,
+                Node {
+                    width: Val::Percent(92.0),
+                    max_width: Val::Px(650.0),
+                    padding: UiRect::all(Val::Px(menu.panel_padding_px + 12.0)),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    row_gap: Val::Px(menu.vertical_gap_px),
+                    border: UiRect::all(Val::Px(1.0)),
+                    border_radius: BorderRadius::all(Val::Px(0.0)),
+                    ..default()
+                },
+                BorderColor::all(panel_border_color),
+                BackgroundColor(panel_color),
+                BoxShadow::new(
+                    panel_shadow_color,
+                    Val::Px(0.0),
+                    Val::Px(menu.panel_shadow_offset_y_px),
+                    Val::Px(0.0),
+                    Val::Px(menu.panel_shadow_blur_px),
+                ),
+                TabGroup::modal(),
+                UiTransform::from_scale(Vec2::splat(0.85)),
+            ))
+            .with_children(|panel| {
+                panel.spawn((
+                    Text::new("SETTINGS"),
+                    TextFont {
+                        font_size: FontSize::Px(menu.title_size_px + 14.0),
+                        ..default()
+                    },
+                    TextColor(title_color),
+                ));
+                panel.spawn((
+                    Text::new("STREAMING / VISUAL QUALITY"),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_metadata_size_px + 2.0),
+                        ..default()
+                    },
+                    TextColor(subtitle_color),
+                ));
+
+                panel
+                    .spawn(Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(1.0),
+                        margin: UiRect::vertical(Val::Px(12.0)),
+                        ..default()
+                    })
+                    .insert(BackgroundColor(panel_border_color));
+
+                panel
+                    .spawn(Node {
+                        width: Val::Percent(100.0),
+                        min_height: Val::Px(64.0),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(12.0),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn((
+                            Text::new("RENDER DISTANCE"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                flex_grow: 1.0,
+                                ..default()
+                            },
+                        ));
+                        row.spawn((
+                            SettingsRenderDistanceValue,
+                            Text::new(""),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                width: Val::Px(104.0),
+                                ..default()
+                            },
+                        ));
+                        for (label, action, index) in [
+                            ("−", "render_distance_down", 0),
+                            ("+", "render_distance_up", 1),
+                        ] {
+                            row.spawn((
+                                Button,
+                                TabIndex(4 + index),
+                                Hovered::default(),
+                                Node {
+                                    width: Val::Px(42.0),
+                                    height: Val::Px(42.0),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::Center,
+                                    ..default()
+                                },
+                                BorderColor::all(button_border_color),
+                                BackgroundColor(button_color),
+                                MenuButtonColors {
+                                    normal: button_color,
+                                    hovered: button_hover_color,
+                                    border_normal: button_border_color,
+                                    border_active: button_active_border_color,
+                                },
+                                SettingAction(action.to_owned()),
+                                observe(handle_setting_action),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new(label),
+                                    TextFont {
+                                        font_size: FontSize::Px(menu.button_font_size_px + 4.0),
+                                        ..default()
+                                    },
+                                    TextColor(button_text_color),
+                                ));
+                            });
+                        }
+                    });
+
+                panel
+                    .spawn(Node {
+                        width: Val::Percent(100.0),
+                        min_height: Val::Px(64.0),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(12.0),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn((
+                            Text::new("LOD DETAIL"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                flex_grow: 1.0,
+                                ..default()
+                            },
+                        ));
+                        row.spawn((
+                            SettingsLodDetailValue,
+                            Text::new(""),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                width: Val::Px(130.0),
+                                ..default()
+                            },
+                        ));
+                        for (label, action, index) in
+                            [("−", "lod_detail_down", 0), ("+", "lod_detail_up", 1)]
+                        {
+                            row.spawn((
+                                Button,
+                                TabIndex(6 + index),
+                                Hovered::default(),
+                                Node {
+                                    width: Val::Px(42.0),
+                                    height: Val::Px(42.0),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::Center,
+                                    ..default()
+                                },
+                                BorderColor::all(button_border_color),
+                                BackgroundColor(button_color),
+                                MenuButtonColors {
+                                    normal: button_color,
+                                    hovered: button_hover_color,
+                                    border_normal: button_border_color,
+                                    border_active: button_active_border_color,
+                                },
+                                SettingAction(action.to_owned()),
+                                observe(handle_setting_action),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new(label),
+                                    TextFont {
+                                        font_size: FontSize::Px(menu.button_font_size_px + 4.0),
+                                        ..default()
+                                    },
+                                    TextColor(button_text_color),
+                                ));
+                            });
+                        }
+                    });
+
+                panel.spawn((
+                    Text::new("Changes apply live and are saved automatically."),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_metadata_size_px),
+                        ..default()
+                    },
+                    TextColor(subtitle_color),
+                ));
+                panel.spawn((
+                    MenuNotice,
+                    Text::new(""),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_description_size_px),
+                        ..default()
+                    },
+                    TextColor(notice_color),
+                    notice_colors,
+                    Node {
+                        width: Val::Percent(100.0),
+                        min_height: Val::Px(18.0),
+                        ..default()
+                    },
+                ));
+
+                panel
+                    .spawn((
+                        Button,
+                        TabIndex(8),
+                        Hovered::default(),
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Px(menu.button_height_px),
+                            margin: UiRect::top(Val::Px(10.0)),
+                            border: UiRect::all(Val::Px(1.0)),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        BorderColor::all(button_border_color),
+                        BackgroundColor(button_color),
+                        MenuAction("home".to_owned()),
+                        MenuButtonColors {
+                            normal: button_color,
+                            hovered: button_hover_color,
+                            border_normal: button_border_color,
+                            border_active: button_active_border_color,
+                        },
+                        observe(handle_navigation_action),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("BACK"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                        ));
+                    });
+            });
+
+            root.spawn((
                 LibraryOnly,
-                Visibility::Visible,
+                Visibility::Hidden,
                 Node {
                     width: Val::Percent(92.0),
                     max_width: Val::Px(menu.panel_width_px),
@@ -640,6 +1707,7 @@ fn setup_menu(
                     Val::Px(menu.panel_shadow_blur_px),
                 ),
                 TabGroup::modal(),
+                UiTransform::from_scale(Vec2::splat(0.85)),
             ))
             .with_children(|panel| {
                 panel.spawn((
@@ -898,8 +1966,56 @@ fn setup_menu(
                                                 ));
                                             }
                                         });
+                                    button.spawn((
+                                        Text::new("JOIN  ▸"),
+                                        TextFont {
+                                            font_size: FontSize::Px(
+                                                menu.world_metadata_size_px + 1.0,
+                                            ),
+                                            ..default()
+                                        },
+                                        TextColor(title_color),
+                                    ));
                                 });
                         }
+                    });
+
+                panel
+                    .spawn((
+                        Button,
+                        TabIndex(library.entries.len() as i32),
+                        Hovered::default(),
+                        Node {
+                            width: Val::Percent(100.0),
+                            max_width: Val::Px(menu.button_width_px),
+                            align_self: AlignSelf::Center,
+                            height: Val::Px(menu.button_height_px),
+                            border: UiRect::all(Val::Px(1.0)),
+                            border_radius: BorderRadius::all(Val::Px(menu.card_radius_px)),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        BorderColor::all(button_border_color),
+                        BackgroundColor(button_color),
+                        MenuAction("home".to_owned()),
+                        MenuButtonColors {
+                            normal: button_color,
+                            hovered: button_hover_color,
+                            border_normal: button_border_color,
+                            border_active: button_active_border_color,
+                        },
+                        observe(handle_navigation_action),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new("BACK TO MENU"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                        ));
                     });
 
                 panel.spawn((
@@ -935,7 +2051,7 @@ fn setup_menu(
                     panel
                         .spawn((
                             Button,
-                            TabIndex(library.entries.len() as i32),
+                            TabIndex(library.entries.len() as i32 + 1),
                             Hovered::default(),
                             Node {
                                 width: Val::Percent(100.0),
@@ -977,6 +2093,7 @@ fn setup_menu(
                             Button,
                             TabIndex(
                                 library.entries.len() as i32
+                                    + 1
                                     + if menu
                                         .buttons
                                         .iter()
@@ -1047,6 +2164,7 @@ fn setup_menu(
                     Val::Px(0.0),
                     Val::Px(menu.panel_shadow_blur_px),
                 ),
+                UiTransform::from_scale(Vec2::splat(0.85)),
             ))
             .with_children(|panel| {
                 panel.spawn((
@@ -1085,7 +2203,7 @@ fn setup_menu(
                 for (index, definition) in menu
                     .buttons
                     .iter()
-                    .filter(|button| matches!(button.action.as_str(), "resume" | "quit"))
+                    .filter(|button| matches!(button.action.as_str(), "resume" | "home" | "quit"))
                     .enumerate()
                 {
                     panel
@@ -1170,6 +2288,7 @@ fn setup_menu(
                             Val::Px(0.0),
                             Val::Px(menu.panel_shadow_blur_px),
                         ),
+                        UiTransform::from_scale(Vec2::splat(0.85)),
                     ))
                     .with_children(|dialog| {
                         dialog.spawn((
@@ -1312,7 +2431,8 @@ fn handle_world_selection(
             return;
         }
     };
-    selected.paths.project_root = project_root;
+    selected.paths.project_root = project_root.clone();
+    apply_user_preferences(&mut selected, &menu_state.preferences);
 
     let selected_state =
         match WorldStateFile::load_or_default(&selected.paths.world_state, &selected.world.id) {
@@ -1330,6 +2450,15 @@ fn handle_world_selection(
                 return;
             }
         };
+
+    if let Err(error) =
+        remember_world_manifest(&project_root, &selection.0, &mut menu_state.preferences)
+    {
+        warn!(
+            "Could not remember selected world '{}': {error}",
+            selection.0.display()
+        );
+    }
 
     gravity.0 = Vec3::from_array(
         selected
@@ -1470,7 +2599,8 @@ fn handle_create_world(
             return;
         }
     };
-    selected.paths.project_root = project_root;
+    selected.paths.project_root = project_root.clone();
+    apply_user_preferences(&mut selected, &menu_state.preferences);
 
     let selected_state =
         match WorldStateFile::load_or_default(&selected.paths.world_state, &selected.world.id) {
@@ -1482,6 +2612,15 @@ fn handle_create_world(
                 return;
             }
         };
+
+    if let Err(error) =
+        remember_world_manifest(&project_root, &manifest_path, &mut menu_state.preferences)
+    {
+        warn!(
+            "Could not remember new world '{}': {error}",
+            manifest_path.display()
+        );
+    }
 
     gravity.0 = Vec3::from_array(
         selected
@@ -1525,6 +2664,116 @@ fn load_menu(path: &Path) -> Result<MenuAsset, String> {
     Ok(menu)
 }
 
+fn handle_navigation_action(
+    activate: On<Activate>,
+    actions: Query<&MenuAction>,
+    mode: Res<State<AppMode>>,
+    mut state: ResMut<MenuState>,
+    mut input_focus: ResMut<InputFocus>,
+) {
+    if *mode.get() != AppMode::WorldLibrary {
+        return;
+    }
+    let Ok(action) = actions.get(activate.entity) else {
+        return;
+    };
+    state.page = match action.0.as_str() {
+        "home" => MenuPage::Home,
+        "worlds" => MenuPage::Worlds,
+        "settings" => MenuPage::Settings,
+        _ => return,
+    };
+    input_focus.clear();
+}
+
+fn handle_setting_action(
+    activate: On<Activate>,
+    actions: Query<&SettingAction>,
+    mode: Res<State<AppMode>>,
+    mut config: ResMut<RuntimeConfig>,
+    mut state: ResMut<MenuState>,
+    mut feedback: ResMut<MenuFeedback>,
+) {
+    if *mode.get() != AppMode::WorldLibrary || state.page != MenuPage::Settings {
+        return;
+    }
+    let Ok(action) = actions.get(activate.entity) else {
+        return;
+    };
+
+    match action.0.as_str() {
+        "render_distance_down" => {
+            state.preferences.render_distance_chunks = state
+                .preferences
+                .render_distance_chunks
+                .saturating_sub(1)
+                .max(2);
+        }
+        "render_distance_up" => {
+            state.preferences.render_distance_chunks =
+                (state.preferences.render_distance_chunks + 1).min(8);
+        }
+        "lod_detail_down" => {
+            state.preferences.lod_detail = state.preferences.lod_detail.saturating_sub(1);
+        }
+        "lod_detail_up" => {
+            state.preferences.lod_detail = (state.preferences.lod_detail + 1).min(2);
+        }
+        _ => return,
+    }
+
+    apply_user_preferences(&mut config, &state.preferences);
+    match save_user_preferences(&config.paths.project_root, &state.preferences) {
+        Ok(()) => {
+            feedback.message = format!(
+                "Settings saved · render distance {} chunks · LOD {}",
+                state.preferences.render_distance_chunks,
+                lod_detail_label(state.preferences.lod_detail)
+            );
+            feedback.tone = MenuFeedbackTone::Success;
+        }
+        Err(error) => {
+            warn!("Could not save settings: {error}");
+            feedback.message =
+                format!("Settings applied for this session, but could not be saved: {error}");
+            feedback.tone = MenuFeedbackTone::Notice;
+        }
+    }
+}
+
+fn sync_settings_labels(
+    config: Res<RuntimeConfig>,
+    state: Res<MenuState>,
+    mut render_distance_labels: Query<
+        &mut Text,
+        (
+            With<SettingsRenderDistanceValue>,
+            Without<SettingsLodDetailValue>,
+        ),
+    >,
+    mut lod_detail_labels: Query<
+        &mut Text,
+        (
+            With<SettingsLodDetailValue>,
+            Without<SettingsRenderDistanceValue>,
+        ),
+    >,
+) {
+    if !config.is_changed() && !state.is_changed() {
+        return;
+    }
+
+    for mut text in &mut render_distance_labels {
+        text.0 = format!("{} CHUNKS", config.engine.streaming.load_radius_chunks);
+    }
+    for mut text in &mut lod_detail_labels {
+        text.0 = lod_detail_label(state.preferences.lod_detail).to_owned();
+    }
+}
+
+// Bevy requires these independent resources as explicit system parameters. Keeping them
+// separate preserves the scheduler's access information and avoids a generic catch-all state.
+#[allow(clippy::too_many_arguments)]
 fn handle_menu_action(
     activate: On<Activate>,
     actions: Query<(Entity, &MenuAction)>,
@@ -1533,6 +2782,7 @@ fn handle_menu_action(
     mut confirmation: ResMut<QuitConfirmationState>,
     mut input_focus: ResMut<InputFocus>,
     mut virtual_time: ResMut<Time<Virtual>>,
+    mut next_state: ResMut<NextState<AppMode>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
     let Ok((_, action)) = actions.get(activate.entity) else {
@@ -1544,6 +2794,14 @@ fn handle_menu_action(
             state.visible = false;
             input_focus.clear();
             virtual_time.unpause();
+        }
+        "home" if *mode.get() == AppMode::Simulation => {
+            state.page = MenuPage::Home;
+            state.visible = true;
+            confirmation.visible = false;
+            input_focus.clear();
+            virtual_time.pause();
+            next_state.set(AppMode::WorldLibrary);
         }
         "quit" if *mode.get() == AppMode::Simulation => {
             confirmation.visible = true;
@@ -1664,6 +2922,10 @@ fn toggle_menu_with_escape(
     }
 
     if *mode.get() == AppMode::WorldLibrary {
+        if state.page != MenuPage::Home {
+            state.page = MenuPage::Home;
+            input_focus.clear();
+        }
         return;
     }
 
@@ -1679,24 +2941,40 @@ fn toggle_menu_with_escape(
     }
 }
 
+type MenuButtonStyleQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    (
+        Entity,
+        &'static Hovered,
+        Has<Pressed>,
+        &'static MenuButtonColors,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+        Option<&'static mut MenuGlowState>,
+        Option<&'static mut BoxShadow>,
+    ),
+    With<Button>,
+>;
+
 fn update_button_styles(
     input_focus: Res<InputFocus>,
-    focus_visible: Res<InputFocusVisible>,
-    mut buttons: Query<
-        (
-            Entity,
-            &Hovered,
-            Has<Pressed>,
-            &MenuButtonColors,
-            &mut BackgroundColor,
-            &mut BorderColor,
-        ),
-        With<Button>,
-    >,
+    mut buttons: MenuButtonStyleQuery<'_, '_>,
+    mut cursor_markers: Query<(&MenuCursorMarker, &mut Visibility)>,
 ) {
-    for (entity, hovered, pressed, colors, mut background, mut border) in &mut buttons {
-        let active =
-            pressed || hovered.get() || (focus_visible.0 && input_focus.get() == Some(entity));
+    let mut active_buttons = Vec::new();
+    let focused_entity = input_focus.get();
+
+    for (entity, hovered, pressed, colors, mut background, mut border, glow_state, shadow) in
+        &mut buttons
+    {
+        let focused = focused_entity == Some(entity);
+        let active = pressed || hovered.get() || focused;
+        let cursor_active = pressed || hovered.get() || focused;
+        if cursor_active {
+            active_buttons.push(entity);
+        }
+
         background.0 = if active {
             colors.hovered
         } else {
@@ -1707,6 +2985,27 @@ fn update_button_styles(
         } else {
             colors.border_normal
         });
+
+        if let (Some(mut glow_state), Some(mut shadow)) = (glow_state, shadow)
+            && glow_state.0 != active
+        {
+            *shadow = BoxShadow::new(
+                Color::srgba(1.0, 1.0, 1.0, if active { 0.20 } else { 0.0 }),
+                Val::Px(0.0),
+                Val::Px(0.0),
+                Val::Px(0.0),
+                Val::Px(16.0),
+            );
+            glow_state.0 = active;
+        }
+    }
+
+    for (marker, mut visibility) in &mut cursor_markers {
+        visibility.set_if_neq(if active_buttons.contains(&marker.0) {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        });
     }
 }
 
@@ -1716,7 +3015,21 @@ type RootVisibilityQuery<'world, 'state> = Query<
     &'static mut Visibility,
     (
         With<MenuRoot>,
+        Without<HomeOnly>,
         Without<LibraryOnly>,
+        Without<SettingsOnly>,
+        Without<SimulationOnly>,
+    ),
+>;
+type HomeVisibilityQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    &'static mut Visibility,
+    (
+        With<HomeOnly>,
+        Without<MenuRoot>,
+        Without<LibraryOnly>,
+        Without<SettingsOnly>,
         Without<SimulationOnly>,
     ),
 >;
@@ -1726,8 +3039,22 @@ type LibraryVisibilityQuery<'world, 'state> = Query<
     &'static mut Visibility,
     (
         With<LibraryOnly>,
-        Without<SimulationOnly>,
         Without<MenuRoot>,
+        Without<HomeOnly>,
+        Without<SettingsOnly>,
+        Without<SimulationOnly>,
+    ),
+>;
+type SettingsVisibilityQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    &'static mut Visibility,
+    (
+        With<SettingsOnly>,
+        Without<MenuRoot>,
+        Without<HomeOnly>,
+        Without<LibraryOnly>,
+        Without<SimulationOnly>,
     ),
 >;
 type SimulationVisibilityQuery<'world, 'state> = Query<
@@ -1736,8 +3063,10 @@ type SimulationVisibilityQuery<'world, 'state> = Query<
     &'static mut Visibility,
     (
         With<SimulationOnly>,
-        Without<LibraryOnly>,
         Without<MenuRoot>,
+        Without<HomeOnly>,
+        Without<LibraryOnly>,
+        Without<SettingsOnly>,
     ),
 >;
 
@@ -1745,30 +3074,54 @@ fn sync_menu_visibility(
     state: Res<MenuState>,
     mode: Res<State<AppMode>>,
     mut roots: RootVisibilityQuery<'_, '_>,
+    mut home_panels: HomeVisibilityQuery<'_, '_>,
     mut library_panels: LibraryVisibilityQuery<'_, '_>,
+    mut settings_panels: SettingsVisibilityQuery<'_, '_>,
     mut simulation_panels: SimulationVisibilityQuery<'_, '_>,
 ) {
-    let (root_visibility, library_visibility, simulation_visibility) =
-        menu_visibility_targets(*mode.get() == AppMode::WorldLibrary, state.visible);
+    let in_library = *mode.get() == AppMode::WorldLibrary;
+    let (root_visibility, _, simulation_visibility) =
+        menu_visibility_targets(in_library, state.visible);
+    let home_visibility = if in_library && state.page == MenuPage::Home {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    let library_visibility = if in_library && state.page == MenuPage::Worlds {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    let settings_visibility = if in_library && state.page == MenuPage::Settings {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
     if state.is_changed() || mode.is_changed() {
         info!(
-            "Menu state changed: mode={:?}, menu_visible={}, root={:?}, library={:?}, pause={:?}",
+            "Menu state changed: mode={:?}, page={:?}, menu_visible={}, root={:?}, home={:?}, worlds={:?}, settings={:?}, pause={:?}",
             mode.get(),
+            state.page,
             state.visible,
             root_visibility,
+            home_visibility,
             library_visibility,
+            settings_visibility,
             simulation_visibility
         );
     }
 
-    // Evaluate the complete state every frame. This keeps the top-level overlay and its
-    // explicitly-visible children in sync even when a state transition and activation occur
-    // in the same frame.
     for mut visibility in &mut roots {
         visibility.set_if_neq(root_visibility);
     }
+    for mut visibility in &mut home_panels {
+        visibility.set_if_neq(home_visibility);
+    }
     for mut visibility in &mut library_panels {
         visibility.set_if_neq(library_visibility);
+    }
+    for mut visibility in &mut settings_panels {
+        visibility.set_if_neq(settings_visibility);
     }
     for mut visibility in &mut simulation_panels {
         visibility.set_if_neq(simulation_visibility);
@@ -1853,6 +3206,8 @@ mod tests {
             schema_version: 1,
             title: "Title".to_owned(),
             subtitle: "Subtitle".to_owned(),
+            home_buttons: default_home_buttons(),
+            home_layout: HomeLayoutDefinition::default(),
             empty_library_title: default_empty_library_title(),
             empty_library_hint: default_empty_library_hint(),
             quit_confirm_title: default_quit_confirm_title(),
@@ -1909,6 +3264,10 @@ mod tests {
                 MenuButtonDefinition {
                     label: "Resume".to_owned(),
                     action: "resume".to_owned(),
+                },
+                MenuButtonDefinition {
+                    label: "Return to main menu".to_owned(),
+                    action: "home".to_owned(),
                 },
                 MenuButtonDefinition {
                     label: "Quit".to_owned(),
@@ -2046,6 +3405,17 @@ mod tests {
     }
 
     #[test]
+    fn menu_asset_rejects_invalid_home_layout_geometry() {
+        let mut menu = valid_menu();
+        menu.home_layout.left_percent = f32::NAN;
+        assert!(menu.validate().is_err());
+
+        let mut menu = valid_menu();
+        menu.home_layout.action_button_width_px = menu.home_layout.action_row_width_px;
+        assert!(menu.validate().is_err());
+    }
+
+    #[test]
     fn menu_theme_allows_flat_panels_and_disabled_shadows() {
         let mut menu = valid_menu();
         menu.panel_radius_px = 0.0;
@@ -2080,5 +3450,78 @@ mod tests {
         let mut menu = valid_menu();
         menu.button_width_px = f32::NAN;
         assert!(menu.validate().is_err());
+    }
+
+    fn temp_root(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("25124-ui-{label}-{nonce}"))
+    }
+
+    #[test]
+    fn user_preferences_round_trip_and_reject_out_of_range_values() {
+        let root = temp_root("preferences");
+        fs::create_dir_all(&root).unwrap();
+
+        let mut preferences = UserPreferences {
+            last_world_manifest: Some("worlds/alpha/world.json".to_owned()),
+            render_distance_chunks: 8,
+            lod_detail: 2,
+            ..UserPreferences::default()
+        };
+        save_user_preferences(&root, &preferences).unwrap();
+        assert_eq!(load_user_preferences(&root), preferences);
+
+        preferences.render_distance_chunks = 9;
+        save_user_preferences(&root, &preferences).unwrap();
+        assert_eq!(load_user_preferences(&root), UserPreferences::default());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn continue_target_must_be_relative_and_present_in_the_world_library() {
+        let root = temp_root("recent-world");
+        let world_directory = root.join("worlds/alpha");
+        fs::create_dir_all(&world_directory).unwrap();
+        fs::write(
+            world_directory.join("world.json"),
+            r#"{"id":"alpha","name":"Alpha"}"#,
+        )
+        .unwrap();
+
+        let library = WorldLibrary::discover(&root).unwrap();
+        let mut preferences = UserPreferences {
+            last_world_manifest: Some("worlds/alpha/world.json".to_owned()),
+            ..UserPreferences::default()
+        };
+        assert_eq!(
+            preferred_world_manifest(&root, &library, &preferences),
+            Some(world_directory.join("world.json"))
+        );
+
+        for unsafe_or_stale in ["../outside/world.json", "worlds/missing/world.json", ""] {
+            preferences.last_world_manifest = Some(unsafe_or_stale.to_owned());
+            assert_eq!(
+                preferred_world_manifest(&root, &library, &preferences),
+                None
+            );
+        }
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn lod_detail_profiles_preserve_strict_distance_ordering() {
+        let profiles = [
+            (0.75_f32, 1.5_f32, 2.25_f32),
+            (1.0_f32, 1.75_f32, 2.5_f32),
+            (1.25_f32, 2.0_f32, 2.75_f32),
+        ];
+        for (near, mid, far) in profiles {
+            assert!(near > 0.0 && near < mid && mid < far && far <= 3.0);
+        }
     }
 }

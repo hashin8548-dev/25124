@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -79,7 +79,7 @@ jobs:
           }
 
       - name: Upload portable Windows x64 package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: physics-sandbox-windows-x64
           path: |

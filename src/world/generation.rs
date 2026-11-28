@@ -13,21 +13,24 @@ const PLATFORM_COMPONENT: &str = "block.bedrock";
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub(crate) struct WorldOrigin(pub DVec3);
 
+type CameraTransformQuery<'world, 'state> =
+    Query<'world, 'state, &'static Transform, With<crate::camera::FreeFlyCamera>>;
+type RebasedTransformQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    (
+        &'static mut Transform,
+        Option<&'static mut crate::world::lod::ChunkLodVisual>,
+    ),
+    Without<ChildOf>,
+>;
+
 /// Recenters the f32 simulation around the camera while preserving absolute world position.
 /// Rebase steps are exact multiples of the procedural chunk edge, so voxel boundaries remain stable.
 pub(super) fn rebase_world_origin(
     mut origin: ResMut<WorldOrigin>,
     mut world_state: ResMut<crate::persistence::WorldStateFile>,
-    mut queries: ParamSet<(
-        Query<&Transform, With<crate::camera::FreeFlyCamera>>,
-        Query<
-            (
-                &mut Transform,
-                Option<&mut crate::world::lod::ChunkLodVisual>,
-            ),
-            Without<ChildOf>,
-        >,
-    )>,
+    mut queries: ParamSet<(CameraTransformQuery<'_, '_>, RebasedTransformQuery<'_, '_>)>,
 ) {
     let Some(camera_position) = queries
         .p0()
@@ -222,7 +225,13 @@ mod tests {
 
         assert_eq!(chunk.dimensions, [32, 8, 32]);
         assert_eq!(chunk.layers[0].y, 0);
-        assert!(chunk.layers[0].rows.iter().all(|row| row == "1".repeat(32)));
+        let expected_flat_row = "1".repeat(32);
+        assert!(
+            chunk.layers[0]
+                .rows
+                .iter()
+                .all(|row| row == &expected_flat_row)
+        );
         assert!(chunk.layers.iter().any(|layer| layer.y == 4));
         let top = chunk.layers.iter().find(|layer| layer.y == 4).unwrap();
         assert!(top.rows[0].chars().all(|cell| cell == '1'));

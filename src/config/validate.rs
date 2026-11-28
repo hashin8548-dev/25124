@@ -642,7 +642,7 @@ mod tests {
         let config = RuntimeConfig::load(
             root.join("data"),
             root.join("assets"),
-            root.join("worlds/sandbox/world.json"),
+            root.join("tests/fixtures/sandbox/world.json"),
         )
         .expect("sample region metadata should validate");
 
@@ -677,7 +677,7 @@ mod tests {
         let config = RuntimeConfig::load(
             root.join("data"),
             root.join("assets"),
-            root.join("worlds/sandbox/world.json"),
+            root.join("tests/fixtures/sandbox/world.json"),
         )
         .expect("sample configuration should validate");
 
