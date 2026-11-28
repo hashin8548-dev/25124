@@ -321,7 +321,7 @@ mod tests {
         for (name, source) in ACTIONS {
             let document: super::ActionDocument = serde_json::from_str(source).unwrap();
             let action = HumanAction::from_document(name, document, true).unwrap();
-            assert_eq!(action.track_names().count(), 20, "{name}");
+            assert_eq!(action.tracks.len(), 20, "{name}");
             assert!(action.track("Root").is_some(), "{name}");
             assert!(action.duration_seconds > 0.0, "{name}");
         }
