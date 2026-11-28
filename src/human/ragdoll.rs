@@ -1058,7 +1058,8 @@ fn nearest_body_parent<'a>(rig: &'a HumanRig, mut parent: Option<&'a str>) -> Op
 #[cfg(test)]
 mod tests {
     use super::{
-        HumanPhysicsSettings, body_collision_layers, capsule_centerline, segment_segment_distance,
+        HumanPhysicsSettings, body_collision_layers, capsule_centerline, nearest_body_parent,
+        segment_segment_distance,
     };
     use crate::human::{HumanMotionLibrary, HumanRig};
     use avian3d::prelude::CollisionLayers;
