@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use bevy::{
     asset::RenderAssetUsages,
+    ecs::system::SystemParam,
     math::DVec3,
     mesh::{Indices, Mesh, PrimitiveTopology},
     prelude::*,
@@ -45,7 +46,7 @@ pub(super) fn update_chunk_lod(
         return;
     }
 
-    let Some(camera_position) = camera.iter().next().map(|transform| transform.translation) else {
+    let Some(camera_position) = context.camera.iter().next().map(|transform| transform.translation) else {
         return;
     };
 
@@ -99,18 +100,34 @@ pub(super) struct BodyLodOwner {
     pub(super) radius_m: f32,
 }
 
+type BodyLodOwners<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static BodyLodOwner,
+        &'static Transform,
+        &'static mut Visibility,
+    ),
+    (With<BodyLodOwner>, Without<BodyLodProxy>),
+>;
+type BodyLodProxies<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static BodyLodProxy,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+    (With<BodyLodProxy>, Without<BodyLodOwner>),
+>;
+
 pub(super) fn update_physics_body_lod(
     mode: Res<State<AppMode>>,
     config: Res<RuntimeConfig>,
     camera: Query<&Transform, With<FreeFlyCamera>>,
-    mut owners: Query<
-        (Entity, &BodyLodOwner, &Transform, &mut Visibility),
-        (With<BodyLodOwner>, Without<BodyLodProxy>),
-    >,
-    mut proxies: Query<
-        (&BodyLodProxy, &mut Transform, &mut Visibility),
-        (With<BodyLodProxy>, Without<BodyLodOwner>),
-    >,
+    mut owners: BodyLodOwners<'_, '_>,
+    mut proxies: BodyLodProxies<'_, '_>,
 ) {
     if *mode.get() != AppMode::Simulation {
         return;
@@ -176,27 +193,39 @@ pub(super) struct FarPlatformLod {
     anchor_absolute: DVec3,
 }
 
+type FarPlatformLodQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut FarPlatformLod,
+        &'static mut Mesh3d,
+        &'static mut MeshMaterial3d<StandardMaterial>,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+>;
+
+#[derive(SystemParam)]
+struct FarPlatformLodSystem<'w, 's> {
+    mode: Res<'w, State<AppMode>>,
+    config: Res<'w, RuntimeConfig>,
+    world_origin: Res<'w, WorldOrigin>,
+    camera: Query<'w, 's, &'static Transform, With<FreeFlyCamera>>,
+}
+
 /// Keeps the far procedural platform visible as one camera-relative surface mesh. It is
 /// independent of chunk residency and contains no physics components or per-chunk entities.
 pub(super) fn update_far_platform_lod(
-    mode: Res<State<AppMode>>,
-    config: Res<RuntimeConfig>,
-    world_origin: Res<WorldOrigin>,
-    camera: Query<&Transform, With<FreeFlyCamera>>,
+    context: FarPlatformLodSystem,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut far_platforms: Query<(
-        Entity,
-        &mut FarPlatformLod,
-        &mut Mesh3d,
-        &mut MeshMaterial3d<StandardMaterial>,
-        &mut Transform,
-        &mut Visibility,
-    )>,
+    mut far_platforms: FarPlatformLodQuery<'_, '_>,
 ) {
-    let is_simulation = *mode.get() == AppMode::Simulation && config.engine.streaming.lod_enabled;
-    let generation = config.world.generation.as_ref();
+    let is_simulation = *context.mode.get() == AppMode::Simulation
+        && context.config.engine.streaming.lod_enabled;
+    let generation = context.config.world.generation.as_ref();
     let Some(WorldGeneration::FlatPlatform { size_units, .. }) =
         generation.filter(|_| is_simulation)
     else {
@@ -209,10 +238,11 @@ pub(super) fn update_far_platform_lod(
         return;
     };
 
-    let camera_absolute = world_origin.0 + camera_transform.translation.as_dvec3();
-    let render_distance = config.engine.streaming.load_radius_chunks;
-    let lod_distance = config.engine.streaming.lod_visibility_distance_chunks;
-    let visual = config
+    let camera_absolute = context.world_origin.0 + camera_transform.translation.as_dvec3();
+    let render_distance = context.config.engine.streaming.load_radius_chunks;
+    let lod_distance = context.config.engine.streaming.lod_visibility_distance_chunks;
+    let visual = context
+        .config
         .components
         .definitions
         .get(PLATFORM_COMPONENT)
@@ -244,7 +274,7 @@ pub(super) fn update_far_platform_lod(
         metallic: visual.metallic,
         alpha_mode: match visual.alpha_mode {
             crate::config::AlphaMode::Opaque => AlphaMode::Opaque,
-            crate::config::AlphaMode::Blend => AlphaMode::Blend,
+            crate::context.config::AlphaMode::Blend => AlphaMode::Blend,
         },
         ..default()
     };
@@ -253,7 +283,7 @@ pub(super) fn update_far_platform_lod(
         far_platforms.iter_mut().next()
     {
         let moved = camera_absolute.distance(far.anchor_absolute) >= 16.0;
-        let changed = config.is_changed()
+        let changed = context.config.is_changed()
             || moved
             || far.world_size_units != *size_units
             || far.render_distance_chunks != render_distance
@@ -264,8 +294,8 @@ pub(super) fn update_far_platform_lod(
                 camera_absolute,
                 inner_radius_m,
                 outer_radius_m,
-                config.engine.streaming.lod_geometry_errors_m
-                    [config.engine.streaming.lod_quality as usize] as f64,
+                context.config.engine.streaming.lod_geometry_errors_m
+                    [context.config.engine.streaming.lod_quality as usize] as f64,
             );
             mesh_handle.0 = meshes.add(mesh);
             material_handle.0 = materials.add(new_material());
@@ -274,8 +304,8 @@ pub(super) fn update_far_platform_lod(
             far.lod_distance_chunks = lod_distance;
             far.anchor_absolute = camera_absolute;
         }
-        if world_origin.is_changed() || changed {
-            transform.translation = (far.anchor_absolute - world_origin.0).as_vec3();
+        if context.world_origin.is_changed() || changed {
+            transform.translation = (far.anchor_absolute - context.world_origin.0).as_vec3();
         }
         visibility.set_if_neq(Visibility::Visible);
     } else {
@@ -284,14 +314,14 @@ pub(super) fn update_far_platform_lod(
             camera_absolute,
             inner_radius_m,
             outer_radius_m,
-            config.engine.streaming.lod_geometry_errors_m
-                [config.engine.streaming.lod_quality as usize] as f64,
+            context.config.engine.streaming.lod_geometry_errors_m
+                [context.config.engine.streaming.lod_quality as usize] as f64,
         );
         commands.spawn((
             Name::new("procedural:flat-platform:far-lod"),
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(materials.add(new_material())),
-            Transform::from_translation((camera_absolute - world_origin.0).as_vec3()),
+            Transform::from_translation((camera_absolute - context.world_origin.0).as_vec3()),
             Visibility::Visible,
             FarPlatformLod {
                 world_size_units: *size_units,

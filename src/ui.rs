@@ -2884,32 +2884,39 @@ fn handle_setting_action(
     }
 }
 
+type SettingsRenderDistanceLabels<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (With<SettingsRenderDistanceValue>, Without<SettingsLodDetailValue>),
+>;
+type SettingsLodDetailLabels<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<SettingsLodDetailValue>,
+        Without<SettingsRenderDistanceValue>,
+        Without<SettingsLodDistanceValue>,
+    ),
+>;
+type SettingsLodDistanceLabels<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<SettingsLodDistanceValue>,
+        Without<SettingsRenderDistanceValue>,
+        Without<SettingsLodDetailValue>,
+    ),
+>;
+
 fn sync_settings_labels(
     config: Res<RuntimeConfig>,
     state: Res<MenuState>,
-    mut render_distance_labels: Query<
-        &mut Text,
-        (
-            With<SettingsRenderDistanceValue>,
-            Without<SettingsLodDetailValue>,
-        ),
-    >,
-    mut lod_detail_labels: Query<
-        &mut Text,
-        (
-            With<SettingsLodDetailValue>,
-            Without<SettingsRenderDistanceValue>,
-            Without<SettingsLodDistanceValue>,
-        ),
-    >,
-    mut lod_distance_labels: Query<
-        &mut Text,
-        (
-            With<SettingsLodDistanceValue>,
-            Without<SettingsRenderDistanceValue>,
-            Without<SettingsLodDetailValue>,
-        ),
-    >,
+    mut render_distance_labels: SettingsRenderDistanceLabels<'_, '_>,
+    mut lod_detail_labels: SettingsLodDetailLabels<'_, '_>,
+    mut lod_distance_labels: SettingsLodDistanceLabels<'_, '_>,
 ) {
     if !config.is_changed() && !state.is_changed() {
         return;
