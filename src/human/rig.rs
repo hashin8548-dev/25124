@@ -171,7 +171,7 @@ impl HumanRig {
                         && collision.capsule_segment_length_m >= 0.0
                         && (collision.capsule_segment_length_m
                             - (collision.axial_length_m - 2.0 * collision.radius_m).max(0.0))
-                            .abs()
+                        .abs()
                             <= 1.0e-4
                         && collision.center_offset_bone_m.iter().all(|x| x.is_finite())
                         && collision.weight_threshold.is_finite()
