@@ -26,7 +26,7 @@ type RebaseEntityQuery<'w, 's> = Query<
 >;
 
 #[derive(SystemParam)]
-struct WorldRebaseParams<'w, 's> {
+pub(super) struct WorldRebaseParams<'w, 's> {
     queries: ParamSet<'w, 's, (RebaseCameraQuery<'w, 's>, RebaseEntityQuery<'w, 's>)>,
 }
 
