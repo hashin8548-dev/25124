@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Result, ensure};
 use avian3d::prelude::{
-    AngularVelocity, Collider, ColliderDensity, CollisionEventsEnabled, Friction,
+    AngularVelocity, Collider, ColliderDensity, CollisionEventsEnabled, CollisionLayers, Friction,
     JointCollisionDisabled, JointDamping, LinearVelocity, Restitution, RevoluteJoint, RigidBody,
     SphericalJoint,
 };
@@ -36,6 +36,8 @@ pub struct HumanPhysicsSettings {
     pub pose_position_damping_n_s_per_m: f32,
     pub max_pose_force_n: f32,
     pub climb_contact_push_force_n: f32,
+    pub self_collision_enabled: bool,
+    pub self_collision_overlap_margin_m: f32,
     pub temporary_assists: HumanTemporaryAssists,
     pub controls: HumanControlSettings,
     pub camera: HumanCameraSettings,
@@ -149,6 +151,8 @@ struct HumanPhysicsSettingsFile {
     pose_position_damping_n_s_per_m: f32,
     max_pose_force_n: f32,
     climb_contact_push_force_n: f32,
+    self_collision_enabled: bool,
+    self_collision_overlap_margin_m: f32,
     limits: HumanJointLimits,
 }
 
@@ -410,6 +414,11 @@ impl HumanPhysicsSettings {
                 && source.climb_contact_push_force_n >= 0.0,
             "human climb contact force must be non-negative and finite"
         );
+        ensure!(
+            source.self_collision_overlap_margin_m.is_finite()
+                && (0.0..=0.1).contains(&source.self_collision_overlap_margin_m),
+            "human self-collision overlap margin must be finite and in [0, 0.1] m"
+        );
         let controls = &manifest.controls;
         let action_name = |state: &str| -> Result<String> {
             let action = controls
@@ -580,6 +589,8 @@ impl HumanPhysicsSettings {
             pose_position_damping_n_s_per_m: source.pose_position_damping_n_s_per_m,
             max_pose_force_n: source.max_pose_force_n,
             climb_contact_push_force_n: source.climb_contact_push_force_n,
+            self_collision_enabled: source.self_collision_enabled,
+            self_collision_overlap_margin_m: source.self_collision_overlap_margin_m,
             temporary_assists: manifest.temporary_assists,
             controls: control_settings,
             camera: camera_settings,
@@ -592,6 +603,191 @@ impl HumanPhysicsSettings {
             .get(body_name)
             .map(|fraction| self.total_mass_kg * fraction)
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CapsuleCenterline {
+    start: Vec3,
+    end: Vec3,
+    radius: f32,
+}
+
+fn capsule_centerline(pose: &super::rig::HumanBonePose) -> CapsuleCenterline {
+    let axis = (pose.rotation_engine * Vec3::Y).normalize();
+    let half_segment = pose.collision.capsule_segment_length_m * 0.5;
+    CapsuleCenterline {
+        start: pose.center_engine - axis * half_segment,
+        end: pose.center_engine + axis * half_segment,
+        radius: pose.collision.radius_m,
+    }
+}
+
+fn segment_segment_distance(
+    first_start: Vec3,
+    first_end: Vec3,
+    second_start: Vec3,
+    second_end: Vec3,
+) -> f32 {
+    let first_direction = first_end - first_start;
+    let second_direction = second_end - second_start;
+    let offset = first_start - second_start;
+    let first_length_squared = first_direction.length_squared();
+    let second_length_squared = second_direction.length_squared();
+    let second_projection = second_direction.dot(offset);
+    let mut first_parameter = 0.0;
+    let mut second_parameter = 0.0;
+
+    if first_length_squared <= 1.0e-12 && second_length_squared <= 1.0e-12 {
+        return first_start.distance(second_start);
+    }
+    if first_length_squared <= 1.0e-12 {
+        second_parameter = (second_projection / second_length_squared).clamp(0.0, 1.0);
+    } else {
+        let first_projection = first_direction.dot(offset);
+        if second_length_squared <= 1.0e-12 {
+            first_parameter = (-first_projection / first_length_squared).clamp(0.0, 1.0);
+        } else {
+            let cross_projection = first_direction.dot(second_direction);
+            let denominator =
+                first_length_squared * second_length_squared - cross_projection * cross_projection;
+            if denominator.abs() > 1.0e-12 {
+                first_parameter = ((cross_projection * second_projection
+                    - first_projection * second_length_squared)
+                    / denominator)
+                    .clamp(0.0, 1.0);
+            }
+            second_parameter = (cross_projection * first_parameter + second_projection)
+                / second_length_squared;
+            if second_parameter < 0.0 {
+                second_parameter = 0.0;
+                first_parameter =
+                    (-first_projection / first_length_squared).clamp(0.0, 1.0);
+            } else if second_parameter > 1.0 {
+                second_parameter = 1.0;
+                first_parameter = ((cross_projection - first_projection)
+                    / first_length_squared)
+                    .clamp(0.0, 1.0);
+            }
+        }
+    }
+
+    let first_point = first_start + first_direction * first_parameter;
+    let second_point = second_start + second_direction * second_parameter;
+    first_point.distance(second_point)
+}
+
+fn body_collision_layers(
+    rig: &HumanRig,
+    poses: &BTreeMap<String, super::rig::HumanBonePose>,
+    self_collision_enabled: bool,
+    overlap_margin_m: f32,
+) -> Result<BTreeMap<String, CollisionLayers>> {
+    let names: Vec<_> = rig.body_names().map(str::to_owned).collect();
+    ensure!(
+        names.len() <= 31,
+        "human ragdoll has {} bodies; collision layers reserve one of 32 bits for the environment",
+        names.len()
+    );
+
+    let membership_bits: BTreeMap<_, _> = names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| (name.clone(), 1_u32 << (index + 1)))
+        .collect();
+
+    let mut excluded_pairs = BTreeSet::<(String, String)>::new();
+    for child_name in &names {
+        let child_bone = rig
+            .bone(child_name)
+            .ok_or_else(|| anyhow::anyhow!("human body '{child_name}' has no rig bone"))?;
+        if let Some(parent_name) =
+            nearest_body_parent(rig, child_bone.parent.as_deref())
+        {
+            let pair = if parent_name < child_name {
+                (parent_name.to_owned(), child_name.clone())
+            } else {
+                (child_name.clone(), parent_name.to_owned())
+            };
+            excluded_pairs.insert(pair);
+        }
+    }
+
+    if self_collision_enabled {
+        let capsules: BTreeMap<_, _> = names
+            .iter()
+            .map(|name| {
+                let pose = poses
+                    .get(name)
+                    .ok_or_else(|| anyhow::anyhow!("human body '{name}' has no idle collision pose"))?;
+                Ok((name.clone(), capsule_centerline(pose)))
+            })
+            .collect::<Result<_>>()?;
+
+        for first_index in 0..names.len() {
+            for second_index in (first_index + 1)..names.len() {
+                let first_name = &names[first_index];
+                let second_name = &names[second_index];
+                let pair = (first_name.clone(), second_name.clone());
+                if excluded_pairs.contains(&pair) {
+                    continue;
+                }
+
+                let first = capsules[first_name];
+                let second = capsules[second_name];
+                let centerline_distance = segment_segment_distance(
+                    first.start,
+                    first.end,
+                    second.start,
+                    second.end,
+                );
+                let penetration = first.radius + second.radius - centerline_distance;
+                if penetration > overlap_margin_m {
+                    excluded_pairs.insert(pair);
+                }
+            }
+        }
+    } else {
+        // Disabling ragdoll self-collision also excludes direct joint pairs.
+        excluded_pairs.extend(
+            names
+                .iter()
+                .enumerate()
+                .flat_map(|(index, first)| {
+                    names
+                        .iter()
+                        .skip(index + 1)
+                        .map(move |second| (first.clone(), second.clone()))
+                }),
+        );
+    }
+
+    // Bit zero is the Avian default environment layer. Every human collider keeps
+    // that bit in its filter, while per-body membership bits permit selective self-contact.
+    let mut layers = BTreeMap::new();
+    for name in &names {
+        let membership = membership_bits[name];
+        let mut filters = 1_u32;
+        if self_collision_enabled {
+            for other_name in &names {
+                if other_name == name {
+                    continue;
+                }
+                let pair = if name < other_name {
+                    (name.clone(), other_name.clone())
+                } else {
+                    (other_name.clone(), name.clone())
+                };
+                if !excluded_pairs.contains(&pair) {
+                    filters |= membership_bits[other_name];
+                }
+            }
+        }
+        layers.insert(
+            name.clone(),
+            CollisionLayers::from_bits(membership, filters),
+        );
+    }
+    Ok(layers)
 }
 
 pub fn spawn_human_player(
@@ -640,6 +836,19 @@ pub fn spawn_human_player(
         return;
     }
 
+    let collision_layers = match body_collision_layers(
+        &rig,
+        &target_pose,
+        settings.self_collision_enabled,
+        settings.self_collision_overlap_margin_m,
+    ) {
+        Ok(layers) => layers,
+        Err(error) => {
+            error!("Human collision-layer setup failed: {error:#}");
+            return;
+        }
+    };
+
     let mut bodies = BTreeMap::new();
     for name in rig.body_names() {
         let Some(pose) = target_pose.get(name) else {
@@ -670,6 +879,7 @@ pub fn spawn_human_player(
             RigidBody::Dynamic,
             collider,
             ColliderDensity(collider_density_kg_m3),
+            collision_layers[name].clone(),
             Friction::new(settings.dynamic_friction)
                 .with_static_coefficient(settings.static_friction),
             Restitution::new(settings.restitution),
@@ -860,8 +1070,10 @@ fn nearest_body_parent<'a>(rig: &'a HumanRig, mut parent: Option<&'a str>) -> Op
 
 #[cfg(test)]
 mod tests {
-    use super::HumanPhysicsSettings;
-    use bevy::prelude::KeyCode;
+    use super::{HumanPhysicsSettings, body_collision_layers, capsule_centerline, segment_segment_distance};
+    use crate::human::{HumanMotionLibrary, HumanRig};
+    use avian3d::prelude::CollisionLayers;
+    use bevy::prelude::{KeyCode, Vec3};
     use std::path::Path;
 
     #[test]
@@ -895,6 +1107,86 @@ mod tests {
         assert_eq!(
             settings.temporary_assists.rotational_assistance.kind,
             "bounded_torque_pd"
+        );
+    }
+
+    #[test]
+    fn idle_capsule_filters_preserve_environment_contacts_and_skip_initial_overlaps() {
+        let rig = HumanRig::load(Path::new("data")).unwrap();
+        let motions = HumanMotionLibrary::load(Path::new("data")).unwrap();
+        let idle = motions.action("idle").unwrap();
+        let poses = rig.sample_engine_body_pose(idle, 0.0, false).unwrap();
+        let layers = body_collision_layers(&rig, &poses, true, 0.005).unwrap();
+
+        let names: Vec<_> = rig.body_names().collect();
+        let mut excluded_overlaps = 0;
+        let mut enabled_separated_pairs = 0;
+        for first_index in 0..names.len() {
+            for second_index in (first_index + 1)..names.len() {
+                let first_name = names[first_index];
+                let second_name = names[second_index];
+                let first_pose = &poses[first_name];
+                let second_pose = &poses[second_name];
+                let first = capsule_centerline(first_pose);
+                let second = capsule_centerline(second_pose);
+                let distance = segment_segment_distance(
+                    first.start,
+                    first.end,
+                    second.start,
+                    second.end,
+                );
+                let initially_overlapping =
+                    first.radius + second.radius - distance > 0.005;
+                let can_collide = layers[first_name].interacts_with(layers[second_name]);
+                assert_eq!(
+                    can_collide,
+                    !initially_overlapping
+                        && nearest_body_parent(&rig, rig.bone(first_name).unwrap().parent.as_deref())
+                            != Some(second_name)
+                        && nearest_body_parent(&rig, rig.bone(second_name).unwrap().parent.as_deref())
+                            != Some(first_name),
+                    "unexpected idle self-collision policy for {first_name} / {second_name}"
+                );
+                if initially_overlapping {
+                    excluded_overlaps += 1;
+                } else if can_collide {
+                    enabled_separated_pairs += 1;
+                }
+            }
+
+            let body_layer = layers[names[first_index]];
+            assert!(
+                body_layer.interacts_with(CollisionLayers::DEFAULT)
+                    && CollisionLayers::DEFAULT.interacts_with(body_layer),
+                "human body '{}' must keep collision with the environment",
+                names[first_index]
+            );
+        }
+        assert!(excluded_overlaps > 0);
+        assert!(enabled_separated_pairs > 0);
+    }
+
+    #[test]
+    fn capsule_segment_distance_handles_degenerate_and_skew_segments() {
+        assert!(
+            (segment_segment_distance(
+                Vec3::ZERO,
+                Vec3::ZERO,
+                Vec3::X,
+                Vec3::X,
+            ) - 1.0)
+                .abs()
+                < f32::EPSILON
+        );
+        assert!(
+            (segment_segment_distance(
+                Vec3::new(-1.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(0.0, 1.0, -1.0),
+                Vec3::new(0.0, 1.0, 1.0),
+            ) - 1.0)
+                .abs()
+                < f32::EPSILON
         );
     }
 
