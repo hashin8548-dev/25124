@@ -169,8 +169,7 @@ pub fn drive_human_action_pose(
         }
         _ => None,
     };
-    let jump_launch_enabled = action_state
-        .has_pending_jump_launch_for(&settings.controls.jump)
+    let jump_launch_enabled = action_state.has_pending_jump_launch_for(&settings.controls.jump)
         && settings.temporary_assists.jump_launch.enabled;
     let wall_grip_force = if action_state.wall_grip_active
         && action_state.wall_grip_normal.is_finite()
@@ -300,7 +299,10 @@ fn root_vertical_pose_force(
 
 #[cfg(test)]
 mod tests {
-    use super::{HumanActionState, launch_impulse_for_mass, root_motion_target_local, root_vertical_pose_force};
+    use super::{
+        HumanActionState, launch_impulse_for_mass, root_motion_target_local,
+        root_vertical_pose_force,
+    };
     use bevy::{
         math::DVec3,
         prelude::{Quat, Vec3},
