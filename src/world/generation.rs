@@ -222,7 +222,8 @@ mod tests {
 
         assert_eq!(chunk.dimensions, [32, 8, 32]);
         assert_eq!(chunk.layers[0].y, 0);
-        assert!(chunk.layers[0].rows.iter().all(|row| row == "1".repeat(32)));
+        let expected_flat_row = "1".repeat(32);
+        assert!(chunk.layers[0].rows.iter().all(|row| row == &expected_flat_row));
         assert!(chunk.layers.iter().any(|layer| layer.y == 4));
         let top = chunk.layers.iter().find(|layer| layer.y == 4).unwrap();
         assert!(top.rows[0].chars().all(|cell| cell == '1'));
