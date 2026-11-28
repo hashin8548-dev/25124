@@ -3,52 +3,99 @@
   "title": "25124",
   "subtitle": "WORLD LIBRARY  /  PROCEDURAL WORLD CREATION",
   "home_buttons": [
-    { "label": "Continue", "action": "continue" },
-    { "label": "New World", "action": "create_world" },
-    { "label": "Worlds", "action": "worlds" },
-    { "label": "Settings", "action": "settings" }
+    {
+      "label": "Continue",
+      "action": "continue"
+    },
+    {
+      "label": "New World",
+      "action": "create_world"
+    },
+    {
+      "label": "Worlds",
+      "action": "worlds"
+    },
+    {
+      "label": "Settings",
+      "action": "settings"
+    }
   ],
   "home_layout": {
     "left_percent": 3.125,
     "top_percent": 10.9,
-    "panel_width_px": 600,
+    "panel_width_px": 492,
     "panel_height_percent": 86,
-    "title_frame_width_px": 540,
-    "title_frame_height_px": 190,
-    "title_font_size_px": 104,
-    "eyebrow_font_size_px": 16,
-    "version_font_size_px": 18,
-    "actions_top_gap_px": 82,
-    "action_list_gap_px": 16,
-    "action_row_width_px": 540,
-    "action_row_height_px": 76,
-    "action_button_width_px": 465,
-    "action_button_height_px": 76,
-    "action_button_left_px": 36,
-    "action_button_padding_left_px": 48,
-    "action_font_size_px": 32,
-    "cursor_font_size_px": 27
+    "title_frame_width_px": 443,
+    "title_frame_height_px": 156,
+    "title_font_size_px": 85,
+    "eyebrow_font_size_px": 13,
+    "version_font_size_px": 15,
+    "actions_top_gap_px": 67,
+    "action_list_gap_px": 13,
+    "action_row_width_px": 443,
+    "action_row_height_px": 62,
+    "action_button_width_px": 381,
+    "action_button_height_px": 62,
+    "action_button_left_px": 30,
+    "action_button_padding_left_px": 39,
+    "action_font_size_px": 26,
+    "cursor_font_size_px": 22
   },
-  "background_srgba": [0, 0, 0, 1],
-  "panel_srgba": [0, 0, 0, 1],
-  "title_srgba": [1, 1, 1, 1],
-  "subtitle_srgba": [0.68, 0.68, 0.68, 1],
-  "button_srgba": [0.015, 0.015, 0.015, 1],
-  "button_hover_srgba": [0.08, 0.08, 0.08, 1],
-  "button_text_srgba": [1, 1, 1, 1],
-  "panel_width_px": 900,
-  "panel_padding_px": 30,
-  "vertical_gap_px": 14,
-  "title_size_px": 38,
-  "subtitle_size_px": 14,
-  "button_width_px": 500,
-  "button_height_px": 52,
-  "button_font_size_px": 16,
-  "world_card_height_px": 126,
-  "world_card_gap_px": 12,
-  "world_preview_size_px": 92,
-  "world_description_size_px": 13,
-  "world_metadata_size_px": 11,
+  "background_srgba": [
+    0,
+    0,
+    0,
+    1
+  ],
+  "panel_srgba": [
+    0,
+    0,
+    0,
+    1
+  ],
+  "title_srgba": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "subtitle_srgba": [
+    0.68,
+    0.68,
+    0.68,
+    1
+  ],
+  "button_srgba": [
+    0.015,
+    0.015,
+    0.015,
+    1
+  ],
+  "button_hover_srgba": [
+    0.08,
+    0.08,
+    0.08,
+    1
+  ],
+  "button_text_srgba": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "panel_width_px": 792,
+  "panel_padding_px": 26,
+  "vertical_gap_px": 12,
+  "title_size_px": 33,
+  "subtitle_size_px": 12,
+  "button_width_px": 440,
+  "button_height_px": 46,
+  "button_font_size_px": 14,
+  "world_card_height_px": 111,
+  "world_card_gap_px": 11,
+  "world_preview_size_px": 81,
+  "world_description_size_px": 12,
+  "world_metadata_size_px": 10,
   "world_empty_description_text": "A quiet space waiting for its first experiment.",
   "world_preview_fallback_label": "WORLD",
   "world_preview_version_prefix": "V",
@@ -66,26 +113,60 @@
       "action": "resume"
     },
     {
+      "label": "RETURN TO MAIN MENU",
+      "action": "home"
+    },
+    {
       "label": "QUIT",
       "action": "quit"
     }
   ],
-  "panel_border_srgba": [0.48, 0.48, 0.48, 0.82],
-  "button_border_srgba": [0.38, 0.38, 0.38, 0.88],
-  "button_active_border_srgba": [1, 1, 1, 1],
+  "panel_border_srgba": [
+    0.48,
+    0.48,
+    0.48,
+    0.82
+  ],
+  "button_border_srgba": [
+    0.38,
+    0.38,
+    0.38,
+    0.88
+  ],
+  "button_active_border_srgba": [
+    1,
+    1,
+    1,
+    1
+  ],
   "panel_radius_px": 0,
   "card_radius_px": 0,
   "empty_library_title": "YOUR WORLD LIBRARY IS EMPTY",
   "empty_library_hint": "Create a flat platform world to begin.",
-  "panel_shadow_srgba": [0.8, 0.8, 0.8, 0.12],
+  "panel_shadow_srgba": [
+    0.8,
+    0.8,
+    0.8,
+    0.12
+  ],
   "panel_shadow_blur_px": 22,
   "panel_shadow_offset_y_px": 12,
   "quit_confirm_title": "UNSAVED SIMULATION",
   "quit_confirm_message": "Changes since your last F5 save will be lost. Press F5 here to save before confirming.",
   "quit_confirm_label": "QUIT ANYWAY",
   "quit_cancel_label": "KEEP PLAYING",
-  "danger_button_srgba": [0.12, 0.12, 0.12, 1],
-  "danger_button_hover_srgba": [0.22, 0.22, 0.22, 1],
+  "danger_button_srgba": [
+    0.12,
+    0.12,
+    0.12,
+    1
+  ],
+  "danger_button_hover_srgba": [
+    0.22,
+    0.22,
+    0.22,
+    1
+  ],
   "library_navigation_hint": "TAB / SHIFT+TAB NAVIGATE   ·   ENTER SELECT",
   "pause_controls_hint": "HOLD RMB TO LOOK  ·  WASD MOVE  ·  SHIFT SPRINT  ·  SPACE/CTRL VERTICAL\nTAB NAVIGATE  ·  ENTER ACTIVATE  ·  ESC RESUME  ·  F5 SAVE",
   "modal_backdrop_srgba": [
