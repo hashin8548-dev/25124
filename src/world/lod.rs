@@ -46,7 +46,12 @@ pub(super) fn update_chunk_lod(
         return;
     }
 
-    let Some(camera_position) = context.camera.iter().next().map(|transform| transform.translation) else {
+    let Some(camera_position) = context
+        .camera
+        .iter()
+        .next()
+        .map(|transform| transform.translation)
+    else {
         return;
     };
 
@@ -223,8 +228,8 @@ pub(super) fn update_far_platform_lod(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut far_platforms: FarPlatformLodQuery<'_, '_>,
 ) {
-    let is_simulation = *context.mode.get() == AppMode::Simulation
-        && context.config.engine.streaming.lod_enabled;
+    let is_simulation =
+        *context.mode.get() == AppMode::Simulation && context.config.engine.streaming.lod_enabled;
     let generation = context.config.world.generation.as_ref();
     let Some(WorldGeneration::FlatPlatform { size_units, .. }) =
         generation.filter(|_| is_simulation)
@@ -240,7 +245,11 @@ pub(super) fn update_far_platform_lod(
 
     let camera_absolute = context.world_origin.0 + camera_transform.translation.as_dvec3();
     let render_distance = context.config.engine.streaming.load_radius_chunks;
-    let lod_distance = context.config.engine.streaming.lod_visibility_distance_chunks;
+    let lod_distance = context
+        .config
+        .engine
+        .streaming
+        .lod_visibility_distance_chunks;
     let visual = context
         .config
         .components

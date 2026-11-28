@@ -2888,7 +2888,10 @@ type SettingsRenderDistanceLabels<'w, 's> = Query<
     'w,
     's,
     &'static mut Text,
-    (With<SettingsRenderDistanceValue>, Without<SettingsLodDetailValue>),
+    (
+        With<SettingsRenderDistanceValue>,
+        Without<SettingsLodDetailValue>,
+    ),
 >;
 type SettingsLodDetailLabels<'w, 's> = Query<
     'w,
