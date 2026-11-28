@@ -839,9 +839,11 @@ mod tests {
             .filter(|(_, normal)| normal[1] > 0.999);
         let top_surface_vertices = top_surface_vertices.collect::<Vec<_>>();
         assert!(!top_surface_vertices.is_empty());
-        assert!(top_surface_vertices
-            .iter()
-            .all(|(position, _)| (position[1] - 1.0).abs() < 1.0e-6));
+        assert!(
+            top_surface_vertices
+                .iter()
+                .all(|(position, _)| (position[1] - 1.0).abs() < 1.0e-6)
+        );
         let min_x = positions.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
         let max_x = positions
             .iter()
@@ -872,7 +874,10 @@ mod tests {
                 }
             }
         }
-        let renderable = cells.iter().map(|palette| *palette != 0).collect::<Vec<_>>();
+        let renderable = cells
+            .iter()
+            .map(|palette| *palette != 0)
+            .collect::<Vec<_>>();
         let grid = VoxelGrid::from_cells([16, 8, 16], 1.0, cells).unwrap();
         let quality = grid.build_surface_lod_meshes(&renderable, 0.05).unwrap();
         let performance = grid.build_surface_lod_meshes(&renderable, 2.0).unwrap();
