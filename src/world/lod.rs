@@ -274,7 +274,7 @@ pub(super) fn update_far_platform_lod(
         metallic: visual.metallic,
         alpha_mode: match visual.alpha_mode {
             crate::config::AlphaMode::Opaque => AlphaMode::Opaque,
-            crate::context.config::AlphaMode::Blend => AlphaMode::Blend,
+            crate::config::AlphaMode::Blend => AlphaMode::Blend,
         },
         ..default()
     };
