@@ -125,6 +125,7 @@ pub fn update_human_controls(
         (Some((settings.controls.idle.as_str(), false)), false, false)
     };
 
+    let mut launch_jump_available = false;
     if let Some((action, reverse)) = selected {
         let available_action = if motions.action(action).is_some() {
             action
@@ -132,12 +133,13 @@ pub fn update_human_controls(
             settings.controls.idle.as_str()
         };
         action_state.select(available_action, available_action == action && reverse);
+        launch_jump_available = launch_jump && available_action == action;
     }
 
     // A new grounded jump is a new action instance, even if the previous jump
     // has not yet transitioned through idle. Restart its non-looping pose timeline
     // and recapture the Root reference before the next fixed physics tick.
-    if launch_jump {
+    if launch_jump_available {
         action_state.elapsed_seconds = 0.0;
         action_state.root_motion_origin_world = None;
         action_state.root_motion_reference_center_engine = None;
