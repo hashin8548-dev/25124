@@ -1,3 +1,4 @@
+mod far_lod;
 mod generation;
 mod greedy_mesher;
 mod ids;
@@ -22,6 +23,7 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<streaming::ChunkStreamingState>()
+            .init_resource::<far_lod::FarChunkLodState>()
             .init_resource::<generation::WorldOrigin>()
             .add_systems(
                 Update,
@@ -34,6 +36,20 @@ impl Plugin for WorldPlugin {
                     .after(generation::rebase_world_origin)
                     .in_set(ChunkStreamingUpdateSet),
             )
-            .add_systems(Update, lod::update_chunk_lod.after(ChunkStreamingUpdateSet));
+            .add_systems(
+                Update,
+                (
+                    lod::update_chunk_lod,
+                    lod::update_physics_body_lod,
+                    lod::update_far_platform_lod,
+                )
+                    .after(ChunkStreamingUpdateSet),
+            )
+            .add_systems(
+                Update,
+                far_lod::update_far_chunk_lod
+                    .after(ChunkStreamingUpdateSet)
+                    .after(lod::update_far_platform_lod),
+            );
     }
 }

@@ -9,8 +9,8 @@ use bevy::{gltf::prelude::GltfAssetLabel, math::DVec3, prelude::*};
 use crate::{
     config::{
         AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ChunkFile, ColliderShape,
-        ComponentDefinition, ObjectChunkSource, RuntimeConfig, SweepModeDefinition,
-        VisualDefinition, object_chunk_coordinate,
+        ComponentCatalog, ComponentDefinition, ObjectChunkSource, RuntimeConfig,
+        SweepModeDefinition, VisualDefinition, object_chunk_coordinate,
     },
     persistence::{
         PersistRuntimeState, PersistedBodyState, PersistedFragment, PersistedFragmentState,
@@ -19,11 +19,16 @@ use crate::{
     physics::{
         DestructibleBody, DestructibleBodySpec, RollingResistance, VoxelBondSpec, spawn_voxel_bond,
     },
-    world::{ChunkMembership, greedy_mesher::VoxelGrid, lod::ChunkLodVisual, voxel_instance_id},
+    world::{
+        ChunkMembership,
+        greedy_mesher::VoxelGrid,
+        lod::{BodyLodOwner, BodyLodProxy, ChunkLodVisual},
+        voxel_instance_id,
+    },
 };
 
-fn object_lod_enabled(body_type: BodyType, lod_enabled: bool) -> bool {
-    lod_enabled && matches!(body_type, BodyType::Static)
+fn object_lod_enabled(_body_type: BodyType, lod_enabled: bool) -> bool {
+    lod_enabled
 }
 
 fn static_cell_render_policy(
@@ -36,6 +41,103 @@ fn static_cell_render_policy(
     let lod_renderable = matches!(body_type, BodyType::Static) && intact;
     let greedy_mergeable = lod_renderable && greedy_meshing_enabled && !destructible && !bonded;
     (lod_renderable, greedy_mergeable)
+}
+
+/// One material group in a residency-independent far-chunk surface proxy.
+pub(super) struct FarChunkLodMesh {
+    pub(super) definition_id: String,
+    pub(super) visual: VisualDefinition,
+    pub(super) mesh: Mesh,
+}
+
+/// Builds one coarse, render-only surface representation from validated authored chunk data.
+/// Physics bodies, destructible/bonded cells, imported models, and blended visuals are excluded.
+pub(super) fn build_far_chunk_lod_meshes(
+    chunk: &ChunkFile,
+    components: &ComponentCatalog,
+    max_error_m: f32,
+) -> Result<Vec<FarChunkLodMesh>, String> {
+    let dimensions = chunk.dimensions.map(|dimension| dimension as usize);
+    let volume = dimensions[0]
+        .checked_mul(dimensions[1])
+        .and_then(|area| area.checked_mul(dimensions[2]))
+        .ok_or_else(|| {
+            format!(
+                "chunk '{}' dimensions overflow addressable memory",
+                chunk.id
+            )
+        })?;
+    let index = |x: usize, y: usize, z: usize| (y * dimensions[2] + z) * dimensions[0] + x;
+    let mut cells = vec![0_u8; volume];
+
+    for layer in &chunk.layers {
+        for (z, row) in layer.rows.iter().enumerate() {
+            for (x, character) in row.chars().enumerate() {
+                let palette = character.to_digit(16).ok_or_else(|| {
+                    format!("chunk '{}' contains a non-hex palette cell", chunk.id)
+                })?;
+                cells[index(x, layer.y as usize, z)] = palette as u8;
+            }
+        }
+    }
+
+    let grid = VoxelGrid::from_cells(dimensions, chunk.voxel_size_m, cells)
+        .map_err(|error| format!("chunk '{}' has invalid voxel data: {error}", chunk.id))?;
+    let mut definitions = BTreeMap::<u8, (String, VisualDefinition)>::new();
+    for (palette, definition_id) in chunk.palette.iter().enumerate().skip(1) {
+        let definition = components.definitions.get(definition_id).ok_or_else(|| {
+            format!(
+                "chunk '{}' references missing definition '{definition_id}'",
+                chunk.id
+            )
+        })?;
+        if matches!(definition.body_type, BodyType::Static)
+            && definition.destructibility.is_none()
+            && definition.bond_strength.is_none()
+            && definition.visual.model.is_none()
+            && matches!(definition.visual.alpha_mode, AlphaMode::Opaque)
+        {
+            definitions.insert(
+                palette as u8,
+                (definition_id.clone(), definition.visual.clone()),
+            );
+        }
+    }
+
+    if definitions.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut renderable = vec![false; volume];
+    for y in 0..dimensions[1] {
+        for z in 0..dimensions[2] {
+            for x in 0..dimensions[0] {
+                let palette = grid.cell(x, y, z);
+                renderable[index(x, y, z)] = palette != 0 && definitions.contains_key(&palette);
+            }
+        }
+    }
+
+    let meshes = grid
+        .build_surface_lod_meshes(&renderable, max_error_m)
+        .map_err(|error| {
+            format!(
+                "chunk '{}' far surface LOD generation failed: {error}",
+                chunk.id
+            )
+        })?;
+    Ok(meshes
+        .into_iter()
+        .filter_map(|(palette, mesh)| {
+            definitions
+                .get(&palette)
+                .map(|(definition_id, visual)| FarChunkLodMesh {
+                    definition_id: definition_id.clone(),
+                    visual: visual.clone(),
+                    mesh,
+                })
+        })
+        .collect())
 }
 
 #[derive(Clone)]
@@ -64,12 +166,6 @@ pub(super) fn spawn_object_chunk(
     let mut material_cache = HashMap::<VisualMaterialKey, Handle<StandardMaterial>>::new();
     let chunk_size_m = config.engine.streaming.object_chunk_size_m;
     let chunk_extent_m = chunk_size_m;
-    let chunk_center = (DVec3::from_array(
-        source
-            .coordinate
-            .map(|axis| (axis as f64 + 0.5) * chunk_size_m as f64),
-    ) - world_origin)
-        .as_vec3();
     let lod_settings = &config.engine.streaming;
 
     for instance in &source.objects {
@@ -112,21 +208,22 @@ pub(super) fn spawn_object_chunk(
             &mut mesh_cache,
             &mut material_cache,
         );
-        let mut object_entity = commands.entity(entity);
-        object_entity.insert(ChunkMembership(source.id.clone()));
+        commands
+            .entity(entity)
+            .insert(ChunkMembership(source.id.clone()));
         if object_lod_enabled(definition.body_type, lod_settings.lod_enabled) {
-            object_entity.insert(ChunkLodVisual {
-                chunk_id: source.id.clone(),
-                level: 0,
-                max_level: 0,
-                center: chunk_center,
-                half_extents: Vec3::splat(chunk_extent_m * 0.5),
-                near_distance_m: lod_settings.lod_near_distance_chunks * chunk_extent_m,
-                mid_distance_m: lod_settings.lod_mid_distance_chunks * chunk_extent_m,
-                far_distance_m: lod_settings.lod_far_distance_chunks * chunk_extent_m,
-                unload_distance_m: lod_settings.unload_radius_chunks as f32 * chunk_extent_m,
-                fallback_on_damage: false,
-            });
+            spawn_body_lod_proxy(
+                commands,
+                entity,
+                &instance.id,
+                &source.id,
+                chunk_extent_m,
+                definition,
+                meshes,
+                materials,
+                &mut mesh_cache,
+                &mut material_cache,
+            );
         }
     }
 
@@ -164,6 +261,8 @@ pub(super) fn spawn_object_chunk(
             definition,
             physical_material,
             config,
+            chunk_extent_m,
+            lod_settings.lod_enabled,
             asset_server,
             meshes,
             materials,
@@ -285,16 +384,10 @@ pub(super) fn spawn_chunk(
     let lod_near_distance_m = lod_settings.lod_near_distance_chunks * chunk_extent_m;
     let lod_mid_distance_m = lod_settings.lod_mid_distance_chunks * chunk_extent_m;
     let lod_far_distance_m = lod_settings.lod_far_distance_chunks * chunk_extent_m;
-    let lod_unload_distance_m = lod_settings.unload_radius_chunks as f32 * chunk_extent_m;
-    let max_lod_level = if dimensions.iter().all(|dimension| dimension % 8 == 0) {
-        3
-    } else if dimensions.iter().all(|dimension| dimension % 4 == 0) {
-        2
-    } else if dimensions.iter().all(|dimension| dimension % 2 == 0) {
-        1
-    } else {
-        0
-    };
+    let lod_unload_distance_m = lod_settings.lod_visibility_distance_chunks as f32 * chunk_extent_m;
+    // Surface LOD is adaptive and does not require dimensions to be divisible by a voxel
+    // aggregation factor. All three levels retain the same exact chunk footprint.
+    let max_lod_level = 3;
     // Batch static cells by palette entry. This keeps independent physical material response
     // while dramatically reducing entities, draw calls, and collider shape count for terrain.
     if config.engine.streaming.greedy_meshing_enabled {
@@ -368,6 +461,7 @@ pub(super) fn spawn_chunk(
                     chunk_id: chunk.id.clone(),
                     level: 0,
                     max_level: 0,
+                    quality_level: u8::MAX,
                     center: lod_center,
                     half_extents: Vec3::from_array(
                         dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
@@ -404,6 +498,7 @@ pub(super) fn spawn_chunk(
                     chunk_id: chunk.id.clone(),
                     level: 0,
                     max_level: max_lod_level,
+                    quality_level: u8::MAX,
                     center: lod_center,
                     half_extents: Vec3::from_array(
                         dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
@@ -418,152 +513,33 @@ pub(super) fn spawn_chunk(
         }
     }
 
-    // Progressive 2x, 4x and 8x visual proxies use the same intact-static source mask.
-    if lod_settings.lod_enabled && dimensions.iter().all(|dimension| dimension % 2 == 0) {
-        let coarse = grid
-            .downsample_by_two(&lod_renderable)
-            .map_err(|error| format!("chunk '{}' LOD downsampling failed: {error}", chunk.id))?;
-        let coarse_renderable: Vec<bool> =
-            (0..coarse.dimensions[0] * coarse.dimensions[1] * coarse.dimensions[2])
-                .map(|linear| {
-                    coarse.cell(
-                        linear % coarse.dimensions[0],
-                        (linear / coarse.dimensions[0]) / coarse.dimensions[2],
-                        (linear / coarse.dimensions[0]) % coarse.dimensions[2],
-                    ) != 0
-                })
-                .collect();
-        for (palette, mesh) in coarse
-            .build_greedy_meshes(&coarse_renderable)
-            .map_err(|error| {
-                format!(
-                    "chunk '{}' coarse mesh generation failed: {error}",
-                    chunk.id
-                )
-            })?
-        {
-            let Some((definition_id, definition)) = definitions_by_palette.get(&palette) else {
-                continue;
-            };
-            commands.spawn((
-                Name::new(format!("chunk:{}:lod1:{}", chunk.id, definition_id)),
-                ChunkMembership(chunk.id.clone()),
-                Mesh3d(meshes.add(mesh)),
-                MeshMaterial3d(materials.add(standard_material_from_visual(&definition.visual))),
-                Transform::from_translation(chunk_origin),
-                Visibility::Hidden,
-                ChunkLodVisual {
-                    chunk_id: chunk.id.clone(),
-                    level: 1,
-                    max_level: max_lod_level,
-                    center: lod_center,
-                    half_extents: Vec3::from_array(
-                        dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
-                    ),
-                    near_distance_m: lod_near_distance_m,
-                    mid_distance_m: lod_mid_distance_m,
-                    far_distance_m: lod_far_distance_m,
-                    unload_distance_m: lod_unload_distance_m,
-                    fallback_on_damage: false,
-                },
-            ));
-        }
-
-        // A second factor-two pass provides a far-distance LOD when the authored chunk
-        // dimensions support exact 4x aggregation on every axis.
-        if lod_settings.lod_enabled && max_lod_level >= 2 {
-            let far_grid = coarse
-                .downsample_by_two(&coarse_renderable)
-                .map_err(|error| {
-                    format!("chunk '{}' far LOD downsampling failed: {error}", chunk.id)
-                })?;
-            let far_renderable: Vec<bool> =
-                (0..far_grid.dimensions[0] * far_grid.dimensions[1] * far_grid.dimensions[2])
-                    .map(|linear| {
-                        far_grid.cell(
-                            linear % far_grid.dimensions[0],
-                            (linear / far_grid.dimensions[0]) / far_grid.dimensions[2],
-                            (linear / far_grid.dimensions[0]) % far_grid.dimensions[2],
-                        ) != 0
-                    })
-                    .collect();
-
-            for (palette, mesh) in
-                far_grid
-                    .build_greedy_meshes(&far_renderable)
+    // Each level is generated from the original exposed surface, not from enlarged voxels.
+    // Adaptive top-surface patches are bounded by a world-space error tolerance; side walls,
+    // cave surfaces, material regions and the chunk-edge sample ring remain exact.
+    if lod_settings.lod_enabled {
+        for quality_level in 0..=2 {
+            for level in 1..=max_lod_level {
+                let error_scale = 2.0_f32.powi(i32::from(level - 1));
+                let max_error_m =
+                    lod_settings.lod_geometry_errors_m[quality_level as usize] * error_scale;
+                let lod_meshes = grid
+                    .build_surface_lod_meshes(&lod_renderable, max_error_m)
                     .map_err(|error| {
                         format!(
-                            "chunk '{}' far LOD mesh generation failed: {error}",
-                            chunk.id
+                            "chunk '{}' surface LOD{} quality {} generation failed: {error}",
+                            chunk.id, level, quality_level
                         )
-                    })?
-            {
-                let Some((definition_id, definition)) = definitions_by_palette.get(&palette) else {
-                    continue;
-                };
-                commands.spawn((
-                    Name::new(format!("chunk:{}:lod2:{}", chunk.id, definition_id)),
-                    ChunkMembership(chunk.id.clone()),
-                    Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(
-                        materials.add(standard_material_from_visual(&definition.visual)),
-                    ),
-                    Transform::from_translation(chunk_origin),
-                    Visibility::Hidden,
-                    ChunkLodVisual {
-                        chunk_id: chunk.id.clone(),
-                        level: 2,
-                        max_level: max_lod_level,
-                        center: lod_center,
-                        half_extents: Vec3::from_array(
-                            dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
-                        ),
-                        near_distance_m: lod_near_distance_m,
-                        mid_distance_m: lod_mid_distance_m,
-                        far_distance_m: lod_far_distance_m,
-                        unload_distance_m: lod_unload_distance_m,
-                        fallback_on_damage: false,
-                    },
-                ));
-            }
-
-            if max_lod_level >= 3 {
-                let ultra_far_grid =
-                    far_grid
-                        .downsample_by_two(&far_renderable)
-                        .map_err(|error| {
-                            format!(
-                                "chunk '{}' ultra-far LOD downsampling failed: {error}",
-                                chunk.id
-                            )
-                        })?;
-                let ultra_far_renderable: Vec<bool> = (0..ultra_far_grid.dimensions[0]
-                    * ultra_far_grid.dimensions[1]
-                    * ultra_far_grid.dimensions[2])
-                    .map(|linear| {
-                        ultra_far_grid.cell(
-                            linear % ultra_far_grid.dimensions[0],
-                            (linear / ultra_far_grid.dimensions[0]) / ultra_far_grid.dimensions[2],
-                            (linear / ultra_far_grid.dimensions[0]) % ultra_far_grid.dimensions[2],
-                        ) != 0
-                    })
-                    .collect();
-
-                for (palette, mesh) in ultra_far_grid
-                    .build_greedy_meshes(&ultra_far_renderable)
-                    .map_err(|error| {
-                        format!(
-                            "chunk '{}' ultra-far LOD mesh generation failed: {error}",
-                            chunk.id
-                        )
-                    })?
-                {
+                    })?;
+                for (palette, mesh) in lod_meshes {
                     let Some((definition_id, definition)) = definitions_by_palette.get(&palette)
                     else {
                         continue;
                     };
                     commands.spawn((
-                        Name::new(format!("chunk:{}:lod3:{}", chunk.id, definition_id)),
+                        Name::new(format!(
+                            "chunk:{}:lod{}:quality{}:{}",
+                            chunk.id, level, quality_level, definition_id
+                        )),
                         ChunkMembership(chunk.id.clone()),
                         Mesh3d(meshes.add(mesh)),
                         MeshMaterial3d(
@@ -573,8 +549,9 @@ pub(super) fn spawn_chunk(
                         Visibility::Hidden,
                         ChunkLodVisual {
                             chunk_id: chunk.id.clone(),
-                            level: 3,
+                            level,
                             max_level: max_lod_level,
+                            quality_level,
                             center: lod_center,
                             half_extents: Vec3::from_array(
                                 dimensions
@@ -663,26 +640,44 @@ pub(super) fn spawn_chunk(
                     &mut visual_mesh_cache,
                     &mut visual_material_cache,
                 );
-                let mut chunk_entity = commands.entity(entity);
-                chunk_entity.insert(ChunkMembership(chunk.id.clone()));
+                commands
+                    .entity(entity)
+                    .insert(ChunkMembership(chunk.id.clone()));
                 if lod_settings.lod_enabled && lod_renderable[index(x, y, z)] {
                     // Keep exact per-cell rendering available for the damaged-chunk fallback,
                     // but avoid drawing it over the merged full-resolution LOD0 surface.
-                    chunk_entity.insert(Visibility::Hidden);
-                    chunk_entity.insert(ChunkLodVisual {
-                        chunk_id: chunk.id.clone(),
-                        level: 0,
-                        max_level: 0,
-                        center: lod_center,
-                        half_extents: Vec3::from_array(
-                            dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
-                        ),
-                        near_distance_m: lod_near_distance_m,
-                        mid_distance_m: lod_mid_distance_m,
-                        far_distance_m: lod_far_distance_m,
-                        unload_distance_m: lod_unload_distance_m,
-                        fallback_on_damage: true,
-                    });
+                    commands.entity(entity).insert((
+                        Visibility::Hidden,
+                        ChunkLodVisual {
+                            chunk_id: chunk.id.clone(),
+                            level: 0,
+                            max_level: 0,
+                            quality_level: u8::MAX,
+                            center: lod_center,
+                            half_extents: Vec3::from_array(
+                                dimensions
+                                    .map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                            ),
+                            near_distance_m: lod_near_distance_m,
+                            mid_distance_m: lod_mid_distance_m,
+                            far_distance_m: lod_far_distance_m,
+                            unload_distance_m: lod_unload_distance_m,
+                            fallback_on_damage: true,
+                        },
+                    ));
+                } else if lod_settings.lod_enabled {
+                    spawn_body_lod_proxy(
+                        commands,
+                        entity,
+                        &instance_id,
+                        &chunk.id,
+                        chunk_extent_m,
+                        &definition,
+                        meshes,
+                        materials,
+                        &mut visual_mesh_cache,
+                        &mut visual_material_cache,
+                    );
                 }
 
                 let ColliderShape::Cuboid { half_extents } = &definition.collider else {
@@ -825,6 +820,8 @@ pub(super) fn spawn_chunk(
             definition,
             physical_material,
             config,
+            chunk_extent_m,
+            lod_settings.lod_enabled,
             asset_server,
             meshes,
             materials,
@@ -893,6 +890,7 @@ fn spawn_body(
             rotation,
             ..default()
         },
+        Visibility::Visible,
     ));
 
     if matches!(definition.body_type, BodyType::Dynamic) {
@@ -994,6 +992,8 @@ fn spawn_saved_fragment(
     authored_definition: &ComponentDefinition,
     physical_material: &crate::config::MaterialDefinition,
     config: &RuntimeConfig,
+    lod_radius_m: f32,
+    lod_enabled: bool,
     asset_server: &AssetServer,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
@@ -1029,6 +1029,7 @@ fn spawn_saved_fragment(
         CollisionEventsEnabled,
         LinearVelocity(Vec3::from_array(state.linear_velocity_m_s)),
         AngularVelocity(Vec3::from_array(state.angular_velocity_rad_s)),
+        Visibility::Visible,
         SleepThreshold {
             linear: config.engine.physics.sleep_linear_threshold_m_s,
             angular: config.engine.physics.sleep_angular_threshold_rad_s,
@@ -1051,6 +1052,7 @@ fn spawn_saved_fragment(
     ) {
         entity.insert(rolling);
     }
+    let entity_id = entity.id();
     add_visual(
         &mut entity,
         &definition,
@@ -1060,6 +1062,60 @@ fn spawn_saved_fragment(
         mesh_cache,
         material_cache,
     );
+    if lod_enabled && let Some(chunk_id) = state.chunk_id.as_deref() {
+        spawn_body_lod_proxy(
+            commands,
+            entity_id,
+            instance_id,
+            chunk_id,
+            lod_radius_m,
+            &definition,
+            meshes,
+            materials,
+            mesh_cache,
+            material_cache,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_body_lod_proxy(
+    commands: &mut Commands,
+    owner: Entity,
+    instance_id: &str,
+    chunk_id: &str,
+    radius_m: f32,
+    definition: &ComponentDefinition,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    mesh_cache: &mut HashMap<MeshKey, Handle<Mesh>>,
+    material_cache: &mut HashMap<VisualMaterialKey, Handle<StandardMaterial>>,
+) {
+    let mesh_key = lod_mesh_key_from_shape(&definition.collider);
+    let mesh = mesh_cache
+        .entry(mesh_key)
+        .or_insert_with(|| mesh_from_lod_collider_shape(&definition.collider, meshes))
+        .clone();
+    let material_key = VisualMaterialKey::from_visual(&definition.visual);
+    let material = material_cache
+        .entry(material_key)
+        .or_insert_with(|| materials.add(standard_material_from_visual(&definition.visual)))
+        .clone();
+
+    let proxy = commands
+        .spawn((
+            Name::new(format!("lod:{instance_id}:proxy")),
+            ChunkMembership(chunk_id.to_owned()),
+            Mesh3d(mesh),
+            MeshMaterial3d(material),
+            Transform::default(),
+            Visibility::Hidden,
+            BodyLodProxy { owner },
+        ))
+        .id();
+    commands
+        .entity(owner)
+        .insert(BodyLodOwner { proxy, radius_m });
 }
 
 fn add_visual(
@@ -1130,6 +1186,8 @@ enum MeshKey {
     Cuboid([u32; 3]),
     Sphere(u32),
     Capsule(u32, u32),
+    LodSphere(u32),
+    LodCapsule(u32, u32),
 }
 
 impl MeshKey {
@@ -1146,6 +1204,21 @@ impl MeshKey {
                 segment_length,
             } => Self::Capsule(radius.to_bits(), segment_length.to_bits()),
         }
+    }
+}
+
+fn lod_mesh_key_from_shape(shape: &ColliderShape) -> MeshKey {
+    match shape {
+        ColliderShape::Cuboid { half_extents } => MeshKey::Cuboid([
+            half_extents[0].to_bits(),
+            half_extents[1].to_bits(),
+            half_extents[2].to_bits(),
+        ]),
+        ColliderShape::Sphere { radius } => MeshKey::LodSphere(radius.to_bits()),
+        ColliderShape::Capsule {
+            radius,
+            segment_length,
+        } => MeshKey::LodCapsule(radius.to_bits(), segment_length.to_bits()),
     }
 }
 
@@ -1198,6 +1271,21 @@ fn mesh_from_collider_shape(shape: &ColliderShape, meshes: &mut Assets<Mesh>) ->
     }
 }
 
+fn mesh_from_lod_collider_shape(shape: &ColliderShape, meshes: &mut Assets<Mesh>) -> Handle<Mesh> {
+    match shape {
+        ColliderShape::Cuboid { half_extents } => meshes.add(Cuboid::new(
+            half_extents[0] * 2.0,
+            half_extents[1] * 2.0,
+            half_extents[2] * 2.0,
+        )),
+        ColliderShape::Sphere { radius } => meshes.add(Sphere::new(*radius).mesh().uv(12, 8)),
+        ColliderShape::Capsule {
+            radius,
+            segment_length,
+        } => meshes.add(Capsule3d::new(*radius, *segment_length)),
+    }
+}
+
 fn rotation_from_degrees(rotation_xyz: [f32; 3]) -> Quat {
     Quat::from_euler(
         EulerRot::XYZ,
@@ -1209,13 +1297,14 @@ fn rotation_from_degrees(rotation_xyz: [f32; 3]) -> Quat {
 
 #[cfg(test)]
 mod tests {
-    use super::{object_lod_enabled, static_cell_render_policy};
-    use crate::config::BodyType;
+    use super::{build_far_chunk_lod_meshes, object_lod_enabled, static_cell_render_policy};
+    use crate::config::{BodyType, ChunkFile, ComponentCatalog};
+    use bevy::prelude::Mesh;
 
     #[test]
     fn legacy_dynamic_objects_keep_rendering_when_they_move_out_of_their_source_chunk() {
         assert!(object_lod_enabled(BodyType::Static, true));
-        assert!(!object_lod_enabled(BodyType::Dynamic, true));
+        assert!(object_lod_enabled(BodyType::Dynamic, true));
         assert!(!object_lod_enabled(BodyType::Static, false));
     }
 
@@ -1243,5 +1332,54 @@ mod tests {
             static_cell_render_policy(BodyType::Dynamic, true, false, false, true),
             (false, false)
         );
+    }
+    #[test]
+    fn far_chunk_lod_builds_a_render_only_mesh_for_plain_static_terrain() {
+        let components: ComponentCatalog = serde_json::from_str(
+            r#"{
+                "schema_version": 1,
+                "definitions": {
+                    "terrain": {
+                        "body_type": "static",
+                        "collider": {
+                            "kind": "cuboid",
+                            "half_extents": [0.5, 0.5, 0.5]
+                        },
+                        "material": "stone",
+                        "swept_ccd": null,
+                        "destructibility": null,
+                        "bond_strength": null,
+                        "visual": {
+                            "model": null,
+                            "color_srgba": [0.4, 0.5, 0.6, 1.0],
+                            "perceptual_roughness": 0.8,
+                            "metallic": 0.0,
+                            "alpha_mode": "opaque"
+                        }
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+        let chunk: ChunkFile = serde_json::from_str(
+            r#"{
+                "schema_version": 1,
+                "id": "authored_0_0_0",
+                "coordinate": [0, 0, 0],
+                "dimensions": [2, 1, 2],
+                "voxel_size_m": 1.0,
+                "palette": ["air", "terrain"],
+                "layers": [
+                    { "y": 0, "rows": ["11", "11"] }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let meshes = build_far_chunk_lod_meshes(&chunk, &components, 0.25).unwrap();
+
+        assert_eq!(meshes.len(), 1);
+        assert_eq!(meshes[0].definition_id, "terrain");
+        assert!(meshes[0].mesh.attribute(Mesh::ATTRIBUTE_POSITION).is_some());
     }
 }

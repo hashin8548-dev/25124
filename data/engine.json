@@ -50,6 +50,10 @@
     "lod_enabled": true,
     "lod_near_distance_chunks": 1.0,
     "lod_mid_distance_chunks": 1.75,
-    "lod_far_distance_chunks": 2.5
+    "lod_far_distance_chunks": 2.5,
+    "lod_visibility_distance_chunks": 512,
+    "lod_geometry_errors_m": [0.75, 0.25, 0.05],
+    "lod_quality": 1,
+    "max_far_lod_chunks": 1024
   }
 }

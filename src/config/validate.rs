@@ -12,6 +12,41 @@ const SCHEMA_VERSION: u32 = 1;
 const ENGINE_SCHEMA_VERSION: u32 = 3;
 const CAMERA_PITCH_LIMIT_DEGREES: f32 = 89.0;
 
+fn validate_lod_distance_settings(
+    load_radius_chunks: u32,
+    lod_visibility_distance_chunks: u32,
+    lod_geometry_errors_m: [f32; 3],
+    lod_quality: u8,
+    max_far_lod_chunks: u32,
+) -> Result<()> {
+    ensure!(
+        (2..=124).contains(&load_radius_chunks),
+        "streaming.load_radius_chunks must be between 2 and 124"
+    );
+    ensure!(
+        lod_visibility_distance_chunks >= load_radius_chunks.saturating_add(3)
+            && lod_visibility_distance_chunks <= 500_000,
+        "streaming.lod_visibility_distance_chunks must be at least three chunks beyond the full-detail radius and no greater than 500000"
+    );
+    ensure!(
+        lod_geometry_errors_m
+            .iter()
+            .all(|error| error.is_finite() && (0.01..=8.0).contains(error))
+            && lod_geometry_errors_m[0] > lod_geometry_errors_m[1]
+            && lod_geometry_errors_m[1] > lod_geometry_errors_m[2],
+        "streaming.lod_geometry_errors_m must be finite, in [0.01, 8], and strictly descend from Performance to Quality"
+    );
+    ensure!(
+        lod_quality <= 2,
+        "streaming.lod_quality must be 0 (Performance), 1 (Balanced), or 2 (Quality)"
+    );
+    ensure!(
+        max_far_lod_chunks <= 4_096,
+        "streaming.max_far_lod_chunks must not exceed 4096"
+    );
+    Ok(())
+}
+
 pub fn validate_all(
     engine: &EngineSettings,
     materials: &MaterialCatalog,
@@ -142,6 +177,13 @@ pub fn validate_all(
     );
 
     let streaming = &engine.streaming;
+    validate_lod_distance_settings(
+        streaming.load_radius_chunks,
+        streaming.lod_visibility_distance_chunks,
+        streaming.lod_geometry_errors_m,
+        streaming.lod_quality,
+        streaming.max_far_lod_chunks,
+    )?;
     ensure!(
         streaming.unload_radius_chunks > streaming.load_radius_chunks,
         "streaming.unload_radius_chunks must exceed load_radius_chunks to provide hysteresis"
@@ -162,8 +204,8 @@ pub fn validate_all(
     ensure!(
         streaming.lod_far_distance_chunks.is_finite()
             && streaming.lod_far_distance_chunks > streaming.lod_mid_distance_chunks
-            && streaming.lod_far_distance_chunks <= streaming.unload_radius_chunks as f32,
-        "streaming.lod_far_distance_chunks must exceed the mid distance and not exceed the unload radius"
+            && streaming.lod_far_distance_chunks < streaming.lod_visibility_distance_chunks as f32,
+        "streaming.lod_far_distance_chunks must exceed the mid distance and remain inside the independent LOD visibility radius"
     );
     ensure!(
         (1..=16).contains(&streaming.max_parallel_chunk_loads),
@@ -181,7 +223,9 @@ pub fn validate_all(
         .fold(0.0_f32, f32::max);
     ensure!(
         (maximum_chunk_extent_m * streaming.load_radius_chunks as f32).is_finite()
-            && (maximum_chunk_extent_m * streaming.unload_radius_chunks as f32).is_finite(),
+            && (maximum_chunk_extent_m * streaming.unload_radius_chunks as f32).is_finite()
+            && (maximum_chunk_extent_m * streaming.lod_visibility_distance_chunks as f32)
+                .is_finite(),
         "streaming radii produce non-finite world-space distances"
     );
 
@@ -604,7 +648,28 @@ fn validate_asset_path(asset: &str) -> Result<()> {
 mod tests {
     use std::path::Path;
 
+    use super::validate_lod_distance_settings;
     use crate::config::RuntimeConfig;
+
+    #[test]
+    fn lod_distance_validation_accepts_124_and_500000_chunks() {
+        assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 4_096).is_ok());
+        assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 0).is_ok());
+        assert!(
+            validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 4_097).is_err()
+        );
+    }
+
+    #[test]
+    fn lod_distance_validation_rejects_unsupported_radius_and_quality_values() {
+        assert!(validate_lod_distance_settings(125, 500_000, [0.75, 0.25, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 500_001, [0.75, 0.25, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 126, [0.75, 0.25, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 127, [0.75, f32::NAN, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 127, [0.75, 0.25, 0.05], 3, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 127, [0.25, 0.75, 0.05], 1, 1024).is_err());
+        assert!(validate_lod_distance_settings(124, 127, [0.75, 0.25, 0.0], 1, 1024).is_err());
+    }
 
     #[test]
     fn collider_validation_accepts_valid_shapes_and_rejects_invalid_dimensions() {
