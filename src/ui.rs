@@ -813,7 +813,7 @@ impl MenuAsset {
             }
             if !matches!(
                 button.action.as_str(),
-                "start" | "resume" | "quit" | "create_world"
+                "start" | "resume" | "quit" | "create_world" | "home"
             ) {
                 return Err(format!(
                     "unsupported menu action '{}' (expected start, resume, quit, or create_world)",
@@ -824,8 +824,8 @@ impl MenuAsset {
                 return Err(format!("duplicate menu action '{}'", button.action));
             }
         }
-        if !actions.contains("resume") || !actions.contains("quit") {
-            return Err("menu must define both resume and quit actions".to_owned());
+        if !actions.contains("resume") || !actions.contains("quit") || !actions.contains("home") {
+            return Err("menu must define resume, return-to-menu, and quit actions".to_owned());
         }
         Ok(())
     }
@@ -964,6 +964,7 @@ fn setup_menu(
                     ..default()
                 },
                 TabGroup::modal(),
+                UiTransform::from_scale(Vec2::splat(0.85)),
             ))
             .with_children(|panel| {
                 panel
@@ -1432,6 +1433,7 @@ fn setup_menu(
                     Val::Px(menu.panel_shadow_blur_px),
                 ),
                 TabGroup::modal(),
+                UiTransform::from_scale(Vec2::splat(0.85)),
             ))
             .with_children(|panel| {
                 panel.spawn((
@@ -1698,6 +1700,7 @@ fn setup_menu(
                     Val::Px(menu.panel_shadow_blur_px),
                 ),
                 TabGroup::modal(),
+                UiTransform::from_scale(Vec2::splat(0.85)),
             ))
             .with_children(|panel| {
                 panel.spawn((
@@ -2154,6 +2157,7 @@ fn setup_menu(
                     Val::Px(0.0),
                     Val::Px(menu.panel_shadow_blur_px),
                 ),
+                UiTransform::from_scale(Vec2::splat(0.85)),
             ))
             .with_children(|panel| {
                 panel.spawn((
@@ -2192,7 +2196,7 @@ fn setup_menu(
                 for (index, definition) in menu
                     .buttons
                     .iter()
-                    .filter(|button| matches!(button.action.as_str(), "resume" | "quit"))
+                    .filter(|button| matches!(button.action.as_str(), "resume" | "home" | "quit"))
                     .enumerate()
                 {
                     panel
@@ -2277,6 +2281,7 @@ fn setup_menu(
                             Val::Px(0.0),
                             Val::Px(menu.panel_shadow_blur_px),
                         ),
+                        UiTransform::from_scale(Vec2::splat(0.85)),
                     ))
                     .with_children(|dialog| {
                         dialog.spawn((
@@ -2770,6 +2775,7 @@ fn handle_menu_action(
     mut confirmation: ResMut<QuitConfirmationState>,
     mut input_focus: ResMut<InputFocus>,
     mut virtual_time: ResMut<Time<Virtual>>,
+    mut next_state: ResMut<NextState<AppMode>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
     let Ok((_, action)) = actions.get(activate.entity) else {
@@ -2781,6 +2787,14 @@ fn handle_menu_action(
             state.visible = false;
             input_focus.clear();
             virtual_time.unpause();
+        }
+        "home" if *mode.get() == AppMode::Simulation => {
+            state.page = MenuPage::Home;
+            state.visible = true;
+            confirmation.visible = false;
+            input_focus.clear();
+            virtual_time.pause();
+            next_state.set(AppMode::WorldLibrary);
         }
         "quit" if *mode.get() == AppMode::Simulation => {
             confirmation.visible = true;
