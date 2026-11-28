@@ -1096,7 +1096,6 @@ impl MeshKey {
                 radius,
                 segment_length,
             } => Self::Capsule(radius.to_bits(), segment_length.to_bits()),
-            }
         }
     }
 }
