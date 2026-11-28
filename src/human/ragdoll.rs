@@ -17,6 +17,9 @@ use crate::world::WorldOrigin;
 
 use super::{HumanActionState, HumanMotionLibrary, HumanRig};
 
+/// Minimum two-hand friction capacity relative to body weight for a climb hold.
+const MIN_CLIMB_SUPPORT_FACTOR: f32 = 1.2;
+
 #[derive(Clone, Debug, Resource)]
 pub struct HumanPhysicsSettings {
     pub total_mass_kg: f32,
@@ -413,6 +416,13 @@ impl HumanPhysicsSettings {
             source.climb_contact_push_force_n.is_finite()
                 && source.climb_contact_push_force_n >= 0.0,
             "human climb contact force must be non-negative and finite"
+        );
+        let two_hand_climb_friction_n =
+            source.dynamic_friction * source.climb_contact_push_force_n;
+        let body_weight_n = source.total_mass_kg * 9.81;
+        ensure!(
+            two_hand_climb_friction_n >= body_weight_n * MIN_CLIMB_SUPPORT_FACTOR,
+            "two-hand climb friction capacity ({two_hand_climb_friction_n:.1} N) must exceed body weight ({body_weight_n:.1} N) by the configured support factor"
         );
         ensure!(
             source.self_collision_overlap_margin_m.is_finite()
@@ -1093,6 +1103,13 @@ mod tests {
         assert!((body_mass_sum - settings.total_mass_kg).abs() <= 1.0e-3);
         assert!(settings.temporary_assists.jump_launch.enabled);
         assert!(settings.temporary_assists.rotational_assistance.enabled);
+        let climb_capacity_n =
+            settings.dynamic_friction * settings.climb_contact_push_force_n;
+        let body_weight_n = settings.total_mass_kg * 9.81;
+        assert!(
+            climb_capacity_n >= body_weight_n * super::MIN_CLIMB_SUPPORT_FACTOR,
+            "climb friction capacity {climb_capacity_n:.1} N is below body weight {body_weight_n:.1} N"
+        );
         assert_eq!(settings.temporary_assists.jump_launch.kind, "impulse");
         assert_eq!(
             settings.temporary_assists.rotational_assistance.kind,

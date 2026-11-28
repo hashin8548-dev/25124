@@ -245,7 +245,7 @@
     "pose_stiffness_nm_per_rad": 48,
     "pose_damping_nm_s_per_rad": 7.5,
     "max_pose_torque_nm": 42,
-    "climb_contact_push_force_n": 135,
+    "climb_contact_push_force_n": 1200,
     "self_collision_enabled": true,
     "self_collision_overlap_margin_m": 0.005,
     "pose_position_stiffness_n_per_m": 180,
