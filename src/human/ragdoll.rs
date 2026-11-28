@@ -1067,13 +1067,13 @@ fn nearest_body_parent<'a>(rig: &'a HumanRig, mut parent: Option<&'a str>) -> Op
 #[cfg(test)]
 mod tests {
     use super::{
-        HumanPhysicsSettings, body_collision_layers, capsule_centerline, nearest_body_parent,
-        segment_segment_distance,
+        HumanPhysicsSettings, body_collision_layers, capsule_centerline, local_joint_frame,
+        nearest_body_parent, segment_segment_distance,
     };
     use crate::human::{HumanMotionLibrary, HumanRig};
     use avian3d::prelude::CollisionLayers;
     use bevy::prelude::{KeyCode, Vec3};
-    use std::path::Path;
+    use std::{path::Path, time::Duration};
 
     #[test]
     fn human_physics_and_temporary_assists_load_from_manifest() {
@@ -1190,11 +1190,119 @@ mod tests {
         let parent_rotation = Quat::from_rotation_y(0.63) * Quat::from_rotation_z(-0.18);
         let child_rotation = Quat::from_rotation_x(-0.91) * Quat::from_rotation_z(0.27);
         let parent_frame =
-            super::local_joint_frame(parent_rotation, parent_rotation, Vec3::new(0.1, -0.2, 0.3));
+            local_joint_frame(parent_rotation, parent_rotation, Vec3::new(0.1, -0.2, 0.3));
         let child_frame =
-            super::local_joint_frame(child_rotation, parent_rotation, Vec3::new(-0.4, 0.2, 0.1));
+            local_joint_frame(child_rotation, parent_rotation, Vec3::new(-0.4, 0.2, 0.1));
         let parent_world_basis = parent_rotation * parent_frame.rotation;
         let child_world_basis = child_rotation * child_frame.rotation;
         assert!(parent_world_basis.dot(child_world_basis).abs() > 0.99999);
+    }
+
+    #[test]
+    fn spherical_joint_preserves_world_anchor_under_body_motion() {
+        use avian3d::prelude::{
+            AngularVelocity, Collider, Gravity, JointCollisionDisabled, JointDamping,
+            LinearVelocity, Mass, PhysicsPlugins, RigidBody, SphericalJoint, SubstepCount,
+        };
+        use bevy::{asset::AssetPlugin, math::Isometry3d, mesh::MeshPlugin, prelude::*, time::TimeUpdateStrategy};
+
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            TransformPlugin,
+            PhysicsPlugins::default(),
+            AssetPlugin::default(),
+            MeshPlugin,
+        ))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            1.0 / 120.0,
+        )))
+        .insert_resource(Time::<Fixed>::from_hz(120.0))
+        .insert_resource(SubstepCount(16))
+        .insert_resource(Gravity::ZERO);
+        app.finish();
+
+        let parent_rotation = Quat::from_rotation_y(0.42) * Quat::from_rotation_z(0.16);
+        let child_rotation = Quat::from_rotation_x(-0.71) * Quat::from_rotation_z(0.28);
+        let parent_translation = Vec3::new(-0.3, 0.0, 0.1);
+        let child_translation = Vec3::new(0.4, 1.0, -0.2);
+        let anchor_world = Vec3::new(0.05, 0.48, -0.04);
+        let parent_anchor_local =
+            parent_rotation.inverse() * (anchor_world - parent_translation);
+        let child_anchor_local =
+            child_rotation.inverse() * (anchor_world - child_translation);
+        let shared_joint_rotation = parent_rotation;
+        let parent_frame =
+            local_joint_frame(parent_rotation, shared_joint_rotation, parent_anchor_local);
+        let child_frame =
+            local_joint_frame(child_rotation, shared_joint_rotation, child_anchor_local);
+
+        let parent = app
+            .world_mut()
+            .spawn((
+                RigidBody::Dynamic,
+                Collider::capsule(0.15, 0.35),
+                Mass(3.0),
+                LinearVelocity(Vec3::ZERO),
+                AngularVelocity(Vec3::ZERO),
+                Transform {
+                    translation: parent_translation,
+                    rotation: parent_rotation,
+                    ..default()
+                },
+            ))
+            .id();
+        let child = app
+            .world_mut()
+            .spawn((
+                RigidBody::Dynamic,
+                Collider::capsule(0.15, 0.35),
+                Mass(2.0),
+                LinearVelocity(Vec3::new(1.5, -0.2, 0.6)),
+                AngularVelocity(Vec3::ZERO),
+                Transform {
+                    translation: child_translation,
+                    rotation: child_rotation,
+                    ..default()
+                },
+            ))
+            .id();
+
+        app.world_mut().spawn((
+            SphericalJoint::new(parent, child)
+                .with_local_frame1(parent_frame)
+                .with_local_frame2(child_frame)
+                .with_twist_axis(Vec3::Y)
+                .with_swing_limits(-0.8, 0.8)
+                .with_twist_limits(-0.6, 0.6)
+                .with_point_compliance(1.0e-7)
+                .with_swing_compliance(1.0e-6)
+                .with_twist_compliance(1.0e-6),
+            JointDamping {
+                linear: 2.0,
+                angular: 2.0,
+            },
+            JointCollisionDisabled,
+        ));
+
+        for _ in 0..240 {
+            app.insert_resource(TimeUpdateStrategy::ManualDuration(
+                Duration::from_secs_f64(1.0 / 120.0),
+            ));
+            app.update();
+        }
+
+        let parent_transform = app.world().get::<Transform>(parent).unwrap();
+        let child_transform = app.world().get::<Transform>(child).unwrap();
+        let parent_anchor_world =
+            parent_transform.translation + parent_transform.rotation * parent_anchor_local;
+        let child_anchor_world =
+            child_transform.translation + child_transform.rotation * child_anchor_local;
+        let anchor_error = parent_anchor_world.distance(child_anchor_world);
+        assert!(
+            anchor_error < 0.02,
+            "Avian solver allowed {:.4} m of spherical-joint anchor drift",
+            anchor_error
+        );
     }
 }
