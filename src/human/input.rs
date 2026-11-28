@@ -42,7 +42,7 @@ pub fn update_human_controls(
     // Ignore all ragdoll bodies so probes only report the environment.
     let filter = SpatialQueryFilter::from_excluded_entities(player.bodies.values().copied());
     let chest_origin = root_transform.translation + Vec3::Y * 0.75;
-    let wall_hit = Dir3::new(forward).ok().and_then(|direction| {
+    let wall_hit = Dir::new(forward).ok().and_then(|direction| {
         spatial_query.cast_ray(
             chest_origin,
             direction,
@@ -53,7 +53,7 @@ pub fn update_human_controls(
     });
     let ground_hit = spatial_query.cast_ray(
         root_transform.translation + Vec3::Y * 0.25,
-        Dir3::NEG_Y,
+        Dir::NEG_Y,
         GROUND_PROBE_DISTANCE_M,
         true,
         &filter,
