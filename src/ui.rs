@@ -636,6 +636,12 @@ impl MenuAsset {
                 action: "quit".to_owned(),
             });
         }
+        if !self.buttons.iter().any(|button| button.action == "home") {
+            self.buttons.push(MenuButtonDefinition {
+                label: "RETURN TO MAIN MENU".to_owned(),
+                action: "home".to_owned(),
+            });
+        }
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -3257,6 +3263,10 @@ mod tests {
                 MenuButtonDefinition {
                     label: "Resume".to_owned(),
                     action: "resume".to_owned(),
+                },
+                MenuButtonDefinition {
+                    label: "Return to main menu".to_owned(),
+                    action: "home".to_owned(),
                 },
                 MenuButtonDefinition {
                     label: "Quit".to_owned(),
