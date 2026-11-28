@@ -655,7 +655,9 @@ mod tests {
     fn lod_distance_validation_accepts_124_and_500000_chunks() {
         assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 4_096).is_ok());
         assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 0).is_ok());
-        assert!(validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 4_097).is_err());
+        assert!(
+            validate_lod_distance_settings(124, 500_000, [0.75, 0.25, 0.05], 1, 4_097).is_err()
+        );
     }
 
     #[test]

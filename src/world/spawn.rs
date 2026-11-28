@@ -9,8 +9,8 @@ use bevy::{gltf::prelude::GltfAssetLabel, math::DVec3, prelude::*};
 use crate::{
     config::{
         AlphaMode, BodyType, BondStrengthDefinition, CcdFilterDefinition, ChunkFile, ColliderShape,
-        ComponentCatalog, ComponentDefinition, ObjectChunkSource, RuntimeConfig, SweepModeDefinition,
-        VisualDefinition, object_chunk_coordinate,
+        ComponentCatalog, ComponentDefinition, ObjectChunkSource, RuntimeConfig,
+        SweepModeDefinition, VisualDefinition, object_chunk_coordinate,
     },
     persistence::{
         PersistRuntimeState, PersistedBodyState, PersistedFragment, PersistedFragmentState,
@@ -61,7 +61,12 @@ pub(super) fn build_far_chunk_lod_meshes(
     let volume = dimensions[0]
         .checked_mul(dimensions[1])
         .and_then(|area| area.checked_mul(dimensions[2]))
-        .ok_or_else(|| format!("chunk '{}' dimensions overflow addressable memory", chunk.id))?;
+        .ok_or_else(|| {
+            format!(
+                "chunk '{}' dimensions overflow addressable memory",
+                chunk.id
+            )
+        })?;
     let index = |x: usize, y: usize, z: usize| (y * dimensions[2] + z) * dimensions[0] + x;
     let mut cells = vec![0_u8; volume];
 
@@ -116,7 +121,10 @@ pub(super) fn build_far_chunk_lod_meshes(
     let meshes = grid
         .build_surface_lod_meshes(&renderable, max_error_m)
         .map_err(|error| {
-            format!("chunk '{}' far surface LOD generation failed: {error}", chunk.id)
+            format!(
+                "chunk '{}' far surface LOD generation failed: {error}",
+                chunk.id
+            )
         })?;
     Ok(meshes
         .into_iter()
@@ -1289,11 +1297,9 @@ fn rotation_from_degrees(rotation_xyz: [f32; 3]) -> Quat {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_far_chunk_lod_meshes, object_lod_enabled, static_cell_render_policy,
-    };
-    use bevy::prelude::Mesh;
+    use super::{build_far_chunk_lod_meshes, object_lod_enabled, static_cell_render_policy};
     use crate::config::{BodyType, ChunkFile, ComponentCatalog};
+    use bevy::prelude::Mesh;
 
     #[test]
     fn legacy_dynamic_objects_keep_rendering_when_they_move_out_of_their_source_chunk() {
@@ -1376,5 +1382,4 @@ mod tests {
         assert_eq!(meshes[0].definition_id, "terrain");
         assert!(meshes[0].mesh.attribute(Mesh::ATTRIBUTE_POSITION).is_some());
     }
-
 }

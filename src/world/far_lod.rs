@@ -70,7 +70,12 @@ pub(super) struct FarChunkLodState {
 type FarChunkLodQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static FarChunkLod, &'static Transform, &'static mut Visibility),
+    (
+        Entity,
+        &'static FarChunkLod,
+        &'static Transform,
+        &'static mut Visibility,
+    ),
 >;
 
 #[derive(SystemParam)]
@@ -126,11 +131,14 @@ pub(super) fn update_far_chunk_lod(
     let reference_source = &context.config.chunks[0];
     let reference_extent = chunk_extent(reference_source);
     let camera_cell = [
-        (f64::from(camera_position.x) + context.world_origin.0.x).div_euclid(reference_extent.x)
+        (f64::from(camera_position.x) + context.world_origin.0.x)
+            .div_euclid(reference_extent.x)
             .floor() as i64,
-        (f64::from(camera_position.y) + context.world_origin.0.y).div_euclid(reference_extent.y)
+        (f64::from(camera_position.y) + context.world_origin.0.y)
+            .div_euclid(reference_extent.y)
             .floor() as i64,
-        (f64::from(camera_position.z) + context.world_origin.0.z).div_euclid(reference_extent.z)
+        (f64::from(camera_position.z) + context.world_origin.0.z)
+            .div_euclid(reference_extent.z)
             .floor() as i64,
     ];
     let settings_changed = state.settings != Some(settings) || context.config.is_changed();
@@ -153,11 +161,8 @@ pub(super) fn update_far_chunk_lod(
             .iter()
             .filter(|source| !source.generated)
             .filter_map(|source| {
-                let distance = distance_to_chunk_aabb(
-                    camera_position,
-                    source,
-                    context.world_origin.0,
-                );
+                let distance =
+                    distance_to_chunk_aabb(camera_position, source, context.world_origin.0);
                 let full_detail_limit = chunk_radius_m(source, settings.unload_radius_chunks);
                 let far_visibility_limit =
                     chunk_radius_m(source, settings.visibility_distance_chunks);
@@ -183,7 +188,9 @@ pub(super) fn update_far_chunk_lod(
             .map(|source| source.id.clone())
             .collect::<HashSet<_>>();
         state.pending.retain(|id, _| desired_ids.contains(id));
-        state.ready.retain(|(source, _)| desired_ids.contains(&source.id));
+        state
+            .ready
+            .retain(|(source, _)| desired_ids.contains(&source.id));
         state.failed.retain(|id| desired_ids.contains(id));
 
         let evicted = state
@@ -243,13 +250,9 @@ pub(super) fn update_far_chunk_lod(
                 .map_err(|error| format!("{}: {error:#}", source_for_task.id))?;
             Ok(chunk)
         });
-        state.pending.insert(
-            source.id.clone(),
-            PendingFarChunk {
-                source,
-                task,
-            },
-        );
+        state
+            .pending
+            .insert(source.id.clone(), PendingFarChunk { source, task });
     }
 
     let mut completed = Vec::new();
@@ -262,11 +265,7 @@ pub(super) fn update_far_chunk_lod(
         let Some(pending) = state.pending.remove(&id) else {
             continue;
         };
-        if !state
-            .desired_sources
-            .iter()
-            .any(|source| source.id == id)
-        {
+        if !state.desired_sources.iter().any(|source| source.id == id) {
             continue;
         }
         match result {
@@ -285,22 +284,14 @@ pub(super) fn update_far_chunk_lod(
         let Some((source, chunk)) = state.ready.pop_front() else {
             break;
         };
-        if !state
-            .desired_sources
-            .iter()
-            .any(|desired| desired.id == source.id)
-        {
+        if !state.desired_sources.iter().any(|desired| desired.id == source.id) {
             continue;
         }
 
         let quality_error =
             context.config.engine.streaming.lod_geometry_errors_m[settings.lod_quality as usize];
         let max_error_m = quality_error * 4.0;
-        match spawn::build_far_chunk_lod_meshes(
-            &chunk,
-            &context.config.components,
-            max_error_m,
-        ) {
+        match spawn::build_far_chunk_lod_meshes(&chunk, &context.config.components, max_error_m) {
             Ok(far_meshes) => {
                 spawn_far_chunk_meshes(
                     &mut commands,
@@ -316,7 +307,10 @@ pub(super) fn update_far_chunk_lod(
             }
             Err(error) => {
                 state.failed.insert(source.id.clone());
-                warn!("Could not build far-LOD geometry for '{}': {error}", source.id);
+                warn!(
+                    "Could not build far-LOD geometry for '{}': {error}",
+                    source.id
+                );
             }
         }
     }
@@ -333,21 +327,23 @@ pub(super) fn update_far_chunk_lod(
         let distance = distance_to_aabb(camera_position, min, max);
         let chunk_is_loaded = context.streaming.is_loaded(&far.chunk_id);
         let damaged = damaged_chunks.contains(far.chunk_id.as_str());
-        let outer_radius = far.half_extents.max_element() * 2.0
-            * settings.visibility_distance_chunks as f32;
+        let outer_radius =
+            far.half_extents.max_element() * 2.0 * settings.visibility_distance_chunks as f32;
         let inner_radius =
             far.half_extents.max_element() * 2.0 * settings.unload_radius_chunks as f32;
-        visibility.set_if_neq(if far_chunk_lod_is_visible(
-            distance,
-            inner_radius,
-            outer_radius,
-            chunk_is_loaded,
-            damaged,
-        ) {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        });
+        visibility.set_if_neq(
+            if far_chunk_lod_is_visible(
+                distance,
+                inner_radius,
+                outer_radius,
+                chunk_is_loaded,
+                damaged,
+            ) {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            },
+        );
     }
 }
 
@@ -464,7 +460,9 @@ mod tests {
         assert!(!far_chunk_lod_is_visible(30.0, 30.0, 5120.0, false, false));
         assert!(far_chunk_lod_is_visible(30.1, 30.0, 5120.0, false, false));
         assert!(far_chunk_lod_is_visible(5120.0, 30.0, 5120.0, false, false));
-        assert!(!far_chunk_lod_is_visible(5120.1, 30.0, 5120.0, false, false));
+        assert!(!far_chunk_lod_is_visible(
+            5120.1, 30.0, 5120.0, false, false
+        ));
     }
 
     #[test]
