@@ -284,7 +284,11 @@ pub(super) fn update_far_chunk_lod(
         let Some((source, chunk)) = state.ready.pop_front() else {
             break;
         };
-        if !state.desired_sources.iter().any(|desired| desired.id == source.id) {
+        if !state
+            .desired_sources
+            .iter()
+            .any(|desired| desired.id == source.id)
+        {
             continue;
         }
 
