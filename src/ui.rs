@@ -1527,14 +1527,14 @@ fn load_menu(path: &Path) -> Result<MenuAsset, String> {
 }
 
 #[derive(SystemParam)]
-struct MenuActionParams<'world, 'state> {
-    actions: Query<'world, 'state, (Entity, &'static MenuAction)>,
-    mode: Res<'world, State<AppMode>>,
-    state: ResMut<'world, MenuState>,
-    confirmation: ResMut<'world, QuitConfirmationState>,
-    input_focus: ResMut<'world, InputFocus>,
-    virtual_time: ResMut<'world, Time<Virtual>>,
-    app_exit: MessageWriter<'world, AppExit>,
+struct MenuActionParams<'w, 's> {
+    actions: Query<'w, 's, (Entity, &'static MenuAction)>,
+    mode: Res<'w, State<AppMode>>,
+    state: ResMut<'w, MenuState>,
+    confirmation: ResMut<'w, QuitConfirmationState>,
+    input_focus: ResMut<'w, InputFocus>,
+    virtual_time: ResMut<'w, Time<Virtual>>,
+    app_exit: MessageWriter<'w, AppExit>,
 }
 
 fn handle_menu_action(activate: On<Activate>, mut params: MenuActionParams) {
