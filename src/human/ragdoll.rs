@@ -497,13 +497,11 @@ pub fn spawn_human_player(
     };
 
     let rig_body_names: BTreeSet<_> = rig.body_names().map(str::to_owned).collect();
-    let configured_body_names: BTreeSet<_> =
-        settings.body_mass_fractions.keys().cloned().collect();
+    let configured_body_names: BTreeSet<_> = settings.body_mass_fractions.keys().cloned().collect();
     if rig_body_names != configured_body_names {
         error!(
             "Human mass distribution tracks {:?} do not match rig body tracks {:?}",
-            configured_body_names,
-            rig_body_names
+            configured_body_names, rig_body_names
         );
         return;
     }
@@ -758,16 +756,10 @@ mod tests {
     fn joint_frames_reconstruct_the_same_world_rest_basis() {
         let parent_rotation = Quat::from_rotation_y(0.63) * Quat::from_rotation_z(-0.18);
         let child_rotation = Quat::from_rotation_x(-0.91) * Quat::from_rotation_z(0.27);
-        let parent_frame = super::local_joint_frame(
-            parent_rotation,
-            parent_rotation,
-            Vec3::new(0.1, -0.2, 0.3),
-        );
-        let child_frame = super::local_joint_frame(
-            child_rotation,
-            parent_rotation,
-            Vec3::new(-0.4, 0.2, 0.1),
-        );
+        let parent_frame =
+            super::local_joint_frame(parent_rotation, parent_rotation, Vec3::new(0.1, -0.2, 0.3));
+        let child_frame =
+            super::local_joint_frame(child_rotation, parent_rotation, Vec3::new(-0.4, 0.2, 0.1));
         let parent_world_basis = parent_rotation * parent_frame.rotation;
         let child_world_basis = child_rotation * child_frame.rotation;
         assert!(parent_world_basis.dot(child_world_basis).abs() > 0.99999);
