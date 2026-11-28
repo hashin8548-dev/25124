@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use avian3d::prelude::{
     AngularVelocity, Collider, ColliderDensity, CollisionEventsEnabled, Friction,
     JointCollisionDisabled, JointDamping, LinearVelocity, Restitution, RevoluteJoint, RigidBody,
