@@ -196,9 +196,7 @@ pub fn drive_human_action_pose(
         // Apply the launch assist proportionally to every segment's mass. Equal delta-v
         // preserves the ragdoll's internal rest motion while giving its centre of mass
         // the configured launch speed without a single-body impulse shock.
-        if jump_launch_enabled
-            && let Some(segment_mass) = settings.body_mass_kg(&part.bone_name)
-        {
+        if jump_launch_enabled && let Some(segment_mass) = settings.body_mass_kg(&part.bone_name) {
             let impulse = launch_impulse_for_mass(
                 segment_mass,
                 settings.temporary_assists.jump_launch.launch_speed_m_s,
@@ -294,10 +292,11 @@ fn root_vertical_pose_force(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        launch_impulse_for_mass, root_motion_target_local, root_vertical_pose_force,
+    use super::{launch_impulse_for_mass, root_motion_target_local, root_vertical_pose_force};
+    use bevy::{
+        math::DVec3,
+        prelude::{Quat, Vec3},
     };
-    use bevy::{math::DVec3, prelude::{Quat, Vec3}};
 
     #[test]
     fn authored_root_position_assistance_never_resists_horizontal_motion() {
@@ -335,8 +334,8 @@ mod tests {
 
     #[test]
     fn jump_assist_gives_every_segment_equal_delta_velocity() {
-        let settings = crate::human::HumanPhysicsSettings::load(std::path::Path::new("data"))
-            .unwrap();
+        let settings =
+            crate::human::HumanPhysicsSettings::load(std::path::Path::new("data")).unwrap();
         let launch_speed = 4.5;
         let mut total_impulse = Vec3::ZERO;
         for name in settings.body_mass_fractions.keys() {
@@ -349,8 +348,7 @@ mod tests {
             );
         }
         assert!(
-            (total_impulse - Vec3::Y * settings.total_mass_kg * launch_speed).length()
-                < 1.0e-3,
+            (total_impulse - Vec3::Y * settings.total_mass_kg * launch_speed).length() < 1.0e-3,
             "sum of segment impulses must equal whole-body launch momentum"
         );
     }
