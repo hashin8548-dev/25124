@@ -23,14 +23,14 @@ try {
     Invoke-CargoCheck -CargoArgs @("fmt", "--all", "--", "--check")
 
     Write-Host "==> Type-checking all targets (locked dependencies)"
-    Invoke-CargoCheck -CargoArgs @("check", "--locked", "--all-targets", "-j", "1")
+    Invoke-CargoCheck -CargoArgs @("check", "--profile", "ci", "--locked", "--all-targets")
 
     Write-Host "==> Running all tests (locked dependencies)"
-    Invoke-CargoCheck -CargoArgs @("test", "--locked", "--all-targets", "-j", "1")
+    Invoke-CargoCheck -CargoArgs @("test", "--profile", "ci", "--locked", "--all-targets")
 
     if (-not $SkipClippy) {
         Write-Host "==> Running Clippy with warnings denied"
-        Invoke-CargoCheck -CargoArgs @("clippy", "--locked", "--all-targets", "-j", "1", "--", "-D", "warnings")
+        Invoke-CargoCheck -CargoArgs @("clippy", "--profile", "ci", "--locked", "--all-targets", "--", "-D", "warnings")
     }
 
     Write-Host "Local validation passed."

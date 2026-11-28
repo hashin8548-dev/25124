@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "id": "sandbox",
+  "name": "Physics Sandbox",
+  "description": "A compact destructible testbed for rigid-body impacts, bonded voxel structures, and chunk streaming.",
+  "preview_asset": null,
+  "metadata": {
+    "category": "physics sandbox",
+    "author": "sample content",
+    "features": ["rigid bodies", "destructible voxels", "bonded structures", "chunk streaming"]
+  },
+  "gravity_m_s2": null,
+  "regions": [
+    "regions/overworld.json"
+  ],
+  "objects": [
+    {
+      "id": "steel_block_a",
+      "definition": "primitive.steel_block",
+      "position_m": [
+        -1,
+        2,
+        0
+      ],
+      "rotation_degrees_xyz": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "steel_block_b",
+      "definition": "primitive.steel_block",
+      "position_m": [
+        -1,
+        2.55,
+        0
+      ],
+      "rotation_degrees_xyz": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "timber_crate",
+      "definition": "primitive.timber_crate",
+      "position_m": [
+        1,
+        3,
+        0
+      ],
+      "rotation_degrees_xyz": [
+        0,
+        12,
+        0
+      ]
+    },
+    {
+      "id": "rubber_ball",
+      "definition": "primitive.rubber_sphere",
+      "position_m": [
+        2.5,
+        4,
+        0
+      ],
+      "rotation_degrees_xyz": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}
