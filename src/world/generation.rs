@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Result, ensure};
-use bevy::{math::DVec3, prelude::*};
+use bevy::{ecs::system::SystemParam, math::DVec3, prelude::*};
 
 use crate::config::{ChunkFile, ChunkLayer, ChunkSource, WorldGeneration};
 
@@ -13,34 +13,31 @@ const PLATFORM_COMPONENT: &str = "block.bedrock";
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub(crate) struct WorldOrigin(pub DVec3);
 
-type RebaseCameraQuery<'world, 'state> =
-    Query<'world, 'state, &'static Transform, With<crate::camera::FreeFlyCamera>>;
-type RebaseEntityQuery<'world, 'state> = Query<
-    'world,
-    'state,
+type RebaseCameraQuery<'w, 's> =
+    Query<'w, 's, &'static Transform, With<crate::camera::FreeFlyCamera>>;
+type RebaseEntityQuery<'w, 's> = Query<
+    'w,
+    's,
     (
         &'static mut Transform,
         Option<&'static mut crate::world::lod::ChunkLodVisual>,
     ),
     Without<ChildOf>,
 >;
-type WorldRebaseQueries<'world, 'state> = ParamSet<
-    'world,
-    'state,
-    (
-        RebaseCameraQuery<'world, 'state>,
-        RebaseEntityQuery<'world, 'state>,
-    ),
->;
+
+#[derive(SystemParam)]
+struct WorldRebaseParams<'w, 's> {
+    queries: ParamSet<'w, 's, (RebaseCameraQuery<'w, 's>, RebaseEntityQuery<'w, 's>)>,
+}
 
 /// Recenters the f32 simulation around the camera while preserving absolute world position.
 /// Rebase steps are exact multiples of the procedural chunk edge, so voxel boundaries remain stable.
 pub(super) fn rebase_world_origin(
     mut origin: ResMut<WorldOrigin>,
     mut world_state: ResMut<crate::persistence::WorldStateFile>,
-    mut queries: WorldRebaseQueries,
+    mut params: WorldRebaseParams,
 ) {
-    let Some(camera_position) = queries
+    let Some(camera_position) = params.queries
         .p0()
         .iter()
         .next()
@@ -58,7 +55,7 @@ pub(super) fn rebase_world_origin(
     }
 
     {
-        let mut all_transforms = queries.p1();
+        let mut all_transforms = params.queries.p1();
         for (mut transform, lod_visual) in &mut all_transforms {
             transform.translation -= shift;
             if let Some(mut visual) = lod_visual {
