@@ -28,7 +28,9 @@ fn validate_lod_distance_settings(
         "streaming.lod_visibility_distance_chunks must be at least three chunks beyond the full-detail radius and no greater than 500000"
     );
     ensure!(
-        lod_geometry_errors_m.iter().all(|error| error.is_finite() && (0.01..=8.0).contains(error))
+        lod_geometry_errors_m
+            .iter()
+            .all(|error| error.is_finite() && (0.01..=8.0).contains(error))
             && lod_geometry_errors_m[0] > lod_geometry_errors_m[1]
             && lod_geometry_errors_m[1] > lod_geometry_errors_m[2],
         "streaming.lod_geometry_errors_m must be finite, in [0.01, 8], and strictly descend from Performance to Quality"
@@ -216,7 +218,8 @@ pub fn validate_all(
     ensure!(
         (maximum_chunk_extent_m * streaming.load_radius_chunks as f32).is_finite()
             && (maximum_chunk_extent_m * streaming.unload_radius_chunks as f32).is_finite()
-            && (maximum_chunk_extent_m * streaming.lod_visibility_distance_chunks as f32).is_finite(),
+            && (maximum_chunk_extent_m * streaming.lod_visibility_distance_chunks as f32)
+                .is_finite(),
         "streaming radii produce non-finite world-space distances"
     );
 

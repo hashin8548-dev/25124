@@ -111,7 +111,9 @@ pub(super) fn spawn_object_chunk(
             &mut mesh_cache,
             &mut material_cache,
         );
-        commands.entity(entity).insert(ChunkMembership(source.id.clone()));
+        commands
+            .entity(entity)
+            .insert(ChunkMembership(source.id.clone()));
         if object_lod_enabled(definition.body_type, lod_settings.lod_enabled) {
             spawn_body_lod_proxy(
                 commands,
@@ -285,8 +287,7 @@ pub(super) fn spawn_chunk(
     let lod_near_distance_m = lod_settings.lod_near_distance_chunks * chunk_extent_m;
     let lod_mid_distance_m = lod_settings.lod_mid_distance_chunks * chunk_extent_m;
     let lod_far_distance_m = lod_settings.lod_far_distance_chunks * chunk_extent_m;
-    let lod_unload_distance_m =
-        lod_settings.lod_visibility_distance_chunks as f32 * chunk_extent_m;
+    let lod_unload_distance_m = lod_settings.lod_visibility_distance_chunks as f32 * chunk_extent_m;
     // Surface LOD is adaptive and does not require dimensions to be divisible by a voxel
     // aggregation factor. All three levels retain the same exact chunk footprint.
     let max_lod_level = 3;
@@ -433,7 +434,8 @@ pub(super) fn spawn_chunk(
                         )
                     })?;
                 for (palette, mesh) in lod_meshes {
-                    let Some((definition_id, definition)) = definitions_by_palette.get(&palette) else {
+                    let Some((definition_id, definition)) = definitions_by_palette.get(&palette)
+                    else {
                         continue;
                     };
                     commands.spawn((
@@ -443,7 +445,9 @@ pub(super) fn spawn_chunk(
                         )),
                         ChunkMembership(chunk.id.clone()),
                         Mesh3d(meshes.add(mesh)),
-                        MeshMaterial3d(materials.add(standard_material_from_visual(&definition.visual))),
+                        MeshMaterial3d(
+                            materials.add(standard_material_from_visual(&definition.visual)),
+                        ),
                         Transform::from_translation(chunk_origin),
                         Visibility::Hidden,
                         ChunkLodVisual {

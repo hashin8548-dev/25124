@@ -12,9 +12,7 @@ use crate::{
     config::{RuntimeConfig, WorldGeneration},
     engine::AppMode,
     physics::DestructionJournal,
-    world::{
-        WorldOrigin, generation::PLATFORM_COMPONENT, parse_voxel_instance_id,
-    },
+    world::{WorldOrigin, generation::PLATFORM_COMPONENT, parse_voxel_instance_id},
 };
 
 /// Visual-only level-of-detail membership for every static voxel in a resident chunk.
@@ -78,8 +76,7 @@ pub(super) fn update_chunk_lod(
         );
         let damaged = damaged_chunks.contains(&lod.chunk_id);
         let quality_matches = lod_quality_matches(streaming.lod_quality, lod.quality_level);
-        let should_be_visible =
-            quality_matches && lod_visual_is_visible(&lod, distance, damaged);
+        let should_be_visible = quality_matches && lod_visual_is_visible(&lod, distance, damaged);
         visibility.set_if_neq(if should_be_visible {
             Visibility::Visible
         } else {
@@ -132,8 +129,7 @@ pub(super) fn update_physics_body_lod(
     };
 
     for (owner, body, body_transform, mut body_visibility) in &mut owners {
-        let Ok((proxy, mut proxy_transform, mut proxy_visibility)) =
-            proxies.get_mut(body.proxy)
+        let Ok((proxy, mut proxy_transform, mut proxy_visibility)) = proxies.get_mut(body.proxy)
         else {
             continue;
         };
@@ -145,8 +141,7 @@ pub(super) fn update_physics_body_lod(
         proxy_transform.scale = body_transform.scale;
 
         let distance = camera_position.distance(body_transform.translation);
-        let full_detail_radius =
-            config.engine.streaming.load_radius_chunks as f32 * body.radius_m;
+        let full_detail_radius = config.engine.streaming.load_radius_chunks as f32 * body.radius_m;
         let lod_visibility_radius =
             config.engine.streaming.lod_visibility_distance_chunks as f32 * body.radius_m;
 
@@ -170,7 +165,6 @@ pub(super) fn update_physics_body_lod(
         } else {
             Visibility::Hidden
         });
-
     }
 }
 
@@ -230,8 +224,7 @@ pub(super) fn update_far_platform_lod(
 
     // A 32m x 32m chunk has a half-diagonal of 22.6m. Start beyond the outer
     // boundary of the full-detail chunk set, with enough overlap for the streaming tick.
-    let inner_radius_m = render_distance as f64 * 32.0
-        + 32.0 * std::f64::consts::FRAC_1_SQRT_2;
+    let inner_radius_m = render_distance as f64 * 32.0 + 32.0 * std::f64::consts::FRAC_1_SQRT_2;
     let outer_radius_m = lod_distance as f64 * 32.0;
     if outer_radius_m <= inner_radius_m {
         for (_, _, _, _, _, mut visibility) in &mut far_platforms {
@@ -323,7 +316,11 @@ fn flat_platform_lod_ring(
         .collect::<Vec<_>>();
     for corner_x in [-half_extent, half_extent] {
         for corner_z in [-half_extent, half_extent] {
-            angles.push((corner_z - anchor_absolute.z).atan2(corner_x - anchor_absolute.x).rem_euclid(std::f64::consts::TAU));
+            angles.push(
+                (corner_z - anchor_absolute.z)
+                    .atan2(corner_x - anchor_absolute.x)
+                    .rem_euclid(std::f64::consts::TAU),
+            );
         }
     }
     angles.sort_by(f64::total_cmp);
@@ -331,8 +328,7 @@ fn flat_platform_lod_ring(
 
     // Sagitta-driven tessellation keeps the radial coverage boundary within the selected
     // geometric error budget. The hard cap bounds vertex memory at maximum LOD distance.
-    let segments = (std::f64::consts::PI
-        * (outer_radius_m / (2.0 * max_error_m.max(0.01))).sqrt())
+    let segments = (std::f64::consts::PI * (outer_radius_m / (2.0 * max_error_m.max(0.01))).sqrt())
         .ceil()
         .clamp(256.0, 65_536.0) as usize;
     let mut uniform_angles = (0..segments)
@@ -425,9 +421,8 @@ fn body_lod_visibility(
     was_full_detail: bool,
     was_lod_visible: bool,
 ) -> (bool, bool) {
-    let full_detail =
-        distance <= full_detail_radius
-            || (was_full_detail && distance <= full_detail_radius * 1.05);
+    let full_detail = distance <= full_detail_radius
+        || (was_full_detail && distance <= full_detail_radius * 1.05);
     let lod_limit = lod_visibility_radius * if was_lod_visible { 1.05 } else { 1.0 };
     (full_detail, !full_detail && distance <= lod_limit)
 }
@@ -485,11 +480,11 @@ mod tests {
         ChunkLodVisual, body_lod_visibility, distance_to_aabb, flat_platform_lod_ring,
         lod_level_is_visible, lod_quality_matches, lod_visual_is_visible,
     };
+    use bevy::prelude::Vec3;
     use bevy::{
         math::DVec3,
         mesh::{Mesh, VertexAttributeValues},
     };
-    use bevy::prelude::Vec3;
 
     #[test]
     fn lod_distance_uses_chunk_bounds_not_only_the_chunk_center() {
@@ -642,13 +637,7 @@ mod tests {
 
     #[test]
     fn flat_platform_far_lod_covers_500000_chunks_with_bounded_mesh_size() {
-        let mesh = flat_platform_lod_ring(
-            255_000_000,
-            DVec3::ZERO,
-            4_000.0,
-            16_000_000.0,
-            0.25,
-        );
+        let mesh = flat_platform_lod_ring(255_000_000, DVec3::ZERO, 4_000.0, 16_000_000.0, 0.25);
         let VertexAttributeValues::Float32x3(positions) =
             mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap()
         else {
@@ -657,14 +646,19 @@ mod tests {
 
         assert!(!positions.is_empty());
         assert!(positions.len() <= (65_536 + 520) * 4);
-        assert!(positions.iter().all(|position| (position[1] - 0.9998).abs() < 1.0e-4));
+        assert!(
+            positions
+                .iter()
+                .all(|position| (position[1] - 0.9998).abs() < 1.0e-4)
+        );
         let max_radius = positions
             .iter()
             .map(|position| position[0].hypot(position[2]))
             .fold(0.0_f32, f32::max);
         assert!((max_radius - 16_000_000.0).abs() < 2.0);
-        assert!(positions.iter().all(|position| position[0].abs() <= 127_500_000.0
-            && position[2].abs() <= 127_500_000.0));
+        assert!(positions.iter().all(
+            |position| position[0].abs() <= 127_500_000.0 && position[2].abs() <= 127_500_000.0
+        ));
     }
 
     #[test]

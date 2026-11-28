@@ -601,10 +601,8 @@ fn apply_user_preferences(config: &mut RuntimeConfig, preferences: &UserPreferen
     streaming.lod_visibility_distance_chunks = preferences.lod_distance_chunks;
     let lod_span = (preferences.lod_distance_chunks - preferences.render_distance_chunks) as f32;
     streaming.lod_near_distance_chunks = preferences.render_distance_chunks as f32;
-    streaming.lod_mid_distance_chunks =
-        streaming.lod_near_distance_chunks + lod_span / 3.0;
-    streaming.lod_far_distance_chunks =
-        streaming.lod_near_distance_chunks + lod_span * (2.0 / 3.0);
+    streaming.lod_mid_distance_chunks = streaming.lod_near_distance_chunks + lod_span / 3.0;
+    streaming.lod_far_distance_chunks = streaming.lod_near_distance_chunks + lod_span * (2.0 / 3.0);
     // Select a precomputed geometric quality variant; transition distances stay unchanged.
     streaming.lod_quality = preferences.lod_detail;
 }
@@ -623,8 +621,8 @@ fn remember_world_manifest(
 
 fn adjust_lod_distance(current: u32, render_distance: u32, increase: bool) -> u32 {
     const STEPS: [u32; 15] = [
-        32, 64, 128, 256, 512, 1_024, 2_048, 4_096, 8_192, 16_384, 32_768, 65_536,
-        131_072, 262_144, 500_000,
+        32, 64, 128, 256, 512, 1_024, 2_048, 4_096, 8_192, 16_384, 32_768, 65_536, 131_072,
+        262_144, 500_000,
     ];
     let minimum = render_distance.saturating_add(3);
     if increase {
@@ -2924,7 +2922,10 @@ fn sync_settings_labels(
         text.0 = lod_detail_label(state.preferences.lod_detail).to_owned();
     }
     for mut text in &mut lod_distance_labels {
-        text.0 = format!("{} CHUNKS", config.engine.streaming.lod_visibility_distance_chunks);
+        text.0 = format!(
+            "{} CHUNKS",
+            config.engine.streaming.lod_visibility_distance_chunks
+        );
     }
 }
 
@@ -3684,10 +3685,16 @@ mod tests {
 
         apply_user_preferences(&mut config, &preferences);
         assert_eq!(config.engine.streaming.load_radius_chunks, 124);
-        assert_eq!(config.engine.streaming.lod_visibility_distance_chunks, 500_000);
+        assert_eq!(
+            config.engine.streaming.lod_visibility_distance_chunks,
+            500_000
+        );
         assert_eq!(config.engine.streaming.lod_near_distance_chunks, 124.0);
         assert_eq!(config.engine.streaming.lod_quality, 2);
-        assert_eq!(config.engine.streaming.lod_geometry_errors_m, [0.75, 0.25, 0.05]);
+        assert_eq!(
+            config.engine.streaming.lod_geometry_errors_m,
+            [0.75, 0.25, 0.05]
+        );
     }
 
     #[test]

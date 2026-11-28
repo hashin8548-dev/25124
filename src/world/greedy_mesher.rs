@@ -210,12 +210,8 @@ impl VoxelGrid {
                             let omit_adaptive_top = suppress_topmost_surfaces
                                 && axis == 1
                                 && sign > 0
-                                && !self.has_renderable_above(
-                                    cell[0],
-                                    cell[1],
-                                    cell[2],
-                                    renderable,
-                                );
+                                && !self
+                                    .has_renderable_above(cell[0], cell[1], cell[2], renderable);
                             if !adjacent_is_mergeable && !omit_adaptive_top {
                                 mask[v_index * self.dimensions[u] + u_index] = palette;
                             }
@@ -405,15 +401,8 @@ impl VoxelGrid {
         Ok(boxes)
     }
 
-    fn has_renderable_above(
-        &self,
-        x: usize,
-        y: usize,
-        z: usize,
-        renderable: &[bool],
-    ) -> bool {
-        (y + 1..self.dimensions[1])
-            .any(|above_y| renderable[self.index(x, above_y, z)])
+    fn has_renderable_above(&self, x: usize, y: usize, z: usize, renderable: &[bool]) -> bool {
+        (y + 1..self.dimensions[1]).any(|above_y| renderable[self.index(x, above_y, z)])
     }
 
     fn index(&self, x: usize, y: usize, z: usize) -> usize {
@@ -484,8 +473,7 @@ fn emit_adaptive_surface_region(
 
         // The error bound is measured at every source cell centre. Patches share deterministic
         // edge samples; deviations are bounded and no generated point leaves the source bounds.
-        let touches_chunk_boundary =
-            x0 == 0 || z0 == 0 || x1 == width || z1 == depth;
+        let touches_chunk_boundary = x0 == 0 || z0 == 0 || x1 == width || z1 == depth;
         let boundary_is_exact = !touches_chunk_boundary || max_height - min_height <= 1.0e-6;
         if max_error <= max_error_m && boundary_is_exact {
             append_surface_quad(
@@ -522,38 +510,110 @@ fn emit_adaptive_surface_region(
     let z_mid = z0 + span_z / 2;
     if span_x > 1 && span_z > 1 {
         emit_adaptive_surface_region(
-            samples, width, depth, palette, x0, x_mid, z0, z_mid,
-            voxel_size_m, max_error_m, buffers,
+            samples,
+            width,
+            depth,
+            palette,
+            x0,
+            x_mid,
+            z0,
+            z_mid,
+            voxel_size_m,
+            max_error_m,
+            buffers,
         );
         emit_adaptive_surface_region(
-            samples, width, depth, palette, x_mid, x1, z0, z_mid,
-            voxel_size_m, max_error_m, buffers,
+            samples,
+            width,
+            depth,
+            palette,
+            x_mid,
+            x1,
+            z0,
+            z_mid,
+            voxel_size_m,
+            max_error_m,
+            buffers,
         );
         emit_adaptive_surface_region(
-            samples, width, depth, palette, x0, x_mid, z_mid, z1,
-            voxel_size_m, max_error_m, buffers,
+            samples,
+            width,
+            depth,
+            palette,
+            x0,
+            x_mid,
+            z_mid,
+            z1,
+            voxel_size_m,
+            max_error_m,
+            buffers,
         );
         emit_adaptive_surface_region(
-            samples, width, depth, palette, x_mid, x1, z_mid, z1,
-            voxel_size_m, max_error_m, buffers,
+            samples,
+            width,
+            depth,
+            palette,
+            x_mid,
+            x1,
+            z_mid,
+            z1,
+            voxel_size_m,
+            max_error_m,
+            buffers,
         );
     } else if span_x > 1 {
         emit_adaptive_surface_region(
-            samples, width, depth, palette, x0, x_mid, z0, z1,
-            voxel_size_m, max_error_m, buffers,
+            samples,
+            width,
+            depth,
+            palette,
+            x0,
+            x_mid,
+            z0,
+            z1,
+            voxel_size_m,
+            max_error_m,
+            buffers,
         );
         emit_adaptive_surface_region(
-            samples, width, depth, palette, x_mid, x1, z0, z1,
-            voxel_size_m, max_error_m, buffers,
+            samples,
+            width,
+            depth,
+            palette,
+            x_mid,
+            x1,
+            z0,
+            z1,
+            voxel_size_m,
+            max_error_m,
+            buffers,
         );
     } else {
         emit_adaptive_surface_region(
-            samples, width, depth, palette, x0, x1, z0, z_mid,
-            voxel_size_m, max_error_m, buffers,
+            samples,
+            width,
+            depth,
+            palette,
+            x0,
+            x1,
+            z0,
+            z_mid,
+            voxel_size_m,
+            max_error_m,
+            buffers,
         );
         emit_adaptive_surface_region(
-            samples, width, depth, palette, x0, x1, z_mid, z1,
-            voxel_size_m, max_error_m, buffers,
+            samples,
+            width,
+            depth,
+            palette,
+            x0,
+            x1,
+            z_mid,
+            z1,
+            voxel_size_m,
+            max_error_m,
+            buffers,
         );
     }
 }
@@ -616,8 +676,7 @@ fn append_mesh(destination: &mut Mesh, source: &Mesh) -> Result<(), String> {
     else {
         return Err("LOD source mesh has no float3 normal attribute".to_owned());
     };
-    let Some(VertexAttributeValues::Float32x2(source_uvs)) =
-        source.attribute(Mesh::ATTRIBUTE_UV_0)
+    let Some(VertexAttributeValues::Float32x2(source_uvs)) = source.attribute(Mesh::ATTRIBUTE_UV_0)
     else {
         return Err("LOD source mesh has no float2 UV attribute".to_owned());
     };
@@ -840,16 +899,34 @@ mod tests {
             other => panic!("unexpected normal attribute: {other:?}"),
         };
         assert_eq!(positions.len(), normals.len());
-        assert!(positions.iter().all(|position| position[1] == 0.0 || position[1] == 1.0));
-        assert!(positions.iter().zip(normals).any(|(position, normal)| {
-            position[1] == 1.0 && normal[1] > 0.999
-        }));
+        assert!(
+            positions
+                .iter()
+                .all(|position| position[1] == 0.0 || position[1] == 1.0)
+        );
+        assert!(
+            positions
+                .iter()
+                .zip(normals)
+                .any(|(position, normal)| { position[1] == 1.0 && normal[1] > 0.999 })
+        );
         let min_x = positions.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
-        let max_x = positions.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
+        let max_x = positions
+            .iter()
+            .map(|p| p[0])
+            .fold(f32::NEG_INFINITY, f32::max);
         let min_z = positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
-        let max_z = positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        let max_z = positions
+            .iter()
+            .map(|p| p[2])
+            .fold(f32::NEG_INFINITY, f32::max);
         assert_eq!((min_x, max_x, min_z, max_z), (0.0, 8.0, 0.0, 8.0));
-        assert!(positions.iter().filter(|p| p[1] == 1.0).all(|p| (p[1] - 1.0).abs() < 1.0e-6));
+        assert!(
+            positions
+                .iter()
+                .filter(|p| p[1] == 1.0)
+                .all(|p| (p[1] - 1.0).abs() < 1.0e-6)
+        );
     }
 
     #[test]
