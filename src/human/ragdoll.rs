@@ -65,6 +65,18 @@ pub struct HumanControlSettings {
     pub idle: String,
     pub walk_backwards_reverse: bool,
     pub crouch_backwards_reverse: bool,
+    pub bindings: HumanInputBindings,
+}
+
+#[derive(Clone, Debug)]
+pub struct HumanInputBindings {
+    pub forward: KeyCode,
+    pub backward: KeyCode,
+    pub left: KeyCode,
+    pub right: KeyCode,
+    pub run_modifiers: Vec<KeyCode>,
+    pub crouch: KeyCode,
+    pub jump: KeyCode,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -160,6 +172,131 @@ pub(super) struct HumanJointConstraint;
 pub struct HumanPlayer {
     pub root: Entity,
     pub bodies: BTreeMap<String, Entity>,
+}
+
+fn input_binding_name<'a>(controls: &'a serde_json::Value, name: &str) -> Result<&'a str> {
+    let value = controls
+        .get("bindings")
+        .and_then(|bindings| bindings.get(name))
+        .and_then(serde_json::Value::as_str);
+    anyhow::Context::with_context(value, || {
+        format!("human controls are missing key binding '{name}'")
+    })
+}
+
+fn key_codes_for_binding(name: &str) -> Result<Vec<KeyCode>> {
+    let single = match name {
+        "A" => KeyCode::KeyA,
+        "B" => KeyCode::KeyB,
+        "C" => KeyCode::KeyC,
+        "D" => KeyCode::KeyD,
+        "E" => KeyCode::KeyE,
+        "F" => KeyCode::KeyF,
+        "G" => KeyCode::KeyG,
+        "H" => KeyCode::KeyH,
+        "I" => KeyCode::KeyI,
+        "J" => KeyCode::KeyJ,
+        "K" => KeyCode::KeyK,
+        "L" => KeyCode::KeyL,
+        "M" => KeyCode::KeyM,
+        "N" => KeyCode::KeyN,
+        "O" => KeyCode::KeyO,
+        "P" => KeyCode::KeyP,
+        "Q" => KeyCode::KeyQ,
+        "R" => KeyCode::KeyR,
+        "S" => KeyCode::KeyS,
+        "T" => KeyCode::KeyT,
+        "U" => KeyCode::KeyU,
+        "V" => KeyCode::KeyV,
+        "W" => KeyCode::KeyW,
+        "X" => KeyCode::KeyX,
+        "Y" => KeyCode::KeyY,
+        "Z" => KeyCode::KeyZ,
+        "SPACE" => KeyCode::Space,
+        "SHIFT_LEFT" => KeyCode::ShiftLeft,
+        "SHIFT_RIGHT" => KeyCode::ShiftRight,
+        "ARROW_UP" => KeyCode::ArrowUp,
+        "ARROW_DOWN" => KeyCode::ArrowDown,
+        "ARROW_LEFT" => KeyCode::ArrowLeft,
+        "ARROW_RIGHT" => KeyCode::ArrowRight,
+        _ => {
+            if name == "SHIFT" {
+                return Ok(vec![KeyCode::ShiftLeft, KeyCode::ShiftRight]);
+            }
+            anyhow::bail!("unsupported human key binding '{name}'");
+        }
+    };
+    Ok(vec![single])
+}
+
+fn required_input_binding(
+    controls: &serde_json::Value,
+    name: &str,
+) -> Result<Vec<KeyCode>> {
+    key_codes_for_binding(input_binding_name(controls, name)?)
+}
+
+fn single_input_binding(controls: &serde_json::Value, name: &str) -> Result<KeyCode> {
+    let mut keys = required_input_binding(controls, name)?;
+    ensure!(
+        keys.len() == 1,
+        "human key binding '{name}' must resolve to exactly one key"
+    );
+    Ok(keys.remove(0))
+}
+
+fn validate_action_key_set(
+    controls: &serde_json::Value,
+    action: &str,
+    bindings: &[&str],
+) -> Result<()> {
+    let expected: BTreeSet<_> = bindings
+        .iter()
+        .map(|name| input_binding_name(controls, name).map(str::to_owned))
+        .collect::<Result<_>>()?;
+    let values = controls
+        .get(action)
+        .and_then(|entry| entry.get("keys"))
+        .and_then(serde_json::Value::as_array);
+    let values = anyhow::Context::with_context(values, || {
+        format!("human control '{action}' must declare its key list")
+    })?;
+    let actual: BTreeSet<_> = values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| anyhow::anyhow!("human control '{action}' contains a non-string key"))
+        })
+        .collect::<Result<_>>()?;
+    ensure!(
+        actual.len() == values.len() && actual == expected,
+        "human control '{action}' keys do not match semantic bindings"
+    );
+    Ok(())
+}
+
+fn parse_human_input_bindings(controls: &serde_json::Value) -> Result<HumanInputBindings> {
+    validate_action_key_set(controls, "walk", &["forward", "backward", "left", "right"])?;
+    validate_action_key_set(controls, "run", &["run", "forward", "left", "right"])?;
+    validate_action_key_set(
+        controls,
+        "crouch",
+        &["crouch", "forward", "backward", "left", "right"],
+    )?;
+    validate_action_key_set(controls, "crouched_idle", &["crouch"])?;
+    validate_action_key_set(controls, "jump", &["jump"])?;
+
+    Ok(HumanInputBindings {
+        forward: single_input_binding(controls, "forward")?,
+        backward: single_input_binding(controls, "backward")?,
+        left: single_input_binding(controls, "left")?,
+        right: single_input_binding(controls, "right")?,
+        run_modifiers: required_input_binding(controls, "run")?,
+        crouch: single_input_binding(controls, "crouch")?,
+        jump: single_input_binding(controls, "jump")?,
+    })
 }
 
 impl HumanPhysicsSettings {
@@ -331,6 +468,7 @@ impl HumanPhysicsSettings {
             idle: action_name("idle")?,
             walk_backwards_reverse,
             crouch_backwards_reverse,
+            bindings: parse_human_input_bindings(controls)?,
         };
         let camera = &manifest.camera;
         let camera_number = |name: &str| -> Result<f32> {
@@ -727,6 +865,7 @@ fn nearest_body_parent<'a>(rig: &'a HumanRig, mut parent: Option<&'a str>) -> Op
 #[cfg(test)]
 mod tests {
     use super::HumanPhysicsSettings;
+    use bevy::prelude::KeyCode;
     use std::path::Path;
 
     #[test]
@@ -735,6 +874,16 @@ mod tests {
         assert!((settings.total_mass_kg - 73.0).abs() < f32::EPSILON);
         assert!((settings.body_mass_kg("Root").unwrap() - 8.1541).abs() < 1.0e-3);
         assert_eq!(settings.mass_distribution_reference, "de_leva_1996_male");
+        assert_eq!(settings.controls.bindings.forward, KeyCode::KeyW);
+        assert_eq!(settings.controls.bindings.backward, KeyCode::KeyS);
+        assert_eq!(settings.controls.bindings.left, KeyCode::KeyA);
+        assert_eq!(settings.controls.bindings.right, KeyCode::KeyD);
+        assert_eq!(settings.controls.bindings.crouch, KeyCode::KeyC);
+        assert_eq!(settings.controls.bindings.jump, KeyCode::Space);
+        assert_eq!(
+            settings.controls.bindings.run_modifiers,
+            [KeyCode::ShiftLeft, KeyCode::ShiftRight]
+        );
         assert_eq!(settings.body_mass_fractions.len(), 12);
         let mass_fraction_sum: f32 = settings.body_mass_fractions.values().sum();
         assert!((mass_fraction_sum - 1.0).abs() <= 1.0e-4);

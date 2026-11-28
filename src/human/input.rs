@@ -58,14 +58,18 @@ pub fn update_human_controls(
     let grounded = ground_hit.is_some_and(|hit| hit.normal.dot(Vec3::Y) > 0.55);
     let descending = root_velocity.0.y < -DESCENDING_THRESHOLD_M_S;
 
-    let key_w = keys.pressed(KeyCode::KeyW);
-    let key_a = keys.pressed(KeyCode::KeyA);
-    let key_s = keys.pressed(KeyCode::KeyS);
-    let key_d = keys.pressed(KeyCode::KeyD);
-    let crouching = keys.pressed(KeyCode::KeyC);
-    let shift = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
-    let jump_pressed = keys.just_pressed(KeyCode::Space);
-    let jump_held = keys.pressed(KeyCode::Space);
+    let bindings = &settings.controls.bindings;
+    let key_w = keys.pressed(bindings.forward);
+    let key_a = keys.pressed(bindings.left);
+    let key_s = keys.pressed(bindings.backward);
+    let key_d = keys.pressed(bindings.right);
+    let crouching = keys.pressed(bindings.crouch);
+    let shift = bindings
+        .run_modifiers
+        .iter()
+        .any(|key| keys.pressed(*key));
+    let jump_pressed = keys.just_pressed(bindings.jump);
+    let jump_held = keys.pressed(bindings.jump);
     let horizontal_input = key_w || key_a || key_s || key_d;
     let backwards = key_s && !key_w;
     let run_input = key_w || key_a || key_d;

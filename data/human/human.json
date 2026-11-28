@@ -96,6 +96,15 @@
     }
   },
   "controls": {
+    "bindings": {
+      "forward": "W",
+      "backward": "S",
+      "left": "A",
+      "right": "D",
+      "run": "SHIFT",
+      "crouch": "C",
+      "jump": "SPACE"
+    },
     "walk": {
       "keys": [
         "W",
