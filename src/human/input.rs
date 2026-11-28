@@ -102,9 +102,7 @@ pub fn update_human_controls(
         )
     } else if jump_pressed && wall_ahead {
         (Some((settings.controls.climb.as_str(), false)), false, true)
-    } else if !grounded && descending {
-        (Some((settings.controls.fall.as_str(), false)), false, false)
-    } else if was_climbing && !grounded {
+    } else if !grounded && (descending || was_climbing) {
         (Some((settings.controls.fall.as_str(), false)), false, false)
     } else if jump_pressed && grounded {
         (

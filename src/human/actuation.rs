@@ -249,17 +249,17 @@ pub fn drive_human_action_pose(
 
         // Translate non-root segments toward the action's calibrated body targets.
         // The Root's authored trajectory is handled separately above as a bounded force.
-        if part.bone_name != "Root" {
-            if let Some(target) = sampled.get(&part.bone_name) {
-                let root_relative = root_target.rotation_engine.inverse()
-                    * (target.center_engine - root_target.center_engine);
-                let desired_center = root_transform.translation + heading * root_relative;
-                let force = ((desired_center - transform.translation)
-                    * settings.pose_position_stiffness_n_per_m
-                    - linear_velocity.0 * settings.pose_position_damping_n_s_per_m)
-                    .clamp_length_max(settings.max_pose_force_n);
-                forces.apply_force(force);
-            }
+        if part.bone_name != "Root"
+            && let Some(target) = sampled.get(&part.bone_name)
+        {
+            let root_relative = root_target.rotation_engine.inverse()
+                * (target.center_engine - root_target.center_engine);
+            let desired_center = root_transform.translation + heading * root_relative;
+            let force = ((desired_center - transform.translation)
+                * settings.pose_position_stiffness_n_per_m
+                - linear_velocity.0 * settings.pose_position_damping_n_s_per_m)
+                .clamp_length_max(settings.max_pose_force_n);
+            forces.apply_force(force);
         }
 
         let torque = (axis * (stiffness * angle) - angular_velocity.0 * damping)

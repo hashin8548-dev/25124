@@ -4,6 +4,18 @@ use bevy::prelude::*;
 
 use super::{HumanActionState, HumanBodyPart, HumanMotionLibrary, HumanRig, HumanSkinnedSceneRoot};
 
+type NamedHumanNodeQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    (
+        Entity,
+        &'static Name,
+        &'static mut Transform,
+        Option<&'static ChildOf>,
+        Option<&'static HumanBodyPart>,
+    ),
+>;
+
 /// Mirrors solver-owned body transforms into the actual skinned GLB hierarchy.
 /// Physical bones follow their rigid bodies; helper/tool bones retain calibrated local
 /// action targets relative to their current physical parent.
@@ -13,13 +25,7 @@ pub fn sync_human_skinned_mesh(
     rig: Res<HumanRig>,
     scene_roots: Query<&Children, With<HumanSkinnedSceneRoot>>,
     children: Query<&Children>,
-    mut named_nodes: Query<(
-        Entity,
-        &Name,
-        &mut Transform,
-        Option<&ChildOf>,
-        Option<&HumanBodyPart>,
-    )>,
+    mut named_nodes: NamedHumanNodeQuery,
     global_transforms: Query<&GlobalTransform>,
 ) {
     let Some(action) = actions.action(&action_state.action_name) else {

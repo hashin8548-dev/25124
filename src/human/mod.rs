@@ -62,7 +62,10 @@ fn load_human_data(mut commands: Commands, config: Res<RuntimeConfig>) {
 
     match HumanPhysicsSettings::load(&config.paths.data_dir) {
         Ok(settings) => {
-            info!("Loaded human physical material and joint settings");
+            info!(
+                "Loaded human physical material and joint settings (mass distribution: {})",
+                settings.mass_distribution_reference
+            );
             commands.insert_resource(settings);
         }
         Err(error) => {

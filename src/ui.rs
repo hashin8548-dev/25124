@@ -7,6 +7,7 @@ use std::{
 
 use bevy::{
     app::AppExit,
+    ecs::system::SystemParam,
     input::mouse::{MouseScrollUnit, MouseWheel},
     input_focus::{
         FocusCause, InputFocus, InputFocusVisible,
@@ -1525,47 +1526,52 @@ fn load_menu(path: &Path) -> Result<MenuAsset, String> {
     Ok(menu)
 }
 
-fn handle_menu_action(
-    activate: On<Activate>,
-    actions: Query<(Entity, &MenuAction)>,
-    mode: Res<State<AppMode>>,
-    mut state: ResMut<MenuState>,
-    mut confirmation: ResMut<QuitConfirmationState>,
-    mut input_focus: ResMut<InputFocus>,
-    mut virtual_time: ResMut<Time<Virtual>>,
-    mut app_exit: MessageWriter<AppExit>,
-) {
-    let Ok((_, action)) = actions.get(activate.entity) else {
+#[derive(SystemParam)]
+struct MenuActionParams<'world, 'state> {
+    actions: Query<'world, 'state, (Entity, &'static MenuAction)>,
+    mode: Res<'world, State<AppMode>>,
+    state: ResMut<'world, MenuState>,
+    confirmation: ResMut<'world, QuitConfirmationState>,
+    input_focus: ResMut<'world, InputFocus>,
+    virtual_time: ResMut<'world, Time<Virtual>>,
+    app_exit: MessageWriter<'world, AppExit>,
+}
+
+fn handle_menu_action(activate: On<Activate>, mut params: MenuActionParams) {
+    let Ok((_, action)) = params.actions.get(activate.entity) else {
         return;
     };
 
     match action.0.as_str() {
         "start" | "resume" => {
-            state.visible = false;
-            input_focus.clear();
-            virtual_time.unpause();
+            params.state.visible = false;
+            params.input_focus.clear();
+            params.virtual_time.unpause();
         }
-        "quit" if *mode.get() == AppMode::Simulation => {
-            confirmation.visible = true;
-            confirmation.return_focus = Some(activate.entity);
-            if let Some((cancel, _)) = actions.iter().find(|(_, action)| action.0 == "quit_cancel")
+        "quit" if *params.mode.get() == AppMode::Simulation => {
+            params.confirmation.visible = true;
+            params.confirmation.return_focus = Some(activate.entity);
+            if let Some((cancel, _)) = params
+                .actions
+                .iter()
+                .find(|(_, action)| action.0 == "quit_cancel")
             {
-                input_focus.set(cancel, FocusCause::Navigated);
+                params.input_focus.set(cancel, FocusCause::Navigated);
             }
         }
         "quit" => {
-            app_exit.write(AppExit::Success);
+            params.app_exit.write(AppExit::Success);
         }
         "quit_cancel" => {
-            confirmation.visible = false;
-            if let Some(previous) = confirmation.return_focus.take() {
-                input_focus.set(previous, FocusCause::Navigated);
+            params.confirmation.visible = false;
+            if let Some(previous) = params.confirmation.return_focus.take() {
+                params.input_focus.set(previous, FocusCause::Navigated);
             } else {
-                input_focus.clear();
+                params.input_focus.clear();
             }
         }
         "quit_confirm" => {
-            app_exit.write(AppExit::Success);
+            params.app_exit.write(AppExit::Success);
         }
         _ => unreachable!("menu actions are validated during asset loading"),
     }
@@ -1679,20 +1685,24 @@ fn toggle_menu_with_escape(
     }
 }
 
+type MenuButtonStyleQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    (
+        Entity,
+        &'static Hovered,
+        Has<Pressed>,
+        &'static MenuButtonColors,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+    ),
+    With<Button>,
+>;
+
 fn update_button_styles(
     input_focus: Res<InputFocus>,
     focus_visible: Res<InputFocusVisible>,
-    mut buttons: Query<
-        (
-            Entity,
-            &Hovered,
-            Has<Pressed>,
-            &MenuButtonColors,
-            &mut BackgroundColor,
-            &mut BorderColor,
-        ),
-        With<Button>,
-    >,
+    mut buttons: MenuButtonStyleQuery,
 ) {
     for (entity, hovered, pressed, colors, mut background, mut border) in &mut buttons {
         let active =
