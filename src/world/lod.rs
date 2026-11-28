@@ -119,7 +119,7 @@ type BodyLodProxies<'w, 's> = Query<
         &'static mut Transform,
         &'static mut Visibility,
     ),
-    (With<BodyLodProxy>, Without<BodyLodOwner>),
+    (With<BodyLodProxy>, Without<BodyLodOwner>, Without<FreeFlyCamera>),
 >;
 
 pub(super) fn update_physics_body_lod(
@@ -204,6 +204,7 @@ type FarPlatformLodQuery<'w, 's> = Query<
         &'static mut Transform,
         &'static mut Visibility,
     ),
+    Without<FreeFlyCamera>,
 >;
 
 #[derive(SystemParam)]
