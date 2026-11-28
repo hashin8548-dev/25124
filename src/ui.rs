@@ -883,11 +883,8 @@ fn setup_menu(
                     .iter()
                     .any(|entry| entry.manifest_path == *path)
             })
-        && let Err(error) = remember_world_manifest(
-            &config.paths.project_root,
-            &manifest_path,
-            &mut preferences,
-        )
+        && let Err(error) =
+            remember_world_manifest(&config.paths.project_root, &manifest_path, &mut preferences)
     {
         warn!(
             "Could not remember command-line world '{}': {error}",
