@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use avian3d::prelude::{
     AngularVelocity, Collider, ColliderDensity, CollisionEventsEnabled, Friction,
     JointCollisionDisabled, JointDamping, LinearVelocity, Restitution, RevoluteJoint, RigidBody,
@@ -253,12 +253,14 @@ impl HumanPhysicsSettings {
         );
         let controls = &manifest.controls;
         let action_name = |state: &str| -> Result<String> {
-            controls
+            let action = controls
                 .get(state)
                 .and_then(|entry| entry.get("action"))
                 .and_then(serde_json::Value::as_str)
-                .map(str::to_owned)
-                .with_context(|| format!("human control state '{state}' has no action name"))
+                .map(str::to_owned);
+            anyhow::Context::with_context(action, || {
+                format!("human control state '{state}' has no action name")
+            })
         };
         let walk_backwards_reverse = controls
             .get("walk")
@@ -306,31 +308,33 @@ impl HumanPhysicsSettings {
         };
         let camera = &manifest.camera;
         let camera_number = |name: &str| -> Result<f32> {
-            camera
+            let value = camera
                 .get(name)
                 .and_then(serde_json::Value::as_f64)
                 .map(|value| value as f32)
-                .filter(|value| value.is_finite())
-                .with_context(|| format!("human camera setting '{name}' must be finite"))
+                .filter(|value| value.is_finite());
+            anyhow::Context::with_context(value, || {
+                format!("human camera setting '{name}' must be finite")
+            })
         };
         let camera_vec3 = |name: &str| -> Result<[f32; 3]> {
-            let values = camera
-                .get(name)
-                .and_then(serde_json::Value::as_array)
-                .with_context(|| format!("human camera setting '{name}' must be a 3D vector"))?;
+            let values = camera.get(name).and_then(serde_json::Value::as_array);
+            let values = anyhow::Context::with_context(values, || {
+                format!("human camera setting '{name}' must be a 3D vector")
+            })?;
             ensure!(
                 values.len() == 3,
                 "human camera setting '{name}' must have three components"
             );
             let mut result = [0.0; 3];
             for (index, value) in values.iter().enumerate() {
-                result[index] = value
+                let number = value
                     .as_f64()
                     .map(|number| number as f32)
-                    .filter(|number| number.is_finite())
-                    .with_context(|| {
-                        format!("human camera setting '{name}[{index}]' must be finite")
-                    })?;
+                    .filter(|number| number.is_finite());
+                result[index] = anyhow::Context::with_context(number, || {
+                    format!("human camera setting '{name}[{index}]' must be finite")
+                })?;
             }
             Ok(result)
         };
@@ -339,9 +343,10 @@ impl HumanPhysicsSettings {
                 == Some("third_person_over_shoulder"),
             "unsupported human camera mode"
         );
-        let crosshair = camera
-            .get("crosshair")
-            .context("human camera crosshair settings are missing")?;
+        let crosshair = anyhow::Context::context(
+            camera.get("crosshair"),
+            "human camera crosshair settings are missing",
+        )?;
         ensure!(
             crosshair.get("kind").and_then(serde_json::Value::as_str) == Some("single_dot"),
             "human camera crosshair must be a single dot"
@@ -353,12 +358,14 @@ impl HumanPhysicsSettings {
             vertical_fov_degrees: camera_number("vertical_fov_degrees")?,
             spring_stiffness: camera_number("spring_stiffness")?,
             spring_damping: camera_number("spring_damping")?,
-            crosshair_diameter_px: crosshair
-                .get("diameter_px")
-                .and_then(serde_json::Value::as_f64)
-                .map(|value| value as f32)
-                .filter(|value| value.is_finite())
-                .context("human crosshair diameter must be finite")?,
+            crosshair_diameter_px: anyhow::Context::context(
+                crosshair
+                    .get("diameter_px")
+                    .and_then(serde_json::Value::as_f64)
+                    .map(|value| value as f32)
+                    .filter(|value| value.is_finite()),
+                "human crosshair diameter must be finite",
+            )?,
         };
         ensure!(
             camera_settings.trailing_distance_m > 0.0

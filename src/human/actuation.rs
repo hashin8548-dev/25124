@@ -57,7 +57,7 @@ impl HumanActionState {
 #[allow(clippy::too_many_arguments)]
 pub fn drive_human_action_pose(
     time: Res<Time<Fixed>>,
-    mut action_state: Option<ResMut<HumanActionState>>,
+    action_state: Option<ResMut<HumanActionState>>,
     motions: Option<Res<HumanMotionLibrary>>,
     rig: Option<Res<HumanRig>>,
     settings: Option<Res<HumanPhysicsSettings>>,
