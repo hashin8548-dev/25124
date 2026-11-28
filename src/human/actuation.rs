@@ -187,18 +187,23 @@ pub fn drive_human_action_pose(
                 );
                 forces.apply_force(root_force);
             }
-            if jump_launch_enabled {
-                if let Some(root_mass) = settings.body_mass_kg("Root") {
-                    let impulse = Vec3::Y
-                        * root_mass
-                        * settings.temporary_assists.jump_launch.launch_speed_m_s;
-                    forces.apply_linear_impulse(impulse);
-                }
-            }
         } else if (part.bone_name == "Hand_L" || part.bone_name == "Hand_R")
             && let Some(force) = wall_grip_force
         {
             forces.apply_force(force);
+        }
+
+        // Apply the launch assist proportionally to every segment's mass. Equal delta-v
+        // preserves the ragdoll's internal rest motion while giving its centre of mass
+        // the configured launch speed without a single-body impulse shock.
+        if jump_launch_enabled
+            && let Some(segment_mass) = settings.body_mass_kg(&part.bone_name)
+        {
+            let impulse = launch_impulse_for_mass(
+                segment_mass,
+                settings.temporary_assists.jump_launch.launch_speed_m_s,
+            );
+            forces.apply_linear_impulse(impulse);
         }
 
         let desired_rotation = if part.bone_name == "Root" {
@@ -261,6 +266,10 @@ pub fn drive_human_action_pose(
     action_state.jump_launch_pending = false;
 }
 
+fn launch_impulse_for_mass(segment_mass_kg: f32, launch_speed_m_s: f32) -> Vec3 {
+    Vec3::Y * segment_mass_kg * launch_speed_m_s
+}
+
 fn root_motion_target_local(
     origin_absolute: DVec3,
     world_origin: DVec3,
@@ -285,7 +294,9 @@ fn root_vertical_pose_force(
 
 #[cfg(test)]
 mod tests {
-    use super::{root_motion_target_local, root_vertical_pose_force};
+    use super::{
+        launch_impulse_for_mass, root_motion_target_local, root_vertical_pose_force,
+    };
     use bevy::{math::DVec3, prelude::{Quat, Vec3}};
 
     #[test]
@@ -319,6 +330,28 @@ mod tests {
         assert!(
             (absolute_target_before - absolute_target_after).length() < 1.0e-3,
             "rebasing must preserve the absolute action target"
+        );
+    }
+
+    #[test]
+    fn jump_assist_gives_every_segment_equal_delta_velocity() {
+        let settings = crate::human::HumanPhysicsSettings::load(std::path::Path::new("data"))
+            .unwrap();
+        let launch_speed = 4.5;
+        let mut total_impulse = Vec3::ZERO;
+        for name in settings.body_mass_fractions.keys() {
+            let mass = settings.body_mass_kg(name).unwrap();
+            let impulse = launch_impulse_for_mass(mass, launch_speed);
+            total_impulse += impulse;
+            assert!(
+                ((impulse / mass).y - launch_speed).abs() < 1.0e-5,
+                "segment '{name}' should receive the same launch delta velocity"
+            );
+        }
+        assert!(
+            (total_impulse - Vec3::Y * settings.total_mass_kg * launch_speed).length()
+                < 1.0e-3,
+            "sum of segment impulses must equal whole-body launch momentum"
         );
     }
 }
