@@ -7,7 +7,7 @@ use crate::config::{ChunkFile, ChunkLayer, ChunkSource, WorldGeneration};
 
 const CHUNK_EDGE: i64 = 32;
 const CHUNK_HEIGHT: u32 = 8;
-const PLATFORM_COMPONENT: &str = "block.bedrock";
+pub(crate) const PLATFORM_COMPONENT: &str = "block.bedrock";
 
 /// Absolute world-space origin used to keep Bevy's f32 transforms close to the camera.
 #[derive(Resource, Clone, Copy, Debug, Default)]

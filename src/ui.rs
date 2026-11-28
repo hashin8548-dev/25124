@@ -133,6 +133,9 @@ struct SettingsRenderDistanceValue;
 #[derive(Component)]
 struct SettingsLodDetailValue;
 
+#[derive(Component)]
+struct SettingsLodDistanceValue;
+
 #[derive(Component, Default)]
 struct MenuGlowState(bool);
 
@@ -480,8 +483,15 @@ struct UserPreferences {
     schema_version: u32,
     last_world_manifest: Option<String>,
     render_distance_chunks: u32,
+    /// Independent far-field LOD coverage in chunks.
+    #[serde(default = "default_lod_distance_chunks")]
+    lod_distance_chunks: u32,
     /// 0 = performance, 1 = balanced, 2 = quality.
     lod_detail: u8,
+}
+
+fn default_lod_distance_chunks() -> u32 {
+    512
 }
 
 impl Default for UserPreferences {
@@ -490,6 +500,7 @@ impl Default for UserPreferences {
             schema_version: 1,
             last_world_manifest: None,
             render_distance_chunks: 2,
+            lod_distance_chunks: default_lod_distance_chunks(),
             lod_detail: 1,
         }
     }
@@ -523,7 +534,9 @@ fn load_user_preferences(project_root: &Path) -> UserPreferences {
         }
     };
     if preferences.schema_version != 1
-        || !(2..=8).contains(&preferences.render_distance_chunks)
+        || !(2..=124).contains(&preferences.render_distance_chunks)
+        || preferences.lod_distance_chunks < preferences.render_distance_chunks.saturating_add(3)
+        || preferences.lod_distance_chunks > 500_000
         || preferences.lod_detail > 2
     {
         warn!(
@@ -585,14 +598,15 @@ fn apply_user_preferences(config: &mut RuntimeConfig, preferences: &UserPreferen
     let streaming = &mut config.engine.streaming;
     streaming.load_radius_chunks = preferences.render_distance_chunks;
     streaming.unload_radius_chunks = preferences.render_distance_chunks.saturating_add(1);
-    let (near, mid, far): (f32, f32, f32) = match preferences.lod_detail {
-        0 => (0.75, 1.5, 2.25),
-        1 => (1.0, 1.75, 2.5),
-        _ => (1.25, 2.0, 2.75),
-    };
-    streaming.lod_near_distance_chunks = near;
-    streaming.lod_mid_distance_chunks = mid;
-    streaming.lod_far_distance_chunks = far.min(streaming.unload_radius_chunks as f32);
+    streaming.lod_visibility_distance_chunks = preferences.lod_distance_chunks;
+    let lod_span = (preferences.lod_distance_chunks - preferences.render_distance_chunks) as f32;
+    streaming.lod_near_distance_chunks = preferences.render_distance_chunks as f32;
+    streaming.lod_mid_distance_chunks =
+        streaming.lod_near_distance_chunks + lod_span / 3.0;
+    streaming.lod_far_distance_chunks =
+        streaming.lod_near_distance_chunks + lod_span * (2.0 / 3.0);
+    // Select a precomputed geometric quality variant; transition distances stay unchanged.
+    streaming.lod_quality = preferences.lod_detail;
 }
 
 fn remember_world_manifest(
@@ -605,6 +619,26 @@ fn remember_world_manifest(
         .map_err(|error| format!("world manifest is outside the project root: {error}"))?;
     preferences.last_world_manifest = Some(relative.to_string_lossy().replace('\\', "/"));
     save_user_preferences(project_root, preferences)
+}
+
+fn adjust_lod_distance(current: u32, render_distance: u32, increase: bool) -> u32 {
+    const STEPS: [u32; 15] = [
+        32, 64, 128, 256, 512, 1_024, 2_048, 4_096, 8_192, 16_384, 32_768, 65_536,
+        131_072, 262_144, 500_000,
+    ];
+    let minimum = render_distance.saturating_add(3);
+    if increase {
+        STEPS
+            .into_iter()
+            .find(|step| *step > current && *step >= minimum)
+            .unwrap_or(500_000)
+    } else {
+        STEPS
+            .into_iter()
+            .rev()
+            .find(|step| *step < current && *step >= minimum)
+            .unwrap_or(minimum)
+    }
 }
 
 fn lod_detail_label(detail: u8) -> &'static str {
@@ -1617,6 +1651,90 @@ fn setup_menu(
                             });
                         }
                     });
+
+                panel
+                    .spawn(Node {
+                        width: Val::Percent(100.0),
+                        min_height: Val::Px(64.0),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(12.0),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn((
+                            Text::new("LOD DISTANCE"),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                flex_grow: 1.0,
+                                ..default()
+                            },
+                        ));
+                        row.spawn((
+                            SettingsLodDistanceValue,
+                            Text::new(""),
+                            TextFont {
+                                font_size: FontSize::Px(menu.button_font_size_px),
+                                ..default()
+                            },
+                            TextColor(button_text_color),
+                            Node {
+                                width: Val::Px(130.0),
+                                ..default()
+                            },
+                        ));
+                        for (label, action, index) in [
+                            ("−", "lod_distance_down", 0),
+                            ("+", "lod_distance_up", 1),
+                        ] {
+                            row.spawn((
+                                Button,
+                                TabIndex(8 + index),
+                                Hovered::default(),
+                                Node {
+                                    width: Val::Px(42.0),
+                                    height: Val::Px(42.0),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::Center,
+                                    ..default()
+                                },
+                                BorderColor::all(button_border_color),
+                                BackgroundColor(button_color),
+                                MenuButtonColors {
+                                    normal: button_color,
+                                    hovered: button_hover_color,
+                                    border_normal: button_border_color,
+                                    border_active: button_active_border_color,
+                                },
+                                SettingAction(action.to_owned()),
+                                observe(handle_setting_action),
+                            ))
+                            .with_children(|button| {
+                                button.spawn((
+                                    Text::new(label),
+                                    TextFont {
+                                        font_size: FontSize::Px(menu.button_font_size_px + 4.0),
+                                        ..default()
+                                    },
+                                    TextColor(button_text_color),
+                                ));
+                            });
+                        }
+                    });
+
+                panel.spawn((
+                    Text::new("Render Distance is full-detail radius; LOD Distance is outer visual coverage."),
+                    TextFont {
+                        font_size: FontSize::Px(menu.world_metadata_size_px),
+                        ..default()
+                    },
+                    TextColor(subtitle_color),
+                ));
 
                 panel.spawn((
                     Text::new("Changes apply live and are saved automatically."),
@@ -2708,10 +2826,36 @@ fn handle_setting_action(
                 .render_distance_chunks
                 .saturating_sub(1)
                 .max(2);
+            if state.preferences.lod_distance_chunks
+                < state.preferences.render_distance_chunks.saturating_add(3)
+            {
+                state.preferences.lod_distance_chunks =
+                    state.preferences.render_distance_chunks.saturating_add(3);
+            }
         }
         "render_distance_up" => {
             state.preferences.render_distance_chunks =
-                (state.preferences.render_distance_chunks + 1).min(8);
+                (state.preferences.render_distance_chunks + 1).min(124);
+            if state.preferences.lod_distance_chunks
+                < state.preferences.render_distance_chunks.saturating_add(3)
+            {
+                state.preferences.lod_distance_chunks =
+                    state.preferences.render_distance_chunks.saturating_add(3);
+            }
+        }
+        "lod_distance_down" => {
+            state.preferences.lod_distance_chunks = adjust_lod_distance(
+                state.preferences.lod_distance_chunks,
+                state.preferences.render_distance_chunks,
+                false,
+            );
+        }
+        "lod_distance_up" => {
+            state.preferences.lod_distance_chunks = adjust_lod_distance(
+                state.preferences.lod_distance_chunks,
+                state.preferences.render_distance_chunks,
+                true,
+            );
         }
         "lod_detail_down" => {
             state.preferences.lod_detail = state.preferences.lod_detail.saturating_sub(1);
@@ -2726,8 +2870,9 @@ fn handle_setting_action(
     match save_user_preferences(&config.paths.project_root, &state.preferences) {
         Ok(()) => {
             feedback.message = format!(
-                "Settings saved · render distance {} chunks · LOD {}",
+                "Settings saved · full detail {} chunks · LOD coverage {} chunks · {} geometry",
                 state.preferences.render_distance_chunks,
+                state.preferences.lod_distance_chunks,
                 lod_detail_label(state.preferences.lod_detail)
             );
             feedback.tone = MenuFeedbackTone::Success;
@@ -2756,6 +2901,15 @@ fn sync_settings_labels(
         (
             With<SettingsLodDetailValue>,
             Without<SettingsRenderDistanceValue>,
+            Without<SettingsLodDistanceValue>,
+        ),
+    >,
+    mut lod_distance_labels: Query<
+        &mut Text,
+        (
+            With<SettingsLodDistanceValue>,
+            Without<SettingsRenderDistanceValue>,
+            Without<SettingsLodDetailValue>,
         ),
     >,
 ) {
@@ -2768,6 +2922,9 @@ fn sync_settings_labels(
     }
     for mut text in &mut lod_detail_labels {
         text.0 = lod_detail_label(state.preferences.lod_detail).to_owned();
+    }
+    for mut text in &mut lod_distance_labels {
+        text.0 = format!("{} CHUNKS", config.engine.streaming.lod_visibility_distance_chunks);
     }
 }
 
@@ -3467,18 +3624,70 @@ mod tests {
 
         let mut preferences = UserPreferences {
             last_world_manifest: Some("worlds/alpha/world.json".to_owned()),
-            render_distance_chunks: 8,
+            render_distance_chunks: 124,
+            lod_distance_chunks: 500_000,
             lod_detail: 2,
             ..UserPreferences::default()
         };
         save_user_preferences(&root, &preferences).unwrap();
         assert_eq!(load_user_preferences(&root), preferences);
 
-        preferences.render_distance_chunks = 9;
+        preferences.render_distance_chunks = 125;
+        save_user_preferences(&root, &preferences).unwrap();
+        assert_eq!(load_user_preferences(&root), UserPreferences::default());
+
+        preferences.render_distance_chunks = 124;
+        preferences.lod_distance_chunks = 500_001;
         save_user_preferences(&root, &preferences).unwrap();
         assert_eq!(load_user_preferences(&root), UserPreferences::default());
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn legacy_preferences_default_the_new_lod_distance_field() {
+        let root = temp_root("legacy-preferences");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            user_preferences_path(&root),
+            r#"{
+                "schema_version": 1,
+                "last_world_manifest": null,
+                "render_distance_chunks": 8,
+                "lod_detail": 1
+            }"#,
+        )
+        .unwrap();
+
+        let restored = load_user_preferences(&root);
+        assert_eq!(restored.render_distance_chunks, 8);
+        assert_eq!(restored.lod_distance_chunks, 512);
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn runtime_preferences_drive_full_detail_lod_range_and_geometry_quality() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut config = RuntimeConfig::load(
+            root.join("data"),
+            root.join("assets"),
+            root.join("tests/fixtures/sandbox/world.json"),
+        )
+        .unwrap();
+        let preferences = UserPreferences {
+            render_distance_chunks: 124,
+            lod_distance_chunks: 500_000,
+            lod_detail: 2,
+            ..UserPreferences::default()
+        };
+
+        apply_user_preferences(&mut config, &preferences);
+        assert_eq!(config.engine.streaming.load_radius_chunks, 124);
+        assert_eq!(config.engine.streaming.lod_visibility_distance_chunks, 500_000);
+        assert_eq!(config.engine.streaming.lod_near_distance_chunks, 124.0);
+        assert_eq!(config.engine.streaming.lod_quality, 2);
+        assert_eq!(config.engine.streaming.lod_geometry_errors_m, [0.75, 0.25, 0.05]);
     }
 
     #[test]
@@ -3514,14 +3723,17 @@ mod tests {
     }
 
     #[test]
-    fn lod_detail_profiles_preserve_strict_distance_ordering() {
-        let profiles = [
-            (0.75_f32, 1.5_f32, 2.25_f32),
-            (1.0_f32, 1.75_f32, 2.5_f32),
-            (1.25_f32, 2.0_f32, 2.75_f32),
-        ];
-        for (near, mid, far) in profiles {
-            assert!(near > 0.0 && near < mid && mid < far && far <= 3.0);
-        }
+    fn lod_distance_steps_reach_500000_without_exceeding_the_full_detail_gap() {
+        assert_eq!(adjust_lod_distance(262_144, 124, true), 500_000);
+        assert_eq!(adjust_lod_distance(500_000, 124, true), 500_000);
+        assert_eq!(adjust_lod_distance(500_000, 124, false), 262_144);
+        assert_eq!(adjust_lod_distance(128, 124, false), 127);
+    }
+
+    #[test]
+    fn lod_detail_profiles_change_geometric_error_not_distance_bands() {
+        let geometric_errors = [0.75_f32, 0.25_f32, 0.05_f32];
+        assert!(geometric_errors[0] > geometric_errors[1]);
+        assert!(geometric_errors[1] > geometric_errors[2]);
     }
 }

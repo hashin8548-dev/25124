@@ -34,6 +34,14 @@ impl Plugin for WorldPlugin {
                     .after(generation::rebase_world_origin)
                     .in_set(ChunkStreamingUpdateSet),
             )
-            .add_systems(Update, lod::update_chunk_lod.after(ChunkStreamingUpdateSet));
+            .add_systems(
+                Update,
+                (
+                    lod::update_chunk_lod,
+                    lod::update_physics_body_lod,
+                    lod::update_far_platform_lod,
+                )
+                    .after(ChunkStreamingUpdateSet),
+            );
     }
 }
