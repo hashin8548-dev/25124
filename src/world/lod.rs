@@ -291,7 +291,7 @@ pub(super) fn update_far_platform_lod(
     if let Some((_, mut far, mut mesh_handle, mut material_handle, mut transform, mut visibility)) =
         far_platforms.iter_mut().next()
     {
-        let moved = camera_absolute.distance(far.anchor_absolute) >= 16.0;
+        let moved = far_platform_anchor_moved(camera_absolute, far.anchor_absolute);
         let changed = context.config.is_changed()
             || moved
             || far.world_size_units != *size_units
@@ -314,7 +314,8 @@ pub(super) fn update_far_platform_lod(
             far.anchor_absolute = camera_absolute;
         }
         if context.world_origin.is_changed() || changed {
-            transform.translation = (far.anchor_absolute - context.world_origin.0).as_vec3();
+            transform.translation =
+                far_platform_local_translation(far.anchor_absolute, context.world_origin.0);
         }
         visibility.set_if_neq(Visibility::Visible);
     } else {
@@ -330,7 +331,10 @@ pub(super) fn update_far_platform_lod(
             Name::new("procedural:flat-platform:far-lod"),
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(materials.add(new_material())),
-            Transform::from_translation((camera_absolute - context.world_origin.0).as_vec3()),
+            Transform::from_translation(far_platform_local_translation(
+                camera_absolute,
+                context.world_origin.0,
+            )),
             Visibility::Visible,
             FarPlatformLod {
                 world_size_units: *size_units,
@@ -340,6 +344,20 @@ pub(super) fn update_far_platform_lod(
             },
         ));
     }
+}
+
+fn far_platform_anchor_moved(current: DVec3, previous: DVec3) -> bool {
+    let dx = current.x - previous.x;
+    let dz = current.z - previous.z;
+    dx.mul_add(dx, dz * dz) >= 16.0_f64.powi(2)
+}
+
+fn far_platform_local_translation(camera_anchor: DVec3, world_origin: DVec3) -> Vec3 {
+    Vec3::new(
+        (camera_anchor.x - world_origin.x) as f32,
+        (1.0 - world_origin.y) as f32,
+        (camera_anchor.z - world_origin.z) as f32,
+    )
 }
 
 fn flat_platform_lod_ring(
@@ -381,7 +399,10 @@ fn flat_platform_lod_ring(
     let mut normals = Vec::<[f32; 3]>::with_capacity(angles.len() * 12);
     let mut uvs = Vec::<[f32; 2]>::with_capacity(angles.len() * 12);
     let mut indices = Vec::<u32>::with_capacity(angles.len() * 6);
-    let base_y = (1.0 - anchor_absolute.y) as f32 - 0.0002;
+    // Keep mesh vertices near the local origin. Encoding absolute camera altitude here
+    // would require subtracting two large f32 values in the entity transform and mesh,
+    // causing the far surface to drift as the camera flies upward.
+    let base_y = -0.0002;
 
     for index in 0..angles.len() {
         let angle0 = angles[index];
@@ -516,8 +537,9 @@ fn lod_level_is_visible(
 #[cfg(test)]
 mod tests {
     use super::{
-        ChunkLodVisual, body_lod_visibility, distance_to_aabb, flat_platform_lod_ring,
-        lod_level_is_visible, lod_quality_matches, lod_visual_is_visible,
+        ChunkLodVisual, body_lod_visibility, distance_to_aabb, far_platform_anchor_moved,
+        far_platform_local_translation, flat_platform_lod_ring, lod_level_is_visible,
+        lod_quality_matches, lod_visual_is_visible,
     };
     use bevy::prelude::Vec3;
     use bevy::{
@@ -675,6 +697,23 @@ mod tests {
     }
 
     #[test]
+    fn far_platform_lod_does_not_reanchor_or_shift_when_camera_only_changes_altitude() {
+        let previous = DVec3::new(120.0, 32.0, -80.0);
+        let high = DVec3::new(120.0, 50_000.0, -80.0);
+        assert!(!far_platform_anchor_moved(high, previous));
+        assert!(far_platform_anchor_moved(
+            DVec3::new(136.0, 50_000.0, -80.0),
+            high
+        ));
+
+        let origin = DVec3::new(96.0, 49_152.0, -96.0);
+        let local = far_platform_local_translation(high, origin);
+        assert_eq!(local.x, 24.0);
+        assert_eq!(local.z, 16.0);
+        assert!((local.y as f64 + origin.y - 1.0).abs() < 1.0e-6);
+    }
+
+    #[test]
     fn flat_platform_far_lod_covers_500000_chunks_with_bounded_mesh_size() {
         let mesh = flat_platform_lod_ring(255_000_000, DVec3::ZERO, 4_000.0, 16_000_000.0, 0.25);
         let VertexAttributeValues::Float32x3(positions) =
@@ -688,7 +727,7 @@ mod tests {
         assert!(
             positions
                 .iter()
-                .all(|position| (position[1] - 0.9998).abs() < 1.0e-4)
+                .all(|position| (position[1] + 0.0002).abs() < 1.0e-6)
         );
         let max_radius = positions
             .iter()
