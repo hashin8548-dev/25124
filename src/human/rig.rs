@@ -428,7 +428,7 @@ fn matrix_is_finite(matrix: Mat4) -> bool {
 mod tests {
     use super::HumanRig;
     use crate::human::HumanMotionLibrary;
-    use std::path::Path;
+    use std::{collections::BTreeSet, path::Path};
 
     #[test]
     fn loads_all_deformation_bodies_and_joint_markers() {
