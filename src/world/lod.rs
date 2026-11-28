@@ -207,7 +207,7 @@ type FarPlatformLodQuery<'w, 's> = Query<
 >;
 
 #[derive(SystemParam)]
-struct FarPlatformLodSystem<'w, 's> {
+pub(super) struct FarPlatformLodSystem<'w, 's> {
     mode: Res<'w, State<AppMode>>,
     config: Res<'w, RuntimeConfig>,
     world_origin: Res<'w, WorldOrigin>,
