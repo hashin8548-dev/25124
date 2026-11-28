@@ -257,10 +257,7 @@ impl HumanRig {
 
     /// Returns the rig-metadata joint marker assigned to a physical body segment.
     pub fn joint_marker_for_body(&self, body_name: &str) -> Option<&str> {
-        self.bones
-            .get(body_name)?
-            .joint_marker_track
-            .as_deref()
+        self.bones.get(body_name)?.joint_marker_track.as_deref()
     }
 
     pub fn bone_names(&self) -> impl Iterator<Item = &str> {
