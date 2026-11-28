@@ -28,6 +28,7 @@ pub struct RigBone {
     pub matrix_parent_local: [[f32; 4]; 4],
     pub action_reference_parent_local: Option<[f32; 16]>,
     pub collision_geometry: Option<BoneCollisionGeometry>,
+    pub joint_marker_track: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -194,6 +195,26 @@ impl HumanRig {
                 "joint marker '{marker_name}' has no idle action reference transform"
             );
         }
+
+        // The converter records the physical joint marker on the body segment it anchors.
+        // Validate the complete mapping once so spawning never relies on bone-name conventions.
+        let mut assigned_markers = BTreeSet::new();
+        for body_name in &body_names {
+            if let Some(marker_name) = &bones[body_name].joint_marker_track {
+                ensure!(
+                    marker_names.contains(marker_name),
+                    "body track '{body_name}' references undeclared joint marker '{marker_name}'"
+                );
+                ensure!(
+                    assigned_markers.insert(marker_name.clone()),
+                    "joint marker '{marker_name}' is assigned to more than one body track"
+                );
+            }
+        }
+        ensure!(
+            assigned_markers == marker_names,
+            "human rig joint markers do not have a one-to-one body-track assignment"
+        );
         for bone in bones.values() {
             if let Some(parent) = &bone.parent {
                 ensure!(
@@ -232,6 +253,14 @@ impl HumanRig {
 
     pub fn marker_names(&self) -> impl Iterator<Item = &str> {
         self.marker_names.iter().map(String::as_str)
+    }
+
+    /// Returns the rig-metadata joint marker assigned to a physical body segment.
+    pub fn joint_marker_for_body(&self, body_name: &str) -> Option<&str> {
+        self.bones
+            .get(body_name)?
+            .joint_marker_track
+            .as_deref()
     }
 
     pub fn bone_names(&self) -> impl Iterator<Item = &str> {
@@ -409,6 +438,11 @@ mod tests {
         let rig = HumanRig::load(Path::new("data")).unwrap();
         assert_eq!(rig.body_names().count(), 12);
         assert_eq!(rig.marker_names().count(), 6);
+        let assigned_markers: BTreeSet<_> = rig
+            .body_names()
+            .filter_map(|name| rig.joint_marker_for_body(name))
+            .collect();
+        assert_eq!(assigned_markers.len(), 6);
         for name in rig.body_names() {
             let bone = rig.bone(name).unwrap();
             assert!(bone.collision_geometry.is_some(), "{name}");

@@ -510,7 +510,7 @@ pub fn spawn_human_player(
             error!("Human joint '{child_name}' is missing a body entity");
             return;
         };
-        let marker_name = joint_marker_for(child_name);
+        let marker_name = rig.joint_marker_for_body(child_name);
         let anchor_name = marker_name.unwrap_or(child_name);
         let Some(anchor_source) = source_pose.get(anchor_name) else {
             error!("Human joint '{child_name}' has no '{anchor_name}' marker transform");
@@ -644,18 +644,6 @@ fn nearest_body_parent<'a>(rig: &'a HumanRig, mut parent: Option<&'a str>) -> Op
         parent = rig.bone(name).and_then(|bone| bone.parent.as_deref());
     }
     None
-}
-
-fn joint_marker_for(child: &str) -> Option<&'static str> {
-    match child {
-        "Arm_L" => Some("Shoulder_L"),
-        "Arm_R" => Some("Shoulder_R"),
-        "Hand_L" => Some("Elbow_L"),
-        "Hand_R" => Some("Elbow_R"),
-        "Leg_L" => Some("Knee_L"),
-        "Leg_R" => Some("Knee_R"),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
