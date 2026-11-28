@@ -708,7 +708,7 @@ fn body_collision_layers(
             .bone(child_name)
             .ok_or_else(|| anyhow::anyhow!("human body '{child_name}' has no rig bone"))?;
         if let Some(parent_name) = nearest_body_parent(rig, child_bone.parent.as_deref()) {
-            let pair = if parent_name < child_name {
+            let pair = if parent_name < child_name.as_str() {
                 (parent_name.to_owned(), child_name.clone())
             } else {
                 (child_name.clone(), parent_name.to_owned())
@@ -1072,7 +1072,7 @@ mod tests {
     };
     use crate::human::{HumanMotionLibrary, HumanRig};
     use avian3d::prelude::CollisionLayers;
-    use bevy::prelude::{KeyCode, Vec3};
+    use bevy::prelude::{KeyCode, Quat, Vec3};
     use std::{path::Path, time::Duration};
 
     #[test]
