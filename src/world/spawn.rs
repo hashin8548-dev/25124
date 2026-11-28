@@ -453,7 +453,8 @@ pub(super) fn spawn_chunk(
                             quality_level,
                             center: lod_center,
                             half_extents: Vec3::from_array(
-                                dimensions.map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
+                                dimensions
+                                    .map(|dimension| dimension as f32 * chunk.voxel_size_m * 0.5),
                             ),
                             near_distance_m: lod_near_distance_m,
                             mid_distance_m: lod_mid_distance_m,
@@ -538,7 +539,9 @@ pub(super) fn spawn_chunk(
                     &mut visual_mesh_cache,
                     &mut visual_material_cache,
                 );
-                commands.entity(entity).insert(ChunkMembership(chunk.id.clone()));
+                commands
+                    .entity(entity)
+                    .insert(ChunkMembership(chunk.id.clone()));
                 if lod_settings.lod_enabled && lod_renderable[index(x, y, z)] {
                     // Keep exact per-cell rendering available for the damaged-chunk fallback,
                     // but avoid drawing it over the merged full-resolution LOD0 surface.
