@@ -1,5 +1,7 @@
 use avian3d::prelude::{AngularVelocity, Forces, LinearVelocity, WriteRigidBodyForces};
-use bevy::prelude::*;
+use bevy::{math::DVec3, prelude::*};
+
+use crate::world::WorldOrigin;
 
 use super::{HumanBodyPart, HumanMotionLibrary, HumanPhysicsSettings, HumanPlayer, HumanRig};
 
@@ -16,8 +18,9 @@ pub struct HumanActionState {
     pub wall_grip_active: bool,
     /// Outward normal returned by the most recent wall probe.
     pub wall_grip_normal: Vec3,
-    /// Physical root position captured at the start of the selected action.
-    pub root_motion_origin_world: Option<Vec3>,
+    /// Absolute world-space root position captured at the start of the selected action.
+    /// DVec3 keeps this reference invariant when the simulation's floating origin is rebased.
+    pub root_motion_origin_world: Option<DVec3>,
     /// Root body centre in the action's first (or reverse-playback last) sample.
     pub root_motion_reference_center_engine: Option<Vec3>,
 }
@@ -62,6 +65,7 @@ pub fn drive_human_action_pose(
     rig: Option<Res<HumanRig>>,
     settings: Option<Res<HumanPhysicsSettings>>,
     player: Option<Res<HumanPlayer>>,
+    origin: Res<WorldOrigin>,
     root_transforms: Query<&Transform>,
     mut bodies: Query<(
         &HumanBodyPart,
@@ -102,7 +106,8 @@ pub fn drive_human_action_pose(
         let Some(reference_root) = reference_pose.get("Root") else {
             return;
         };
-        action_state.root_motion_origin_world = Some(root_transform.translation);
+        action_state.root_motion_origin_world =
+            Some(root_transform.translation.as_dvec3() + origin.0);
         action_state.root_motion_reference_center_engine = Some(reference_root.center_engine);
     }
 
@@ -145,10 +150,15 @@ pub fn drive_human_action_pose(
         action_state.root_motion_origin_world,
         action_state.root_motion_reference_center_engine,
     ) {
-        (Some(origin_world), Some(reference_center))
+        (Some(origin_absolute), Some(reference_center))
             if !suppress_authored_jump_root && !root_translation_is_contact_driven =>
         {
-            Some(origin_world + heading * (root_target.center_engine - reference_center))
+            Some(root_motion_target_local(
+                origin_absolute,
+                origin.0,
+                heading,
+                root_target.center_engine - reference_center,
+            ))
         }
         _ => None,
     };
@@ -251,6 +261,15 @@ pub fn drive_human_action_pose(
     action_state.jump_launch_pending = false;
 }
 
+fn root_motion_target_local(
+    origin_absolute: DVec3,
+    world_origin: DVec3,
+    heading: Quat,
+    source_root_offset: Vec3,
+) -> Vec3 {
+    (origin_absolute - world_origin).as_vec3() + heading * source_root_offset
+}
+
 fn root_vertical_pose_force(
     desired_y: f32,
     current_y: f32,
@@ -266,7 +285,8 @@ fn root_vertical_pose_force(
 
 #[cfg(test)]
 mod tests {
-    use super::root_vertical_pose_force;
+    use super::{root_motion_target_local, root_vertical_pose_force};
+    use bevy::{math::DVec3, prelude::{Quat, Vec3}};
 
     #[test]
     fn authored_root_position_assistance_never_resists_horizontal_motion() {
@@ -274,5 +294,31 @@ mod tests {
         assert_eq!(force.x, 0.0);
         assert_eq!(force.z, 0.0);
         assert!((force.y - 166.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn root_action_target_is_invariant_under_floating_origin_rebase() {
+        let absolute_start = DVec3::new(180_000.0, 8_500.0, -92_000.0);
+        let before_rebase = DVec3::new(179_968.0, 8_192.0, -92_032.0);
+        let after_rebase = before_rebase + DVec3::new(32.0, 256.0, -64.0);
+        let heading = Quat::from_rotation_y(0.7);
+        let source_offset = Vec3::new(0.03, 0.12, -0.02);
+
+        let target_before =
+            root_motion_target_local(absolute_start, before_rebase, heading, source_offset);
+        let target_after =
+            root_motion_target_local(absolute_start, after_rebase, heading, source_offset);
+        let expected_shift = (after_rebase - before_rebase).as_vec3();
+
+        assert!(
+            (target_after - (target_before - expected_shift)).length() < 1.0e-4,
+            "the local action target must shift by the same vector as the simulation origin"
+        );
+        let absolute_target_before = target_before.as_dvec3() + before_rebase;
+        let absolute_target_after = target_after.as_dvec3() + after_rebase;
+        assert!(
+            (absolute_target_before - absolute_target_after).length() < 1.0e-3,
+            "rebasing must preserve the absolute action target"
+        );
     }
 }
