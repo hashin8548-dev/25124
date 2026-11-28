@@ -64,7 +64,7 @@ pub(super) fn update_chunk_lod(
             lod.center + lod.half_extents,
         );
         let damaged = damaged_chunks.contains(&lod.chunk_id);
-        let should_be_visible = lod_visual_is_visible(lod, distance, damaged);
+        let should_be_visible = lod_visual_is_visible(&lod, distance, damaged);
         visibility.set_if_neq(if should_be_visible {
             Visibility::Visible
         } else {
