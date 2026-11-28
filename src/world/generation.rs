@@ -30,10 +30,7 @@ type RebasedTransformQuery<'world, 'state> = Query<
 pub(super) fn rebase_world_origin(
     mut origin: ResMut<WorldOrigin>,
     mut world_state: ResMut<crate::persistence::WorldStateFile>,
-    mut queries: ParamSet<(
-        CameraTransformQuery<'_, '_>,
-        RebasedTransformQuery<'_, '_>,
-    )>,
+    mut queries: ParamSet<(CameraTransformQuery<'_, '_>, RebasedTransformQuery<'_, '_>)>,
 ) {
     let Some(camera_position) = queries
         .p0()
