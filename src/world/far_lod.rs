@@ -4,6 +4,7 @@ use std::{
 };
 
 use bevy::{
+    ecs::system::SystemParam,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future::poll_once},
 };
@@ -16,7 +17,8 @@ use super::{
 use crate::{
     camera::FreeFlyCamera,
     config::{
-        AlphaMode, ChunkFile, ChunkSource, RuntimeConfig, VisualDefinition, validate_chunk_file,
+        AlphaMode as ConfigAlphaMode, ChunkFile, ChunkSource, RuntimeConfig, VisualDefinition,
+        validate_chunk_file,
     },
     engine::AppMode,
     physics::DestructionJournal,
@@ -127,7 +129,7 @@ pub(super) fn update_far_chunk_lod(
         return;
     };
     let camera_position = camera_transform.translation;
-    let settings = FarChunkLodSettings::from(&context.config);
+    let settings = FarChunkLodSettings::from(&*context.config);
     let reference_source = &context.config.chunks[0];
     let reference_extent = chunk_extent(reference_source);
     let camera_cell = [
@@ -402,8 +404,8 @@ fn standard_material_from_visual(visual: &VisualDefinition) -> StandardMaterial 
         perceptual_roughness: visual.perceptual_roughness,
         metallic: visual.metallic,
         alpha_mode: match visual.alpha_mode {
-            AlphaMode::Opaque => AlphaMode::Opaque,
-            AlphaMode::Blend => AlphaMode::Blend,
+            ConfigAlphaMode::Opaque => AlphaMode::Opaque,
+            ConfigAlphaMode::Blend => AlphaMode::Blend,
         },
         ..default()
     }
