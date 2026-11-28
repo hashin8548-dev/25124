@@ -539,7 +539,7 @@ mod tests {
         assert!(!full);
         assert!(lod);
 
-        let (full, lod) = body_lod_visibility(105.0, 10.0, 100.0, false, true);
+        let (full, lod) = body_lod_visibility(104.0, 10.0, 100.0, false, true);
         assert!(!full);
         assert!(lod);
 
