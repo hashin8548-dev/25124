@@ -1204,7 +1204,7 @@ mod tests {
             AngularVelocity, Collider, Gravity, JointCollisionDisabled, JointDamping,
             LinearVelocity, Mass, PhysicsPlugins, RigidBody, SphericalJoint, SubstepCount,
         };
-        use bevy::{asset::AssetPlugin, math::Isometry3d, mesh::MeshPlugin, prelude::*, time::TimeUpdateStrategy};
+        use bevy::{asset::AssetPlugin, mesh::MeshPlugin, prelude::*, time::TimeUpdateStrategy};
 
         let mut app = App::new();
         app.add_plugins((
