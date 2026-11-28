@@ -13,12 +13,8 @@ const PLATFORM_COMPONENT: &str = "block.bedrock";
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub(crate) struct WorldOrigin(pub DVec3);
 
-type RebaseCameraQuery<'world, 'state> = Query<
-    'world,
-    'state,
-    &'static Transform,
-    With<crate::camera::FreeFlyCamera>,
->;
+type RebaseCameraQuery<'world, 'state> =
+    Query<'world, 'state, &'static Transform, With<crate::camera::FreeFlyCamera>>;
 type RebaseEntityQuery<'world, 'state> = Query<
     'world,
     'state,
@@ -28,8 +24,14 @@ type RebaseEntityQuery<'world, 'state> = Query<
     ),
     Without<ChildOf>,
 >;
-type WorldRebaseQueries<'world, 'state> =
-    ParamSet<'world, 'state, (RebaseCameraQuery<'world, 'state>, RebaseEntityQuery<'world, 'state>)>;
+type WorldRebaseQueries<'world, 'state> = ParamSet<
+    'world,
+    'state,
+    (
+        RebaseCameraQuery<'world, 'state>,
+        RebaseEntityQuery<'world, 'state>,
+    ),
+>;
 
 /// Recenters the f32 simulation around the camera while preserving absolute world position.
 /// Rebase steps are exact multiples of the procedural chunk edge, so voxel boundaries remain stable.
