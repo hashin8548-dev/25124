@@ -45,12 +45,19 @@ impl HumanActionState {
     /// Change the sampled action without mutating any source JSON data.
     pub fn select(&mut self, action_name: &str, reverse: bool) {
         if self.action_name != action_name || self.reverse != reverse {
+            // A queued impulse belongs to the action instance that requested it.
+            // Never let it leak into a later action if input cancels the jump.
+            self.jump_launch_pending = false;
             self.action_name = action_name.to_owned();
             self.elapsed_seconds = 0.0;
             self.reverse = reverse;
             self.root_motion_origin_world = None;
             self.root_motion_reference_center_engine = None;
         }
+    }
+
+    pub(super) fn has_pending_jump_launch_for(&self, jump_action: &str) -> bool {
+        self.jump_launch_pending && self.action_name == jump_action
     }
 }
 
@@ -162,8 +169,9 @@ pub fn drive_human_action_pose(
         }
         _ => None,
     };
-    let jump_launch_enabled =
-        action_state.jump_launch_pending && settings.temporary_assists.jump_launch.enabled;
+    let jump_launch_enabled = action_state
+        .has_pending_jump_launch_for(&settings.controls.jump)
+        && settings.temporary_assists.jump_launch.enabled;
     let wall_grip_force = if action_state.wall_grip_active
         && action_state.wall_grip_normal.is_finite()
         && action_state.wall_grip_normal.length_squared() > 0.9
@@ -292,11 +300,30 @@ fn root_vertical_pose_force(
 
 #[cfg(test)]
 mod tests {
-    use super::{launch_impulse_for_mass, root_motion_target_local, root_vertical_pose_force};
+    use super::{HumanActionState, launch_impulse_for_mass, root_motion_target_local, root_vertical_pose_force};
     use bevy::{
         math::DVec3,
         prelude::{Quat, Vec3},
     };
+
+    #[test]
+    fn queued_jump_impulse_is_bound_to_its_selected_action() {
+        let mut state = HumanActionState::default();
+        state.select("jump", false);
+        state.jump_launch_pending = true;
+
+        assert!(state.has_pending_jump_launch_for("jump"));
+        assert!(!state.has_pending_jump_launch_for("fall"));
+
+        // Re-selecting the same action must preserve the one-shot request.
+        state.select("jump", false);
+        assert!(state.has_pending_jump_launch_for("jump"));
+
+        // A real action transition cancels a request that has not reached physics yet.
+        state.select("fall", false);
+        assert!(!state.jump_launch_pending);
+        assert!(!state.has_pending_jump_launch_for("jump"));
+    }
 
     #[test]
     fn authored_root_position_assistance_never_resists_horizontal_motion() {
