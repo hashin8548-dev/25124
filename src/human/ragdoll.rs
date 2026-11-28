@@ -417,8 +417,7 @@ impl HumanPhysicsSettings {
                 && source.climb_contact_push_force_n >= 0.0,
             "human climb contact force must be non-negative and finite"
         );
-        let two_hand_climb_friction_n =
-            source.dynamic_friction * source.climb_contact_push_force_n;
+        let two_hand_climb_friction_n = source.dynamic_friction * source.climb_contact_push_force_n;
         let body_weight_n = source.total_mass_kg * 9.81;
         ensure!(
             two_hand_climb_friction_n >= body_weight_n * MIN_CLIMB_SUPPORT_FACTOR,
@@ -1103,8 +1102,7 @@ mod tests {
         assert!((body_mass_sum - settings.total_mass_kg).abs() <= 1.0e-3);
         assert!(settings.temporary_assists.jump_launch.enabled);
         assert!(settings.temporary_assists.rotational_assistance.enabled);
-        let climb_capacity_n =
-            settings.dynamic_friction * settings.climb_contact_push_force_n;
+        let climb_capacity_n = settings.dynamic_friction * settings.climb_contact_push_force_n;
         let body_weight_n = settings.total_mass_kg * 9.81;
         assert!(
             climb_capacity_n >= body_weight_n * super::MIN_CLIMB_SUPPORT_FACTOR,
