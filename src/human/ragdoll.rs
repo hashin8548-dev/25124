@@ -1204,7 +1204,9 @@ mod tests {
             AngularVelocity, Collider, Gravity, JointCollisionDisabled, JointDamping,
             LinearVelocity, Mass, PhysicsPlugins, RigidBody, SphericalJoint, SubstepCount,
         };
-        use bevy::{asset::AssetPlugin, mesh::MeshPlugin, prelude::*, time::TimeUpdateStrategy};
+        use bevy::{
+            asset::AssetPlugin, mesh::MeshPlugin, prelude::*, time::TimeUpdateStrategy,
+        };
 
         let mut app = App::new();
         app.add_plugins((
@@ -1227,10 +1229,8 @@ mod tests {
         let parent_translation = Vec3::new(-0.3, 0.0, 0.1);
         let child_translation = Vec3::new(0.4, 1.0, -0.2);
         let anchor_world = Vec3::new(0.05, 0.48, -0.04);
-        let parent_anchor_local =
-            parent_rotation.inverse() * (anchor_world - parent_translation);
-        let child_anchor_local =
-            child_rotation.inverse() * (anchor_world - child_translation);
+        let parent_anchor_local = parent_rotation.inverse() * (anchor_world - parent_translation);
+        let child_anchor_local = child_rotation.inverse() * (anchor_world - child_translation);
         let shared_joint_rotation = parent_rotation;
         let parent_frame =
             local_joint_frame(parent_rotation, shared_joint_rotation, parent_anchor_local);
@@ -1286,9 +1286,9 @@ mod tests {
         ));
 
         for _ in 0..240 {
-            app.insert_resource(TimeUpdateStrategy::ManualDuration(
-                Duration::from_secs_f64(1.0 / 120.0),
-            ));
+            app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+                1.0 / 120.0,
+            )));
             app.update();
         }
 
