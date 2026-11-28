@@ -266,53 +266,6 @@ impl VoxelGrid {
     }
 
     /// Builds a factor-two, visual-only approximation from mergeable source cells.
-    /// A coarse cell uses the most common non-air palette among its eight source cells.
-    /// Ties choose the lowest palette index for deterministic output. This intentionally
-    /// favors retaining thin structures over producing holes in distant silhouettes.
-    pub fn downsample_by_two(&self, renderable: &[bool]) -> Result<Self, String> {
-        if renderable.len() != self.cells.len() {
-            return Err("LOD renderable mask does not match the voxel grid volume".to_owned());
-        }
-        if self.dimensions.iter().any(|dimension| dimension % 2 != 0) {
-            return Err("factor-two LOD requires even voxel dimensions".to_owned());
-        }
-
-        let dimensions = [
-            self.dimensions[0] / 2,
-            self.dimensions[1] / 2,
-            self.dimensions[2] / 2,
-        ];
-        let mut cells = vec![0_u8; dimensions[0] * dimensions[1] * dimensions[2]];
-        for y in 0..dimensions[1] {
-            for z in 0..dimensions[2] {
-                for x in 0..dimensions[0] {
-                    let mut counts = [0_u8; 256];
-                    for dy in 0..2 {
-                        for dz in 0..2 {
-                            for dx in 0..2 {
-                                let source = self.index(x * 2 + dx, y * 2 + dy, z * 2 + dz);
-                                let palette = self.cells[source];
-                                if palette != 0 && renderable[source] {
-                                    counts[palette as usize] += 1;
-                                }
-                            }
-                        }
-                    }
-                    let mut selected = 0_u8;
-                    let mut selected_count = 0_u8;
-                    for palette in 1..=u8::MAX {
-                        if counts[palette as usize] > selected_count {
-                            selected = palette;
-                            selected_count = counts[palette as usize];
-                        }
-                    }
-                    cells[(y * dimensions[2] + z) * dimensions[0] + x] = selected;
-                }
-            }
-        }
-
-        Self::from_cells(dimensions, self.voxel_size_m * 2.0, cells)
-    }
     /// Decomposes equal-material occupied cells into maximal axis-aligned boxes. Each box
     /// becomes one child shape in the chunk's compound collider.
     pub fn greedy_boxes(&self, mergeable: &[bool]) -> Result<Vec<GreedyBox>, String> {
@@ -799,6 +752,7 @@ fn append_face(
 #[cfg(test)]
 mod tests {
     use super::VoxelGrid;
+    use bevy::mesh::{Mesh, VertexAttributeValues};
 
     #[test]
     fn two_adjacent_voxels_merge_shared_faces_into_one_mesh_surface() {
@@ -863,26 +817,6 @@ mod tests {
         let grid = VoxelGrid::from_cells([1, 1, 1], 1.0, vec![1]).unwrap();
         assert!(grid.build_greedy_meshes(&[]).is_err());
         assert!(grid.greedy_boxes(&[]).is_err());
-    }
-
-    #[test]
-    fn factor_two_lod_uses_dominant_palette_and_doubles_voxel_size() {
-        let grid = VoxelGrid::from_cells([2, 2, 2], 0.5, vec![1, 1, 2, 0, 1, 2, 0, 0]).unwrap();
-        let coarse = grid.downsample_by_two(&[true; 8]).unwrap();
-        assert_eq!(coarse.dimensions, [1, 1, 1]);
-        assert_eq!(coarse.voxel_size_m, 1.0);
-        assert_eq!(coarse.cell(0, 0, 0), 1);
-    }
-
-    #[test]
-    fn factor_two_lod_ignores_non_mergeable_cells() {
-        let grid = VoxelGrid::from_cells([2, 2, 2], 1.0, vec![1, 1, 1, 1, 1, 1, 1, 1]).unwrap();
-        let coarse = grid
-            .downsample_by_two(&[true, false, false, false, false, false, false, false])
-            .unwrap();
-        assert_eq!(coarse.cell(0, 0, 0), 1);
-        let empty = grid.downsample_by_two(&[false; 8]).unwrap();
-        assert_eq!(empty.cell(0, 0, 0), 0);
     }
 
     #[test]
@@ -963,11 +897,6 @@ mod tests {
         assert!(grid.build_surface_lod_meshes(&[true], f32::NAN).is_err());
     }
 
-    #[test]
-    fn factor_two_lod_rejects_odd_dimensions() {
-        let grid = VoxelGrid::from_cells([3, 2, 2], 1.0, vec![1; 12]).unwrap();
-        assert!(grid.downsample_by_two(&[true; 12]).is_err());
-    }
     #[test]
     fn homogeneous_static_slab_becomes_one_compound_shape_box() {
         let grid = VoxelGrid::from_cells([16, 1, 16], 1.0, vec![1; 16 * 16]).unwrap();

@@ -169,7 +169,7 @@ pub(super) fn update_physics_body_lod(
 }
 
 #[derive(Component)]
-struct FarPlatformLod {
+pub(super) struct FarPlatformLod {
     world_size_units: u64,
     render_distance_chunks: u32,
     lod_distance_chunks: u32,
