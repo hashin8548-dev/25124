@@ -148,18 +148,11 @@ pub fn drive_human_action_pose(
     };
     let jump_impulse =
         if action_state.jump_launch_pending && settings.temporary_assists.jump_launch.enabled {
-            rig.bone("Root")
-                .and_then(|bone| bone.collision_geometry.as_ref())
-                .map(|geometry| {
-                    let radius = geometry.radius_m;
-                    let segment = geometry.capsule_segment_length_m;
-                    let volume = std::f32::consts::PI * radius * radius * segment
-                        + (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3);
-                    let estimated_root_mass = volume * settings.density_kg_m3;
-                    Vec3::Y
-                        * estimated_root_mass
-                        * settings.temporary_assists.jump_launch.launch_speed_m_s
-                })
+            Some(
+                Vec3::Y
+                    * settings.total_mass_kg
+                    * settings.temporary_assists.jump_launch.launch_speed_m_s,
+            )
         } else {
             None
         };

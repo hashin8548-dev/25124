@@ -74,6 +74,14 @@ pub struct BoneCollisionGeometryValue {
     pub capsule_segment_length_m: f32,
 }
 
+impl BoneCollisionGeometryValue {
+    pub fn volume_m3(self) -> f32 {
+        let radius = self.radius_m;
+        std::f32::consts::PI * radius * radius * self.capsule_segment_length_m
+            + (4.0 / 3.0) * std::f32::consts::PI * radius.powi(3)
+    }
+}
+
 impl HumanRig {
     pub fn load(data_dir: &Path) -> Result<Self> {
         let path = data_dir.join("human").join("rig.json");

@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::Path,
+};
 
 use anyhow::{Result, ensure};
 use avian3d::prelude::{
@@ -6,7 +10,7 @@ use avian3d::prelude::{
     JointCollisionDisabled, JointDamping, LinearVelocity, Restitution, RevoluteJoint, RigidBody,
     SphericalJoint,
 };
-use bevy::{gltf::prelude::GltfAssetLabel, prelude::*};
+use bevy::{gltf::prelude::GltfAssetLabel, math::Isometry3d, prelude::*};
 use serde::Deserialize;
 
 use crate::world::WorldOrigin;
@@ -15,7 +19,9 @@ use super::{HumanActionState, HumanMotionLibrary, HumanRig};
 
 #[derive(Clone, Debug, Resource)]
 pub struct HumanPhysicsSettings {
-    pub density_kg_m3: f32,
+    pub total_mass_kg: f32,
+    pub mass_distribution_reference: String,
+    pub body_mass_fractions: BTreeMap<String, f32>,
     pub static_friction: f32,
     pub dynamic_friction: f32,
     pub restitution: f32,
@@ -114,7 +120,9 @@ struct HumanManifest {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct HumanPhysicsSettingsFile {
-    density_kg_m3: f32,
+    total_mass_kg: f32,
+    mass_distribution_reference: String,
+    body_mass_fractions: BTreeMap<String, f32>,
     static_friction: f32,
     dynamic_friction: f32,
     restitution: f32,
@@ -170,8 +178,26 @@ impl HumanPhysicsSettings {
         );
         let source = manifest.physics;
         ensure!(
-            source.density_kg_m3.is_finite() && source.density_kg_m3 > 0.0,
-            "human body density must be positive and finite"
+            source.total_mass_kg.is_finite()
+                && source.total_mass_kg > 0.0
+                && source.total_mass_kg <= 500.0,
+            "human total body mass must be in (0, 500] kg"
+        );
+        ensure!(
+            !source.mass_distribution_reference.trim().is_empty(),
+            "human mass distribution must identify its anthropometric reference"
+        );
+        ensure!(
+            !source.body_mass_fractions.is_empty()
+                && source.body_mass_fractions.values().all(|fraction| {
+                    fraction.is_finite() && *fraction > 0.0 && *fraction <= 1.0
+                }),
+            "human segment mass fractions must be positive and finite"
+        );
+        let mass_fraction_sum: f32 = source.body_mass_fractions.values().sum();
+        ensure!(
+            (mass_fraction_sum - 1.0).abs() <= 1.0e-4,
+            "human segment mass fractions must sum to 1.0 (got {mass_fraction_sum})"
         );
         ensure!(
             source.static_friction.is_finite()
@@ -403,7 +429,9 @@ impl HumanPhysicsSettings {
         );
 
         Ok(Self {
-            density_kg_m3: source.density_kg_m3,
+            total_mass_kg: source.total_mass_kg,
+            mass_distribution_reference: source.mass_distribution_reference,
+            body_mass_fractions: source.body_mass_fractions,
             static_friction: source.static_friction,
             dynamic_friction: source.dynamic_friction,
             restitution: source.restitution,
@@ -423,6 +451,12 @@ impl HumanPhysicsSettings {
             camera: camera_settings,
             limits: source.limits,
         })
+    }
+
+    pub fn body_mass_kg(&self, body_name: &str) -> Option<f32> {
+        self.body_mass_fractions
+            .get(body_name)
+            .map(|fraction| self.total_mass_kg * fraction)
     }
 }
 
@@ -462,6 +496,18 @@ pub fn spawn_human_player(
         }
     };
 
+    let rig_body_names: BTreeSet<_> = rig.body_names().map(str::to_owned).collect();
+    let configured_body_names: BTreeSet<_> =
+        settings.body_mass_fractions.keys().cloned().collect();
+    if rig_body_names != configured_body_names {
+        error!(
+            "Human mass distribution tracks {:?} do not match rig body tracks {:?}",
+            configured_body_names,
+            rig_body_names
+        );
+        return;
+    }
+
     let mut bodies = BTreeMap::new();
     for name in rig.body_names() {
         let Some(pose) = target_pose.get(name) else {
@@ -470,6 +516,16 @@ pub fn spawn_human_player(
         };
         let translation =
             (Vec3::from_array(pose.center_engine.to_array()).as_dvec3() - origin.0).as_vec3();
+        let Some(mass_kg) = settings.body_mass_kg(name) else {
+            error!("Human body '{name}' has no configured segment mass");
+            return;
+        };
+        let collider_volume_m3 = pose.collision.volume_m3();
+        let collider_density_kg_m3 = mass_kg / collider_volume_m3;
+        if !collider_density_kg_m3.is_finite() || collider_density_kg_m3 <= 0.0 {
+            error!("Human body '{name}' has invalid collider mass properties");
+            return;
+        }
         let collider = Collider::capsule(
             pose.collision.radius_m,
             pose.collision.capsule_segment_length_m,
@@ -481,7 +537,7 @@ pub fn spawn_human_player(
             },
             RigidBody::Dynamic,
             collider,
-            ColliderDensity(settings.density_kg_m3),
+            ColliderDensity(collider_density_kg_m3),
             Friction::new(settings.dynamic_friction)
                 .with_static_coefficient(settings.static_friction),
             Restitution::new(settings.restitution),
@@ -531,6 +587,19 @@ pub fn spawn_human_player(
             parent_pose.rotation_engine.inverse() * (anchor_engine - parent_pose.center_engine);
         let child_anchor_local =
             child_pose.rotation_engine.inverse() * (anchor_engine - child_pose.center_engine);
+        // Both local joint frames represent the same world-space rest basis. This keeps
+        // hinge/twist axes aligned when parent and child bones have different FBX rotations.
+        let shared_joint_rotation = parent_pose.rotation_engine;
+        let parent_joint_frame = local_joint_frame(
+            parent_pose.rotation_engine,
+            shared_joint_rotation,
+            parent_anchor_local,
+        );
+        let child_joint_frame = local_joint_frame(
+            child_pose.rotation_engine,
+            shared_joint_rotation,
+            child_anchor_local,
+        );
 
         let damping = JointDamping {
             linear: settings.joint_damping_linear,
@@ -544,15 +613,12 @@ pub fn spawn_human_player(
             } else {
                 (limits.elbow_min_rad, limits.elbow_max_rad)
             };
-            let world_hinge_axis = parent_pose.rotation_engine * Vec3::X;
-            let parent_local_axis =
-                (parent_pose.rotation_engine.inverse() * world_hinge_axis).normalize_or_zero();
             commands.spawn((
                 Name::new(format!("HumanJoint::{parent_name}::{child_name}")),
                 RevoluteJoint::new(parent_entity, child_entity)
-                    .with_local_anchor1(parent_anchor_local)
-                    .with_local_anchor2(child_anchor_local)
-                    .with_hinge_axis(parent_local_axis)
+                    .with_local_frame1(parent_joint_frame)
+                    .with_local_frame2(child_joint_frame)
+                    .with_hinge_axis(Vec3::X)
                     .with_angle_limits(min_angle, max_angle)
                     .with_point_compliance(settings.joint_point_compliance)
                     .with_align_compliance(settings.joint_angular_compliance)
@@ -572,14 +638,12 @@ pub fn spawn_human_player(
             } else {
                 (limits.spine_swing_rad, limits.spine_twist_rad)
             };
-            let local_twist_axis =
-                parent_pose.rotation_engine.inverse() * (parent_pose.rotation_engine * Vec3::Y);
             commands.spawn((
                 Name::new(format!("HumanJoint::{parent_name}::{child_name}")),
                 SphericalJoint::new(parent_entity, child_entity)
-                    .with_local_anchor1(parent_anchor_local)
-                    .with_local_anchor2(child_anchor_local)
-                    .with_twist_axis(local_twist_axis.normalize_or_zero())
+                    .with_local_frame1(parent_joint_frame)
+                    .with_local_frame2(child_joint_frame)
+                    .with_twist_axis(Vec3::Y)
                     .with_swing_limits(-swing, swing)
                     .with_twist_limits(-twist, twist)
                     .with_point_compliance(settings.joint_point_compliance)
@@ -624,6 +688,17 @@ pub fn spawn_human_player(
     );
 }
 
+fn local_joint_frame(
+    body_rotation: Quat,
+    shared_world_rotation: Quat,
+    local_anchor: Vec3,
+) -> Isometry3d {
+    Isometry3d::new(
+        local_anchor,
+        (body_rotation.inverse() * shared_world_rotation).normalize(),
+    )
+}
+
 /// Remove the player assembly when leaving Simulation so a newly selected world
 /// receives a fresh dynamic ragdoll and action state.
 pub fn despawn_human_player(
@@ -659,7 +734,17 @@ mod tests {
     #[test]
     fn human_physics_and_temporary_assists_load_from_manifest() {
         let settings = HumanPhysicsSettings::load(Path::new("data")).unwrap();
-        assert!((settings.density_kg_m3 - 985.0).abs() < f32::EPSILON);
+        assert!((settings.total_mass_kg - 73.0).abs() < f32::EPSILON);
+        assert_eq!(settings.mass_distribution_reference, "de_leva_1996_male");
+        assert_eq!(settings.body_mass_fractions.len(), 12);
+        let mass_fraction_sum: f32 = settings.body_mass_fractions.values().sum();
+        assert!((mass_fraction_sum - 1.0).abs() <= 1.0e-4);
+        let body_mass_sum: f32 = settings
+            .body_mass_fractions
+            .keys()
+            .filter_map(|name| settings.body_mass_kg(name))
+            .sum();
+        assert!((body_mass_sum - settings.total_mass_kg).abs() <= 1.0e-3);
         assert!(settings.temporary_assists.jump_launch.enabled);
         assert!(settings.temporary_assists.rotational_assistance.enabled);
         assert_eq!(settings.temporary_assists.jump_launch.kind, "impulse");
@@ -667,5 +752,24 @@ mod tests {
             settings.temporary_assists.rotational_assistance.kind,
             "bounded_torque_pd"
         );
+    }
+
+    #[test]
+    fn joint_frames_reconstruct_the_same_world_rest_basis() {
+        let parent_rotation = Quat::from_rotation_y(0.63) * Quat::from_rotation_z(-0.18);
+        let child_rotation = Quat::from_rotation_x(-0.91) * Quat::from_rotation_z(0.27);
+        let parent_frame = super::local_joint_frame(
+            parent_rotation,
+            parent_rotation,
+            Vec3::new(0.1, -0.2, 0.3),
+        );
+        let child_frame = super::local_joint_frame(
+            child_rotation,
+            parent_rotation,
+            Vec3::new(-0.4, 0.2, 0.1),
+        );
+        let parent_world_basis = parent_rotation * parent_frame.rotation;
+        let child_world_basis = child_rotation * child_frame.rotation;
+        assert!(parent_world_basis.dot(child_world_basis).abs() > 0.99999);
     }
 }

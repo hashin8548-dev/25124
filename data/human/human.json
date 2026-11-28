@@ -196,7 +196,22 @@
     }
   },
   "physics": {
-    "density_kg_m3": 985,
+    "total_mass_kg": 73,
+    "mass_distribution_reference": "de_leva_1996_male",
+    "body_mass_fractions": {
+      "Root": 0.1117,
+      "Torso": 0.1633,
+      "Chest": 0.1596,
+      "Head": 0.0694,
+      "Thigh_R": 0.1416,
+      "Thigh_L": 0.1416,
+      "Leg_R": 0.057,
+      "Leg_L": 0.057,
+      "Arm_R": 0.0271,
+      "Arm_L": 0.0271,
+      "Hand_R": 0.0223,
+      "Hand_L": 0.0223
+    },
     "static_friction": 0.9,
     "dynamic_friction": 0.72,
     "restitution": 0,
@@ -207,16 +222,16 @@
     "limits": {
       "hip_swing_rad": 0.9,
       "hip_twist_rad": 0.5,
-      "shoulder_swing_rad": 1.45,
-      "shoulder_twist_rad": 1,
+      "shoulder_swing_rad": 3.1415927,
+      "shoulder_twist_rad": 3.1415927,
       "spine_swing_rad": 0.42,
       "spine_twist_rad": 0.32,
       "neck_swing_rad": 0.62,
       "neck_twist_rad": 0.45,
-      "knee_min_rad": -2.45,
+      "knee_min_rad": -2.7052603,
       "knee_max_rad": 0.12,
       "elbow_min_rad": 0,
-      "elbow_max_rad": 2.45
+      "elbow_max_rad": 2.6179939
     },
     "pose_stiffness_nm_per_rad": 48,
     "pose_damping_nm_s_per_rad": 7.5,
