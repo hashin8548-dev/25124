@@ -733,6 +733,9 @@ mod tests {
     fn human_physics_and_temporary_assists_load_from_manifest() {
         let settings = HumanPhysicsSettings::load(Path::new("data")).unwrap();
         assert!((settings.total_mass_kg - 73.0).abs() < f32::EPSILON);
+        assert!(
+            (settings.body_mass_kg("Root").unwrap() - 8.1541).abs() < 1.0e-3
+        );
         assert_eq!(settings.mass_distribution_reference, "de_leva_1996_male");
         assert_eq!(settings.body_mass_fractions.len(), 12);
         let mass_fraction_sum: f32 = settings.body_mass_fractions.values().sum();

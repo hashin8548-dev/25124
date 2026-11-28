@@ -146,16 +146,8 @@ pub fn drive_human_action_pose(
         }
         _ => None,
     };
-    let jump_impulse =
-        if action_state.jump_launch_pending && settings.temporary_assists.jump_launch.enabled {
-            Some(
-                Vec3::Y
-                    * settings.total_mass_kg
-                    * settings.temporary_assists.jump_launch.launch_speed_m_s,
-            )
-        } else {
-            None
-        };
+    let jump_launch_enabled =
+        action_state.jump_launch_pending && settings.temporary_assists.jump_launch.enabled;
     let wall_grip_force = if action_state.wall_grip_active
         && action_state.wall_grip_normal.is_finite()
         && action_state.wall_grip_normal.length_squared() > 0.9
@@ -175,8 +167,13 @@ pub fn drive_human_action_pose(
                     .clamp_length_max(settings.max_pose_force_n);
                 forces.apply_force(root_force);
             }
-            if let Some(impulse) = jump_impulse {
-                forces.apply_linear_impulse(impulse);
+            if jump_launch_enabled {
+                if let Some(root_mass) = settings.body_mass_kg("Root") {
+                    let impulse = Vec3::Y
+                        * root_mass
+                        * settings.temporary_assists.jump_launch.launch_speed_m_s;
+                    forces.apply_linear_impulse(impulse);
+                }
             }
         } else if (part.bone_name == "Hand_L" || part.bone_name == "Hand_R")
             && let Some(force) = wall_grip_force
