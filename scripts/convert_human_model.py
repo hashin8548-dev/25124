@@ -44,10 +44,20 @@ def load_manifest() -> dict:
     rig = manifest.get("rig", {})
     body_tracks = rig.get("body_tracks")
     marker_tracks = rig.get("joint_marker_tracks")
+    anchor_tracks = rig.get("joint_anchor_tracks")
     if not isinstance(body_tracks, list) or not body_tracks:
         raise RuntimeError("human.json must define rig.body_tracks")
-    if not isinstance(marker_tracks, list):
+    if not isinstance(marker_tracks, list) or not marker_tracks:
         raise RuntimeError("human.json must define rig.joint_marker_tracks")
+    if not isinstance(anchor_tracks, dict) or not anchor_tracks:
+        raise RuntimeError("human.json must define rig.joint_anchor_tracks")
+    if (
+        not all(isinstance(body, str) and body in body_tracks for body in anchor_tracks)
+        or not all(isinstance(marker, str) and marker in marker_tracks for marker in anchor_tracks.values())
+        or set(anchor_tracks.values()) != set(marker_tracks)
+        or len(set(anchor_tracks.values())) != len(anchor_tracks)
+    ):
+        raise RuntimeError("human.json joint_anchor_tracks must map body tracks one-to-one to all joint markers")
     return manifest
 
 
@@ -200,6 +210,7 @@ def extract_rig(
                 "collision_geometry": collision_geometry.get(bone.name),
                 "body_track": bone.name if bone.name in body_tracks else None,
                 "joint_marker_track": bone.name if bone.name in marker_tracks else None,
+                "joint_anchor_track": manifest["rig"]["joint_anchor_tracks"].get(bone.name),
             }
         )
 

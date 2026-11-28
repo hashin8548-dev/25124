@@ -194,7 +194,8 @@
         "weight_threshold": 0.5
       },
       "body_track": "Arm_L",
-      "joint_marker_track": null
+      "joint_marker_track": null,
+      "joint_anchor_track": "Shoulder_L"
     },
     {
       "name": "Arm_R",
@@ -323,7 +324,8 @@
         "weight_threshold": 0.5
       },
       "body_track": "Arm_R",
-      "joint_marker_track": null
+      "joint_marker_track": null,
+      "joint_anchor_track": "Shoulder_R"
     },
     {
       "name": "Chest",
@@ -811,7 +813,8 @@
         "weight_threshold": 0.5
       },
       "body_track": "Hand_L",
-      "joint_marker_track": null
+      "joint_marker_track": null,
+      "joint_anchor_track": "Elbow_L"
     },
     {
       "name": "Hand_R",
@@ -940,7 +943,8 @@
         "weight_threshold": 0.5
       },
       "body_track": "Hand_R",
-      "joint_marker_track": null
+      "joint_marker_track": null,
+      "joint_anchor_track": "Elbow_R"
     },
     {
       "name": "Head",
@@ -1428,7 +1432,8 @@
         "weight_threshold": 0.5
       },
       "body_track": "Leg_L",
-      "joint_marker_track": null
+      "joint_marker_track": null,
+      "joint_anchor_track": "Knee_L"
     },
     {
       "name": "Leg_R",
@@ -1557,7 +1562,8 @@
         "weight_threshold": 0.5
       },
       "body_track": "Leg_R",
-      "joint_marker_track": null
+      "joint_marker_track": null,
+      "joint_anchor_track": "Knee_R"
     },
     {
       "name": "Root",

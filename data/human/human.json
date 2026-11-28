@@ -42,6 +42,14 @@
       "Elbow_L",
       "Knee_L"
     ],
+    "joint_anchor_tracks": {
+      "Arm_L": "Shoulder_L",
+      "Arm_R": "Shoulder_R",
+      "Hand_L": "Elbow_L",
+      "Hand_R": "Elbow_R",
+      "Leg_L": "Knee_L",
+      "Leg_R": "Knee_R"
+    },
     "auxiliary_tracks": [
       "Tool_R",
       "Tool_L"

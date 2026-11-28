@@ -28,6 +28,9 @@ pub struct RigBone {
     pub matrix_parent_local: [[f32; 4]; 4],
     pub action_reference_parent_local: Option<[f32; 16]>,
     pub collision_geometry: Option<BoneCollisionGeometry>,
+    /// Joint-marker bone used as the physical anchor for this body segment.
+    pub joint_anchor_track: Option<String>,
+    /// Self-identification for bones included in the joint-marker tracks.
     pub joint_marker_track: Option<String>,
 }
 
@@ -196,14 +199,25 @@ impl HumanRig {
             );
         }
 
-        // The converter records the physical joint marker on the body segment it anchors.
-        // Validate the complete mapping once so spawning never relies on bone-name conventions.
+        // The converter stores body-to-marker assignments separately from marker self-tags.
+        // Validate exact coverage and the helper-bone hierarchy before spawning physics joints.
         let mut assigned_markers = BTreeSet::new();
         for body_name in &body_names {
-            if let Some(marker_name) = &bones[body_name].joint_marker_track {
+            if let Some(marker_name) = &bones[body_name].joint_anchor_track {
                 ensure!(
                     marker_names.contains(marker_name),
                     "body track '{body_name}' references undeclared joint marker '{marker_name}'"
+                );
+                let marker_bone = &bones[marker_name];
+                ensure!(
+                    marker_bone.joint_marker_track.as_deref() == Some(marker_name.as_str()),
+                    "body track '{body_name}' references '{marker_name}', which is not a tagged joint-marker bone"
+                );
+                let body_parent = bones[body_name].parent.as_deref();
+                ensure!(
+                    body_parent == Some(marker_name.as_str())
+                        || body_parent == marker_bone.parent.as_deref(),
+                    "joint marker '{marker_name}' is not a helper of body track '{body_name}'"
                 );
                 ensure!(
                     assigned_markers.insert(marker_name.clone()),
@@ -257,7 +271,7 @@ impl HumanRig {
 
     /// Returns the rig-metadata joint marker assigned to a physical body segment.
     pub fn joint_marker_for_body(&self, body_name: &str) -> Option<&str> {
-        self.bones.get(body_name)?.joint_marker_track.as_deref()
+        self.bones.get(body_name)?.joint_anchor_track.as_deref()
     }
 
     pub fn bone_names(&self) -> impl Iterator<Item = &str> {
