@@ -623,6 +623,7 @@ impl MenuAsset {
         fallback
     }
 
+    // Older external menu themes may omit newer navigation actions.
     fn ensure_required_actions(&mut self) {
         if !self.buttons.iter().any(|button| button.action == "resume") {
             self.buttons.push(MenuButtonDefinition {
