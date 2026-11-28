@@ -116,19 +116,16 @@ impl VoxelGrid {
         for palette in palettes {
             let mut buffers = MeshBuffers::default();
 
-            emit_adaptive_surface_region(
-                &top_samples,
+            let mut context = AdaptiveSurfaceContext {
+                samples: &top_samples,
                 width,
                 depth,
                 palette,
-                0,
-                width,
-                0,
-                depth,
-                self.voxel_size_m,
+                voxel_size_m: self.voxel_size_m,
                 max_error_m,
-                &mut buffers,
-            );
+                buffers: &mut buffers,
+            };
+            emit_adaptive_surface_region(&mut context, 0, width, 0, depth);
 
             if buffers.indices.is_empty() {
                 continue;
@@ -369,18 +366,22 @@ struct SurfaceSample {
     height_m: f32,
 }
 
-fn emit_adaptive_surface_region(
-    samples: &[Option<SurfaceSample>],
+struct AdaptiveSurfaceContext<'a> {
+    samples: &'a [Option<SurfaceSample>],
     width: usize,
     depth: usize,
     palette: u8,
+    voxel_size_m: f32,
+    max_error_m: f32,
+    buffers: &'a mut MeshBuffers,
+}
+
+fn emit_adaptive_surface_region(
+    context: &mut AdaptiveSurfaceContext<'_>,
     x0: usize,
     x1: usize,
     z0: usize,
     z1: usize,
-    voxel_size_m: f32,
-    max_error_m: f32,
-    buffers: &mut MeshBuffers,
 ) {
     if x0 >= x1 || z0 >= z1 {
         return;
@@ -389,7 +390,7 @@ fn emit_adaptive_surface_region(
     let mut covered = true;
     for z in z0..z1 {
         for x in x0..x1 {
-            if !samples[z * width + x].is_some_and(|sample| sample.palette == palette) {
+            if !context.samples[z * context.width + x].is_some_and(|sample| sample.palette == context.palette) {
                 covered = false;
                 break;
             }
@@ -400,10 +401,10 @@ fn emit_adaptive_surface_region(
     }
 
     if covered {
-        let h00 = samples[z0 * width + x0].unwrap().height_m;
-        let h10 = samples[z0 * width + x1 - 1].unwrap().height_m;
-        let h01 = samples[(z1 - 1) * width + x0].unwrap().height_m;
-        let h11 = samples[(z1 - 1) * width + x1 - 1].unwrap().height_m;
+        let h00 = context.samples[z0 * context.width + x0].unwrap().height_m;
+        let h10 = context.samples[z0 * context.width + x1 - 1].unwrap().height_m;
+        let h01 = context.samples[(z1 - 1) * context.width + x0].unwrap().height_m;
+        let h11 = context.samples[(z1 - 1) * context.width + x1 - 1].unwrap().height_m;
         let span_x = (x1 - x0) as f32;
         let span_z = (z1 - z0) as f32;
         let mut max_error = 0.0_f32;
@@ -417,7 +418,7 @@ fn emit_adaptive_surface_region(
                 let lower = h00 + (h10 - h00) * tx;
                 let upper = h01 + (h11 - h01) * tx;
                 let predicted = lower + (upper - lower) * tz;
-                let actual = samples[z * width + x].unwrap().height_m;
+                let actual = context.samples[z * context.width + x].unwrap().height_m;
                 min_height = min_height.min(actual);
                 max_height = max_height.max(actual);
                 max_error = max_error.max((predicted - actual).abs());
@@ -426,15 +427,15 @@ fn emit_adaptive_surface_region(
 
         // The error bound is measured at every source cell centre. Patches share deterministic
         // edge samples; deviations are bounded and no generated point leaves the source bounds.
-        let touches_chunk_boundary = x0 == 0 || z0 == 0 || x1 == width || z1 == depth;
+        let touches_chunk_boundary = x0 == 0 || z0 == 0 || x1 == context.width || z1 == context.depth;
         let boundary_is_exact = !touches_chunk_boundary || max_height - min_height <= 1.0e-6;
-        if max_error <= max_error_m && boundary_is_exact {
+        if max_error <= context.max_error_m && boundary_is_exact {
             append_surface_quad(
-                buffers,
-                x0 as f32 * voxel_size_m,
-                x1 as f32 * voxel_size_m,
-                z0 as f32 * voxel_size_m,
-                z1 as f32 * voxel_size_m,
+                context.buffers,
+                x0 as f32 * context.voxel_size_m,
+                x1 as f32 * context.voxel_size_m,
+                z0 as f32 * context.voxel_size_m,
+                z1 as f32 * context.voxel_size_m,
                 [h00, h10, h11, h01],
             );
             return;
@@ -444,15 +445,15 @@ fn emit_adaptive_surface_region(
     let span_x = x1 - x0;
     let span_z = z1 - z0;
     if span_x == 1 && span_z == 1 {
-        if let Some(sample) = samples[z0 * width + x0]
-            && sample.palette == palette
+        if let Some(sample) = context.samples[z0 * context.width + x0]
+            && sample.palette == context.palette
         {
             append_surface_quad(
-                buffers,
-                x0 as f32 * voxel_size_m,
-                x1 as f32 * voxel_size_m,
-                z0 as f32 * voxel_size_m,
-                z1 as f32 * voxel_size_m,
+                context.buffers,
+                x0 as f32 * context.voxel_size_m,
+                x1 as f32 * context.voxel_size_m,
+                z0 as f32 * context.voxel_size_m,
+                z1 as f32 * context.voxel_size_m,
                 [sample.height_m; 4],
             );
         }
@@ -462,112 +463,16 @@ fn emit_adaptive_surface_region(
     let x_mid = x0 + span_x / 2;
     let z_mid = z0 + span_z / 2;
     if span_x > 1 && span_z > 1 {
-        emit_adaptive_surface_region(
-            samples,
-            width,
-            depth,
-            palette,
-            x0,
-            x_mid,
-            z0,
-            z_mid,
-            voxel_size_m,
-            max_error_m,
-            buffers,
-        );
-        emit_adaptive_surface_region(
-            samples,
-            width,
-            depth,
-            palette,
-            x_mid,
-            x1,
-            z0,
-            z_mid,
-            voxel_size_m,
-            max_error_m,
-            buffers,
-        );
-        emit_adaptive_surface_region(
-            samples,
-            width,
-            depth,
-            palette,
-            x0,
-            x_mid,
-            z_mid,
-            z1,
-            voxel_size_m,
-            max_error_m,
-            buffers,
-        );
-        emit_adaptive_surface_region(
-            samples,
-            width,
-            depth,
-            palette,
-            x_mid,
-            x1,
-            z_mid,
-            z1,
-            voxel_size_m,
-            max_error_m,
-            buffers,
-        );
+        emit_adaptive_surface_region(context, x0, x_mid, z0, z_mid);
+        emit_adaptive_surface_region(context, x_mid, x1, z0, z_mid);
+        emit_adaptive_surface_region(context, x0, x_mid, z_mid, z1);
+        emit_adaptive_surface_region(context, x_mid, x1, z_mid, z1);
     } else if span_x > 1 {
-        emit_adaptive_surface_region(
-            samples,
-            width,
-            depth,
-            palette,
-            x0,
-            x_mid,
-            z0,
-            z1,
-            voxel_size_m,
-            max_error_m,
-            buffers,
-        );
-        emit_adaptive_surface_region(
-            samples,
-            width,
-            depth,
-            palette,
-            x_mid,
-            x1,
-            z0,
-            z1,
-            voxel_size_m,
-            max_error_m,
-            buffers,
-        );
+        emit_adaptive_surface_region(context, x0, x_mid, z0, z1);
+        emit_adaptive_surface_region(context, x_mid, x1, z0, z1);
     } else {
-        emit_adaptive_surface_region(
-            samples,
-            width,
-            depth,
-            palette,
-            x0,
-            x1,
-            z0,
-            z_mid,
-            voxel_size_m,
-            max_error_m,
-            buffers,
-        );
-        emit_adaptive_surface_region(
-            samples,
-            width,
-            depth,
-            palette,
-            x0,
-            x1,
-            z_mid,
-            z1,
-            voxel_size_m,
-            max_error_m,
-            buffers,
-        );
+        emit_adaptive_surface_region(context, x0, x1, z0, z_mid);
+        emit_adaptive_surface_region(context, x0, x1, z_mid, z1);
     }
 }
 
