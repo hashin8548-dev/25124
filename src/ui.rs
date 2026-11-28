@@ -869,10 +869,10 @@ fn setup_menu(
     };
 
     let mut preferences = load_user_preferences(&config.paths.project_root);
-    if !config.start_in_library {
-        // A command-line --world launch is also a joined world. Only remember it when
-        // the inferred conventional manifest is present in the discovered library.
-        if let Some(manifest_path) = config
+    // A command-line --world launch is also a joined world. Only remember it when
+    // the inferred conventional manifest is present in the discovered library.
+    if !config.start_in_library
+        && let Some(manifest_path) = config
             .paths
             .world_state
             .parent()
@@ -883,18 +883,16 @@ fn setup_menu(
                     .iter()
                     .any(|entry| entry.manifest_path == *path)
             })
-        {
-            if let Err(error) = remember_world_manifest(
-                &config.paths.project_root,
-                &manifest_path,
-                &mut preferences,
-            ) {
-                warn!(
-                    "Could not remember command-line world '{}': {error}",
-                    manifest_path.display()
-                );
-            }
-        }
+        && let Err(error) = remember_world_manifest(
+            &config.paths.project_root,
+            &manifest_path,
+            &mut preferences,
+        )
+    {
+        warn!(
+            "Could not remember command-line world '{}': {error}",
+            manifest_path.display()
+        );
     }
     apply_user_preferences(&mut config, &preferences);
     let last_world_manifest =
@@ -2764,6 +2762,9 @@ fn sync_settings_labels(
     }
 }
 
+// Bevy requires these independent resources as explicit system parameters. Keeping them
+// separate preserves the scheduler's access information and avoids a generic catch-all state.
+#[allow(clippy::too_many_arguments)]
 fn handle_menu_action(
     activate: On<Activate>,
     actions: Query<(Entity, &MenuAction)>,
@@ -2922,21 +2923,25 @@ fn toggle_menu_with_escape(
     }
 }
 
+type MenuButtonStyleQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    (
+        Entity,
+        &'static Hovered,
+        Has<Pressed>,
+        &'static MenuButtonColors,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+        Option<&'static mut MenuGlowState>,
+        Option<&'static mut BoxShadow>,
+    ),
+    With<Button>,
+>;
+
 fn update_button_styles(
     input_focus: Res<InputFocus>,
-    mut buttons: Query<
-        (
-            Entity,
-            &Hovered,
-            Has<Pressed>,
-            &MenuButtonColors,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            Option<&mut MenuGlowState>,
-            Option<&mut BoxShadow>,
-        ),
-        With<Button>,
-    >,
+    mut buttons: MenuButtonStyleQuery<'_, '_>,
     mut cursor_markers: Query<(&MenuCursorMarker, &mut Visibility)>,
 ) {
     let mut active_buttons = Vec::new();
@@ -2963,17 +2968,17 @@ fn update_button_styles(
             colors.border_normal
         });
 
-        if let (Some(mut glow_state), Some(mut shadow)) = (glow_state, shadow) {
-            if glow_state.0 != active {
-                *shadow = BoxShadow::new(
-                    Color::srgba(1.0, 1.0, 1.0, if active { 0.20 } else { 0.0 }),
-                    Val::Px(0.0),
-                    Val::Px(0.0),
-                    Val::Px(0.0),
-                    Val::Px(16.0),
-                );
-                glow_state.0 = active;
-            }
+        if let (Some(mut glow_state), Some(mut shadow)) = (glow_state, shadow)
+            && glow_state.0 != active
+        {
+            *shadow = BoxShadow::new(
+                Color::srgba(1.0, 1.0, 1.0, if active { 0.20 } else { 0.0 }),
+                Val::Px(0.0),
+                Val::Px(0.0),
+                Val::Px(0.0),
+                Val::Px(16.0),
+            );
+            glow_state.0 = active;
         }
     }
 
