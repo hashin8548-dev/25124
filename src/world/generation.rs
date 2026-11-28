@@ -13,20 +13,26 @@ const PLATFORM_COMPONENT: &str = "block.bedrock";
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub(crate) struct WorldOrigin(pub DVec3);
 
+type CameraTransformQuery<'world, 'state> =
+    Query<'world, 'state, &'static Transform, With<crate::camera::FreeFlyCamera>>;
+type RebasedTransformQuery<'world, 'state> = Query<
+    'world,
+    'state,
+    (
+        &'static mut Transform,
+        Option<&'static mut crate::world::lod::ChunkLodVisual>,
+    ),
+    Without<ChildOf>,
+>;
+
 /// Recenters the f32 simulation around the camera while preserving absolute world position.
 /// Rebase steps are exact multiples of the procedural chunk edge, so voxel boundaries remain stable.
 pub(super) fn rebase_world_origin(
     mut origin: ResMut<WorldOrigin>,
     mut world_state: ResMut<crate::persistence::WorldStateFile>,
     mut queries: ParamSet<(
-        Query<&Transform, With<crate::camera::FreeFlyCamera>>,
-        Query<
-            (
-                &mut Transform,
-                Option<&mut crate::world::lod::ChunkLodVisual>,
-            ),
-            Without<ChildOf>,
-        >,
+        CameraTransformQuery<'_, '_>,
+        RebasedTransformQuery<'_, '_>,
     )>,
 ) {
     let Some(camera_position) = queries
