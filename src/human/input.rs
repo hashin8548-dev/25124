@@ -1,4 +1,7 @@
-use avian3d::prelude::{Dir3, LinearVelocity, SpatialQuery, SpatialQueryFilter};
+use avian3d::{
+    math::Dir,
+    prelude::{LinearVelocity, SpatialQuery, SpatialQueryFilter},
+};
 use bevy::prelude::*;
 
 use super::{
@@ -14,7 +17,7 @@ const DESCENDING_THRESHOLD_M_S: f32 = 0.25;
 pub fn update_human_controls(
     keys: Res<ButtonInput<KeyCode>>,
     spatial_query: SpatialQuery,
-    mut action_state: Option<ResMut<HumanActionState>>,
+    action_state: Option<ResMut<HumanActionState>>,
     motions: Option<Res<HumanMotionLibrary>>,
     settings: Option<Res<HumanPhysicsSettings>>,
     player: Option<Res<HumanPlayer>>,

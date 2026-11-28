@@ -40,13 +40,13 @@ pub fn sync_human_skinned_mesh(
     // Only visit nodes under this character's tagged GLB WorldAssetRoot instance.
     let mut scene_entities = BTreeSet::new();
     for root_children in &scene_roots {
-        let mut pending: Vec<Entity> = root_children.iter().copied().collect();
+        let mut pending: Vec<Entity> = root_children.iter().collect();
         while let Some(entity) = pending.pop() {
             if !scene_entities.insert(entity) {
                 continue;
             }
             if let Ok(descendants) = children.get(entity) {
-                pending.extend(descendants.iter().copied());
+                pending.extend(descendants.iter());
             }
         }
     }

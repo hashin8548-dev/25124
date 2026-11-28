@@ -19,7 +19,7 @@ pub(super) fn follow_player_camera(
     config: Res<crate::config::RuntimeConfig>,
     settings: Option<Res<HumanPhysicsSettings>>,
     player: Option<Res<HumanPlayer>>,
-    mut action_state: Option<ResMut<HumanActionState>>,
+    action_state: Option<ResMut<HumanActionState>>,
     root: Query<&Transform, With<HumanPlayerRoot>>,
     mut cameras: Query<(
         &mut Transform,

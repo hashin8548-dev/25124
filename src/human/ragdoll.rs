@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use avian3d::prelude::{
     AngularVelocity, Collider, ColliderDensity, CollisionEventsEnabled, Friction,
     JointCollisionDisabled, JointDamping, LinearVelocity, Restitution, RevoluteJoint, RigidBody,
@@ -157,10 +157,13 @@ pub struct HumanPlayer {
 impl HumanPhysicsSettings {
     pub fn load(data_dir: &Path) -> Result<Self> {
         let path = data_dir.join("human").join("human.json");
-        let text = fs::read_to_string(&path)
-            .with_context(|| format!("reading human physics settings {}", path.display()))?;
-        let manifest: HumanManifest = serde_json::from_str(&text)
-            .with_context(|| format!("parsing human physics settings {}", path.display()))?;
+        let text = anyhow::Context::with_context(fs::read_to_string(&path), || {
+            format!("reading human physics settings {}", path.display())
+        })?;
+        let manifest: HumanManifest = anyhow::Context::with_context(
+            serde_json::from_str(&text),
+            || format!("parsing human physics settings {}", path.display()),
+        )?;
         ensure!(
             manifest.schema_version == 1,
             "unsupported human manifest schema version"

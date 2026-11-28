@@ -1,4 +1,4 @@
-use avian3d::prelude::{AngularVelocity, Forces, LinearVelocity};
+use avian3d::prelude::{AngularVelocity, Forces, LinearVelocity, WriteRigidBodyForces};
 use bevy::prelude::*;
 
 use super::{HumanBodyPart, HumanMotionLibrary, HumanPhysicsSettings, HumanPlayer, HumanRig};
