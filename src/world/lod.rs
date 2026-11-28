@@ -46,12 +46,7 @@ pub(super) fn update_chunk_lod(
         return;
     }
 
-    let Some(camera_position) = context
-        .camera
-        .iter()
-        .next()
-        .map(|transform| transform.translation)
-    else {
+    let Some(camera_position) = camera.iter().next().map(|transform| transform.translation) else {
         return;
     };
 
@@ -239,7 +234,7 @@ pub(super) fn update_far_platform_lod(
         }
         return;
     };
-    let Some(camera_transform) = camera.iter().next() else {
+    let Some(camera_transform) = context.camera.iter().next() else {
         return;
     };
 
