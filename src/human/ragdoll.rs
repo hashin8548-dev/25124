@@ -160,10 +160,10 @@ impl HumanPhysicsSettings {
         let text = anyhow::Context::with_context(fs::read_to_string(&path), || {
             format!("reading human physics settings {}", path.display())
         })?;
-        let manifest: HumanManifest = anyhow::Context::with_context(
-            serde_json::from_str(&text),
-            || format!("parsing human physics settings {}", path.display()),
-        )?;
+        let manifest: HumanManifest =
+            anyhow::Context::with_context(serde_json::from_str(&text), || {
+                format!("parsing human physics settings {}", path.display())
+            })?;
         ensure!(
             manifest.schema_version == 1,
             "unsupported human manifest schema version"
